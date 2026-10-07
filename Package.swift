@@ -61,7 +61,7 @@ let package = Package(
         ),
         .target(
             name: "MusicSource",
-            dependencies: ["DeckhandCore"]
+            dependencies: ["DeckhandCore", "CSQLCipher"]
         ),
         .target(
             name: "Sync",

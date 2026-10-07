@@ -12,6 +12,8 @@ public struct Manifest: Codable, Sendable {
         public var usbPath: String
         public var contentHash: String
         public var analysisVersion: Int
+        /// Inputs the ANLZ files were last written from (cues, writer options); a change forces a rewrite.
+        public var anlzFingerprint: String?
     }
 
     public struct Playlist: Codable, Sendable, Equatable {

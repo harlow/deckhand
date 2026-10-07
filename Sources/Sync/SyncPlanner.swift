@@ -117,7 +117,8 @@ public struct SyncPlanner {
             .filter { r in !tracks.contains { $0.usbPath == r.usbPath } }
         manifest.tracks = Dictionary(uniqueKeysWithValues: tracks.map {
             ($0.source.id, Manifest.Track(contentId: $0.contentId, usbPath: $0.usbPath, contentHash: $0.contentHash,
-                                          analysisVersion: TrackAnalysis.currentVersion))
+                                          analysisVersion: TrackAnalysis.currentVersion,
+                                          anlzFingerprint: $0.action == .unchanged ? previous.tracks[$0.source.id]?.anlzFingerprint : nil))
         })
 
         // Playlists: stable IDs, sibling order follows source order.

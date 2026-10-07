@@ -96,6 +96,7 @@ struct SyncCommand: ParsableCommand {
     @Option(help: "Key display on the player: classic (Am) or alphanumeric (8A).")
     var keyFormat: OneLibraryDatabase.KeyFormat = .classic
     @OptionGroup var tagOptions: TagOptions
+    @Option(help: "Cue points from Mixed In Key: memory, hot (A–H), both, or none.") var cues: CueMode = .both
     @Flag(help: .hidden) var extendedBeatgrid = false
     @Flag(help: .hidden) var rewriteAnalysis = false
 
@@ -124,11 +125,8 @@ struct SyncCommand: ParsableCommand {
             print("\nNo changes written.")
             return
         }
-        if !plan.hasChanges && plan.manifest.selectedPlaylistIds == manifest.selectedPlaylistIds && !rewriteAnalysis {
-            print("\nAlready up to date.")
-            return
-        }
-        if !yes {
+        let selectionChanged = plan.manifest.selectedPlaylistIds != manifest.selectedPlaylistIds
+        if (plan.hasChanges || selectionChanged) && !yes {
             print("\nSync? [Y/n] ", terminator: "")
             let answer = readLine()?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
             guard answer.isEmpty || answer == "y" || answer == "yes" else {
@@ -152,7 +150,13 @@ struct SyncCommand: ParsableCommand {
         executor.rewriteAnalysisFiles = rewriteAnalysis
         executor.analysisPolicy = tagOptions.policy
         executor.artwork = lib.artwork
-        try executor.execute(plan, keyFormat: keyFormat)
+        executor.mixedInKey = tagOptions.mixedInKeyLibrary
+        executor.cueMode = cues
+        let wrote = try executor.execute(plan, keyFormat: keyFormat, force: selectionChanged || rewriteAnalysis)
+        if !wrote {
+            print("\nAlready up to date.")
+            return
+        }
         print("\nDone. \(plan.tracks.count) tracks in \(plan.playlists.filter { !$0.source.isFolder }.count) playlists on \(v.name).")
         print("Run `deckhand eject \(v.url.path)` before unplugging.")
     }
@@ -272,6 +276,7 @@ extension String {
 }
 
 extension OneLibraryDatabase.KeyFormat: ExpressibleByArgument {}
+extension CueMode: ExpressibleByArgument {}
 
 /// How existing file tags feed analysis. Shared by `sync` and `analyze`.
 struct TagOptions: ParsableArguments {
@@ -279,8 +284,13 @@ struct TagOptions: ParsableArguments {
     var keyTags = true
     @Flag(inversion: .prefixedNo, help: "Use the file's BPM tag to choose the tempo and pin the beat grid.")
     var bpmHint = true
+    @Flag(inversion: .prefixedNo, help: "Use Mixed In Key's stored analysis (tempo, key) when it has the track.")
+    var mixedInKey = true
 
-    var policy: AnalysisPolicy { AnalysisPolicy(keyFromTags: keyTags, bpmHintFromTags: bpmHint) }
+    var policy: AnalysisPolicy { AnalysisPolicy(keyFromTags: keyTags, bpmHintFromTags: bpmHint, useMixedInKey: mixedInKey) }
+
+    /// Loaded only when enabled; nil if MIK isn't installed.
+    var mixedInKeyLibrary: MixedInKeyLibrary? { mixedInKey ? MixedInKeyLibrary.load() : nil }
 }
 
 struct AnalyzeCommand: ParsableCommand {
@@ -319,7 +329,7 @@ struct AnalyzeCommand: ParsableCommand {
             AnalysisRunner.Item(url: $0.location!, contentHash: try cache.contentHash(of: $0.location!), title: $0.title)
         }
         let start = Date()
-        let runner = AnalysisRunner(cache: cache, policy: tagOptions.policy) { event in
+        let runner = AnalysisRunner(cache: cache, policy: tagOptions.policy, mixedInKey: tagOptions.mixedInKeyLibrary) { event in
             switch event {
             case .started(let i, let n, let title): print("  analyze [\(i)/\(n)] \(title)")
             case .failed(let title, let error): warn("  ! \(title): \(error)")

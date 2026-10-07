@@ -26,8 +26,11 @@ public struct AnlzWriter {
     /// Total decoded sample frames in the audio file.
     let totalSamples: UInt64
     let options: Options
+    let cues: [CuePoint]
 
-    public init(audioPath: String, analysis: TrackAnalysis, totalSamples: UInt64, options: Options = .init()) {
+    public init(audioPath: String, analysis: TrackAnalysis, totalSamples: UInt64, cues: [CuePoint] = [],
+                options: Options = .init()) {
+        self.cues = cues.sorted { $0.timeMs < $1.timeMs }
         self.audioPath = audioPath
         self.analysis = analysis
         self.totalSamples = totalSamples
@@ -167,18 +170,76 @@ public struct AnlzWriter {
         section("PWV2", header: { $0.u32(UInt32(entries.count)); $0.u32(0x10000) }, body: { $0.bytes(entries) })
     }
 
+    private func cueList(hot: Bool) -> [CuePoint] {
+        cues.filter { if case .hot = $0.kind { hot } else { !hot } }
+    }
+
+    private func hotIndex(_ c: CuePoint) -> UInt32 {
+        if case .hot(let n) = c.kind { UInt32(n) } else { 0 }
+    }
+
+    /// Legacy cue list (PCOB with PCPT entries), read by older players.
     private func pcob(hotCues: Bool) -> Data {
-        section("PCOB", header: {
+        let list = cueList(hot: hotCues)
+        return section("PCOB", header: {
             $0.u32(hotCues ? 1 : 0)
-            $0.u32(0) // unknown u16 + cue count u16
+            $0.u16(0)
+            $0.u16(UInt16(list.count))
             $0.u32(0xFFFF_FFFF)
+        }, body: { w in
+            for (i, c) in list.enumerated() {
+                w.ascii("PCPT")
+                w.u32(0x1C)
+                w.u32(0x38)
+                w.u32(hotIndex(c))
+                w.u32(4) // enabled
+                w.u32(0x10000)
+                w.u16(i == 0 ? 0xFFFF : UInt16(i - 1))
+                w.u16(i == list.count - 1 ? 0xFFFF : UInt16(i + 1))
+                w.u8(1) // single cue, not a loop
+                w.u8(0)
+                w.u16(1000)
+                w.u32(UInt32(max(0, c.timeMs)))
+                w.u32(0xFFFF_FFFF) // loop end
+                w.zeros(16)
+            }
         })
     }
 
+    /// Extended cue list (PCO2 with PCP2 entries): comments and colors, read by nxs2-era and newer players.
     private func pco2(hotCues: Bool) -> Data {
-        section("PCO2", header: {
+        let list = cueList(hot: hotCues)
+        return section("PCO2", header: {
             $0.u32(hotCues ? 1 : 0)
-            $0.u32(0) // cue count u16 + unknown u16
+            $0.u16(UInt16(list.count))
+            $0.u16(0)
+        }, body: { w in
+            for c in list {
+                var comment = BinaryWriter()
+                if let text = c.comment, !text.isEmpty {
+                    comment.utf16BE(text)
+                    comment.u16(0)
+                }
+                // Rekordbox pads entries to 0x90 bytes when the comment fits.
+                let length = max(0x90, 48 + comment.count)
+                let start = w.count
+                w.ascii("PCP2")
+                w.u32(0x10)
+                w.u32(UInt32(length))
+                w.u32(hotIndex(c))
+                w.u8(1)
+                w.zeros(3)
+                w.u32(UInt32(max(0, c.timeMs)))
+                w.u32(0xFFFF_FFFF)
+                w.u8(0) // color table index
+                w.zeros(7)
+                w.u16(0) // loop numerator
+                w.u16(0) // loop denominator
+                w.u32(UInt32(comment.count))
+                w.bytes(comment.data)
+                w.zeros(4) // color code + RGB: player default
+                w.zeros(length - (w.count - start))
+            }
         })
     }
 

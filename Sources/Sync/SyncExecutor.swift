@@ -1,6 +1,7 @@
 import Analysis
 import DeckhandCore
 import Foundation
+import MusicSource
 import OneLibrary
 
 /// Applies a SyncPlan to a drive.
@@ -24,6 +25,10 @@ public struct SyncExecutor {
     /// ANLZ writer options; see AnlzWriter.Options.
     public var anlzOptions = AnlzWriter.Options()
     public var analysisPolicy = AnalysisPolicy()
+    /// Which imported cues to write as memory and/or hot cues.
+    public var cueMode: CueMode = .both
+    /// Mixed In Key's stored analysis, used as hints when present.
+    public var mixedInKey: MixedInKeyLibrary?
     /// Cover art source; tracks get no artwork when nil.
     public var artwork: (any ArtworkProvider)?
     /// Rewrite analysis files for all tracks, e.g. after changing anlzOptions.
@@ -37,7 +42,9 @@ public struct SyncExecutor {
         self.progress = progress
     }
 
-    public func execute(_ plan: SyncPlan, keyFormat: OneLibraryDatabase.KeyFormat = .classic) throws {
+    /// Returns false if nothing needed writing (no track, playlist or analysis-file changes).
+    @discardableResult
+    public func execute(_ plan: SyncPlan, keyFormat: OneLibraryDatabase.KeyFormat = .classic, force: Bool = false) throws -> Bool {
         let volume = plan.volume
         try volume.checkWritable()
         let free = try Volume(url: volume.url).available
@@ -65,7 +72,7 @@ public struct SyncExecutor {
         timer.mark("copy")
         // 2. Analyze and 3. write ANLZ files for new/replaced tracks.
         let progress = self.progress
-        let runner = AnalysisRunner(cache: cache, policy: analysisPolicy) { event in
+        let runner = AnalysisRunner(cache: cache, policy: analysisPolicy, mixedInKey: mixedInKey) { event in
             switch event {
             case .started(let i, let n, let title): progress(.analyzing(index: i, total: n, title: title))
             case .failed(let title, let error): progress(.analysisFailed(title: title, error: error))
@@ -77,17 +84,27 @@ public struct SyncExecutor {
         timer.mark("analyze")
         try cache.saveFingerprints()
 
+        var manifest = plan.manifest
+        var anlzWritten = 0
         for t in plan.tracks {
             guard let a = analyses[t.contentHash] ?? cache.analysis(forHash: t.contentHash, policy: analysisPolicy) else { continue }
             analyses[t.contentHash] = a
-            if t.action == .unchanged && !t.needsAnalysis && !rewriteAnalysisFiles { continue }
+            let cues = CueBuilder.cues(from: mixedInKey?.track(for: t.sourceFile), analysis: a, mode: cueMode)
+            let fingerprint = "v\(a.version);pqt2=\(anlzOptions.includeExtendedBeatGrid);cues=\(CueBuilder.fingerprint(cues))"
+            let stale = manifest.tracks[t.source.id]?.anlzFingerprint != fingerprint
+            if t.action == .unchanged && !t.needsAnalysis && !rewriteAnalysisFiles && !stale { continue }
             try ensureMounted(volume)
-            try writeAnlz(for: t, analysis: a, on: volume)
+            try writeAnlz(for: t, analysis: a, cues: cues, on: volume)
+            manifest.tracks[t.source.id]?.anlzFingerprint = fingerprint
+            anlzWritten += 1
+        }
+        if !plan.hasChanges && anlzWritten == 0 && !force {
+            progress(.done)
+            return false
         }
 
         // 4. Build the database in staging.
         timer.mark("anlz files")
-        var manifest = plan.manifest
         let (artPaths, orphanedArt) = try writeArtwork(plan, manifest: &manifest)
         timer.mark("artwork")
         progress(.writingDatabase)
@@ -158,6 +175,7 @@ public struct SyncExecutor {
         FileOps.syncFilesystem()
         timer.mark("cleanup")
         progress(.done)
+        return true
     }
 
     /// Writes each distinct cover once and returns track ID → small-image path, plus image
@@ -203,9 +221,9 @@ public struct SyncExecutor {
         }
     }
 
-    private func writeAnlz(for t: SyncPlan.TrackEntry, analysis: TrackAnalysis, on volume: Volume) throws {
+    private func writeAnlz(for t: SyncPlan.TrackEntry, analysis: TrackAnalysis, cues: [CuePoint], on volume: Volume) throws {
         let totalSamples = UInt64((analysis.durationSeconds * Double(analysis.sampleRate)).rounded())
-        let files = AnlzWriter(audioPath: t.usbPath, analysis: analysis, totalSamples: totalSamples, options: anlzOptions).build()
+        let files = AnlzWriter(audioPath: t.usbPath, analysis: analysis, totalSamples: totalSamples, cues: cues, options: anlzOptions).build()
         let dir = volume.url(forUsbPath: AnlzPath.directory(forAudioPath: t.usbPath))
         try FileOps.writeAtomically(files.dat, to: dir.appendingPathComponent("ANLZ0000.DAT"))
         try FileOps.writeAtomically(files.ext, to: dir.appendingPathComponent("ANLZ0000.EXT"))

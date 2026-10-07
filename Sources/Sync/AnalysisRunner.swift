@@ -1,6 +1,7 @@
 import Analysis
 import DeckhandCore
 import Foundation
+import MusicSource
 
 /// How file tags are used during analysis.
 public struct AnalysisPolicy: Sendable, Equatable {
@@ -8,14 +9,19 @@ public struct AnalysisPolicy: Sendable, Equatable {
     public var keyFromTags = true
     /// Use the file's BPM tag to choose tempo and pin the beat grid.
     public var bpmHintFromTags = true
+    /// Prefer Mixed In Key's stored analysis (precise tempo, key) over file tags when available.
+    public var useMixedInKey = true
 
-    public init(keyFromTags: Bool = true, bpmHintFromTags: Bool = true) {
+    public init(keyFromTags: Bool = true, bpmHintFromTags: Bool = true, useMixedInKey: Bool = true) {
         self.keyFromTags = keyFromTags
         self.bpmHintFromTags = bpmHintFromTags
+        self.useMixedInKey = useMixedInKey
     }
 
     /// Stored with cached results; a different policy means re-analysis.
-    var fingerprint: String { "key-tags=\(keyFromTags ? 1 : 0);bpm-hint=\(bpmHintFromTags ? 1 : 0)" }
+    var fingerprint: String {
+        "key-tags=\(keyFromTags ? 1 : 0);bpm-hint=\(bpmHintFromTags ? 1 : 0);mik=\(useMixedInKey ? 1 : 0)"
+    }
 }
 
 /// Analyzes tracks concurrently and caches results by audio content hash.
@@ -39,11 +45,14 @@ public struct AnalysisRunner {
 
     let cache: AnalysisCache
     let policy: AnalysisPolicy
+    let mixedInKey: MixedInKeyLibrary?
     let progress: @Sendable (Event) -> Void
 
-    public init(cache: AnalysisCache, policy: AnalysisPolicy, progress: @escaping @Sendable (Event) -> Void = { _ in }) {
+    public init(cache: AnalysisCache, policy: AnalysisPolicy, mixedInKey: MixedInKeyLibrary? = nil,
+                progress: @escaping @Sendable (Event) -> Void = { _ in }) {
         self.cache = cache
         self.policy = policy
+        self.mixedInKey = policy.useMixedInKey ? mixedInKey : nil
         self.progress = progress
     }
 
@@ -76,7 +85,11 @@ public struct AnalysisRunner {
 
     func analyze(_ url: URL) throws -> TrackAnalysis {
         let tags = (policy.keyFromTags || policy.bpmHintFromTags) ? FileTagReader.read(url) : FileTags()
-        let hints = AnalysisHints(bpm: policy.bpmHintFromTags ? tags.bpm : nil, key: policy.keyFromTags ? tags.key : nil)
+        var hints = AnalysisHints(bpm: policy.bpmHintFromTags ? tags.bpm : nil, key: policy.keyFromTags ? tags.key : nil)
+        if let mik = mixedInKey?.track(for: url) {
+            hints.bpm = mik.tempo ?? hints.bpm
+            hints.key = mik.key ?? hints.key
+        }
         return try TrackAnalyzer.analyze(url: url, hints: hints)
     }
 }
