@@ -70,8 +70,8 @@ public struct AnalysisRunner {
                 let index = lock.withLock { started += 1; return started }
                 progress(.started(index: index, total: pending.count, title: item.title))
                 do {
-                    let a = try analyze(item.url)
-                    try cache.store(a, forHash: item.contentHash, policy: policy)
+                    let (a, cues) = try analyze(item.url)
+                    try cache.store(a, cues: cues, forHash: item.contentHash, policy: policy)
                     lock.withLock { results[item.contentHash] = a }
                 } catch {
                     progress(.failed(title: item.title, error: "\(error)"))
@@ -83,13 +83,16 @@ public struct AnalysisRunner {
         return results
     }
 
-    func analyze(_ url: URL) throws -> TrackAnalysis {
+    /// Decodes once and runs every analysis stage on the same audio.
+    func analyze(_ url: URL) throws -> (TrackAnalysis, CueAnalyzer.Result) {
         let tags = (policy.keyFromTags || policy.bpmHintFromTags) ? FileTagReader.read(url) : FileTags()
         var hints = AnalysisHints(bpm: policy.bpmHintFromTags ? tags.bpm : nil, key: policy.keyFromTags ? tags.key : nil)
         if let mik = mixedInKey?.track(for: url) {
             hints.bpm = mik.tempo ?? hints.bpm
             hints.key = mik.key ?? hints.key
         }
-        return try TrackAnalyzer.analyze(url: url, hints: hints)
+        let audio = try AudioDecoder.decodeMono(url)
+        let analysis = TrackAnalyzer.analyze(audio, hints: hints)
+        return (analysis, CueAnalyzer.detect(audio, analysis: analysis))
     }
 }

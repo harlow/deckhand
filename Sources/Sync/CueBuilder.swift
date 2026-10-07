@@ -1,3 +1,4 @@
+import Analysis
 import DeckhandCore
 import Foundation
 import MusicSource
@@ -7,6 +8,16 @@ public enum CueMode: String, Sendable, CaseIterable {
     case memory, hot, both, none
 }
 
+/// Where cue positions come from.
+public enum CueSource: String, Sendable, CaseIterable {
+    /// Mixed In Key's cues when it has the track, otherwise Deckhand's.
+    case auto
+    /// Always Deckhand's own detection.
+    case deckhand
+    /// Only Mixed In Key's cues; tracks it doesn't have get none.
+    case mik
+}
+
 /// Turns imported cue positions into device cues.
 enum CueBuilder {
     /// Players have eight hot cue pads (A–H).
@@ -14,16 +25,23 @@ enum CueBuilder {
     /// Imported cues within this distance of a beat snap onto it.
     static let snapToleranceMs = 150
 
-    static func cues(from mik: MixedInKeyLibrary.Track?, analysis: TrackAnalysis?, mode: CueMode) -> [CuePoint] {
-        guard mode != .none, let mik, !mik.cues.isEmpty else { return [] }
+    static func cues(mik: MixedInKeyLibrary.Track?, detected: CueAnalyzer.Result?, analysis: TrackAnalysis?,
+                     source: CueSource, mode: CueMode) -> [CuePoint] {
+        guard mode != .none else { return [] }
         let beats = analysis?.beats.map(\.timeMs) ?? []
+        let useMIK = source == .mik || (source == .auto && !(mik?.cues.isEmpty ?? true))
 
         var positions: [(timeMs: Int, energy: Int)] = []
-        for cue in mik.cues {
-            let raw = Int((cue.time * 1000).rounded())
-            let t = snap(raw, to: beats)
-            if positions.last?.timeMs != t { positions.append((t, cue.energy)) }
+        if useMIK {
+            // MIK times are on the decoded timeline; snapping onto our (player-timeline) beats absorbs the offset.
+            for cue in mik?.cues ?? [] {
+                let t = snap(Int((cue.time * 1000).rounded()), to: beats)
+                if positions.last?.timeMs != t { positions.append((t, cue.energy)) }
+            }
+        } else {
+            positions = (detected?.cues ?? []).map { ($0.timeMs, $0.energy) }
         }
+        guard !positions.isEmpty else { return [] }
 
         var out: [CuePoint] = []
         if mode == .memory || mode == .both {

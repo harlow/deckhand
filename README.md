@@ -37,6 +37,11 @@ Sync is incremental: audio is copied once, analysis (BPM, beat grid, key, wavefo
 database is rebuilt in a staging file, validated, and swapped in; play history recorded by the player
 is preserved. Deckhand only deletes files it put on the drive.
 
+Analysis is Deckhand's own: BPM and beat grid, key (Camelot/classic), and auto cue points with
+energy levels, written as memory cues and colour-coded hot cues A–H (`--cues`, `--cue-source`).
+If Mixed In Key 11 is installed, its stored results are used for tracks it already analyzed
+(`--no-mixed-in-key` to turn off); it's never required.
+
 Tracks that can't be exported (DRM, cloud-only, missing, unsupported format) are listed, never
 silently dropped.
 

@@ -11,11 +11,21 @@ public enum CueAnalyzer {
     public struct DetectedCue: Sendable, Equatable {
         public var timeMs: Int
         public var energy: Int
+
+        public init(timeMs: Int, energy: Int) {
+            self.timeMs = timeMs
+            self.energy = energy
+        }
     }
 
     public struct Result: Sendable, Equatable {
         public var cues: [DetectedCue]
         public var energy: Int?
+
+        public init(cues: [DetectedCue], energy: Int?) {
+            self.cues = cues
+            self.energy = energy
+        }
     }
 
     /// Bump when the models or features change.

@@ -1,3 +1,4 @@
+import Analysis
 import DeckhandCore
 import MusicSource
 import Testing
@@ -22,15 +23,26 @@ import Testing
     }
 
     @Test func modes() {
-        let both = CueBuilder.cues(from: mik, analysis: analysis(), mode: .both)
+        let both = CueBuilder.cues(mik: mik, detected: nil, analysis: analysis(), source: .auto, mode: .both)
         let hot = both.filter { if case .hot = $0.kind { true } else { false } }
         #expect(both.count - hot.count == 10)
         #expect(hot.count == 8)
         #expect(hot.first?.kind == .hot(1) && hot.last?.kind == .hot(8))
         #expect(hot.first?.timeMs == 25)
         #expect(hot.first?.comment == "Energy 5")
-        #expect(CueBuilder.cues(from: mik, analysis: analysis(), mode: .none).isEmpty)
-        #expect(CueBuilder.cues(from: nil, analysis: analysis(), mode: .both).isEmpty)
-        #expect(CueBuilder.fingerprint(both) != CueBuilder.fingerprint(CueBuilder.cues(from: mik, analysis: analysis(), mode: .memory)))
+        #expect(CueBuilder.cues(mik: mik, detected: nil, analysis: analysis(), source: .auto, mode: .none).isEmpty)
+        #expect(CueBuilder.cues(mik: nil, detected: nil, analysis: analysis(), source: .auto, mode: .both).isEmpty)
+        #expect(CueBuilder.fingerprint(both) != CueBuilder.fingerprint(CueBuilder.cues(mik: mik, detected: nil, analysis: analysis(), source: .auto, mode: .memory)))
+    }
+
+    @Test func sources() {
+        let detected = CueAnalyzer.Result(cues: [.init(timeMs: 525, energy: 8), .init(timeMs: 16_525, energy: 4)], energy: 7)
+        let own = CueBuilder.cues(mik: mik, detected: detected, analysis: analysis(), source: .deckhand, mode: .hot)
+        #expect(own.map(\.timeMs) == [525, 16_525])
+        #expect(own.first?.rgb == CueBuilder.color(energy: 8))
+        // auto prefers MIK when it has cues, falls back to Deckhand's otherwise.
+        #expect(CueBuilder.cues(mik: mik, detected: detected, analysis: analysis(), source: .auto, mode: .hot).count == 8)
+        #expect(CueBuilder.cues(mik: nil, detected: detected, analysis: analysis(), source: .auto, mode: .hot).count == 2)
+        #expect(CueBuilder.cues(mik: nil, detected: detected, analysis: analysis(), source: .mik, mode: .hot).isEmpty)
     }
 }

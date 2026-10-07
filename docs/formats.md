@@ -81,6 +81,8 @@ the player's timeline. Non-MP3 formats get no offset (unverified for AAC/M4A).
 | Grid phase vs Rekordbox | 75.5% within 10 ms (MIK itself: 77.5%) |
 | Downbeat agrees with Rekordbox | 75.9% (Rekordbox's own first beat is bar 1 in only 83%) |
 | Tempo range | 80–160 BPM, folding like MIK (172 → 86) |
+| Auto cues vs MIK (424 held-out) | F1 0.70 at ±1 beat, 0.75 at ±1 bar; up to 8 per track on phrase boundaries |
+| Track energy vs MIK | 55% exact, 97% within ±1 (always-6 baseline: 51% exact) |
 
 Mixed In Key's beat times are on Core Audio's decoded timeline; add `AudioDecoder.mp3TimelineOffset`
 to compare with Rekordbox (then median 3.6 ms apart).

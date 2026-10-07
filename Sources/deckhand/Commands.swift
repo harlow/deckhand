@@ -96,7 +96,9 @@ struct SyncCommand: ParsableCommand {
     @Option(help: "Key display on the player: classic (Am) or alphanumeric (8A).")
     var keyFormat: OneLibraryDatabase.KeyFormat = .classic
     @OptionGroup var tagOptions: TagOptions
-    @Option(help: "Cue points from Mixed In Key: memory, hot (A–H), both, or none.") var cues: CueMode = .both
+    @Option(help: "Cues to write: memory, hot (A–H), both, or none.") var cues: CueMode = .both
+    @Option(help: "Cue positions: auto (Mixed In Key's if it has the track, else Deckhand's), deckhand, or mik.")
+    var cueSource: CueSource = .auto
     @Flag(help: .hidden) var extendedBeatgrid = false
     @Flag(help: .hidden) var rewriteAnalysis = false
 
@@ -152,6 +154,7 @@ struct SyncCommand: ParsableCommand {
         executor.artwork = lib.artwork
         executor.mixedInKey = tagOptions.mixedInKeyLibrary
         executor.cueMode = cues
+        executor.cueSource = cueSource
         let wrote = try executor.execute(plan, keyFormat: keyFormat, force: selectionChanged || rewriteAnalysis)
         if !wrote {
             print("\nAlready up to date.")
@@ -277,6 +280,7 @@ extension String {
 
 extension OneLibraryDatabase.KeyFormat: ExpressibleByArgument {}
 extension CueMode: ExpressibleByArgument {}
+extension CueSource: ExpressibleByArgument {}
 
 /// How existing file tags feed analysis. Shared by `sync` and `analyze`.
 struct TagOptions: ParsableArguments {

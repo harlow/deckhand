@@ -27,6 +27,7 @@ public struct SyncExecutor {
     public var analysisPolicy = AnalysisPolicy()
     /// Which imported cues to write as memory and/or hot cues.
     public var cueMode: CueMode = .both
+    public var cueSource: CueSource = .auto
     /// Mixed In Key's stored analysis, used as hints when present.
     public var mixedInKey: MixedInKeyLibrary?
     /// Cover art source; tracks get no artwork when nil.
@@ -89,7 +90,9 @@ public struct SyncExecutor {
         for t in plan.tracks {
             guard let a = analyses[t.contentHash] ?? cache.analysis(forHash: t.contentHash, policy: analysisPolicy) else { continue }
             analyses[t.contentHash] = a
-            let cues = CueBuilder.cues(from: mixedInKey?.track(for: t.sourceFile), analysis: a, mode: cueMode)
+            let cues = CueBuilder.cues(mik: mixedInKey?.track(for: t.sourceFile),
+                                       detected: cache.detectedCues(forHash: t.contentHash, policy: analysisPolicy),
+                                       analysis: a, source: cueSource, mode: cueMode)
             let fingerprint = "v\(a.version);pqt2=\(anlzOptions.includeExtendedBeatGrid);cues=\(CueBuilder.fingerprint(cues))"
             let stale = manifest.tracks[t.source.id]?.anlzFingerprint != fingerprint
             if t.action == .unchanged && !t.needsAnalysis && !rewriteAnalysisFiles && !stale { continue }

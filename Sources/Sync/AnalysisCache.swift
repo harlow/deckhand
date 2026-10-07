@@ -1,3 +1,4 @@
+import Analysis
 import DeckhandCore
 import Foundation
 
@@ -39,19 +40,33 @@ public final class AnalysisCache: @unchecked Sendable {
         root.appendingPathComponent("analysis").appendingPathComponent("\(hash).json")
     }
 
-    /// Cached analysis made by the current algorithm version under `policy`.
+    /// Cached analysis made by the current algorithm versions under `policy`.
     public func analysis(forHash hash: String, policy: AnalysisPolicy) -> TrackAnalysis? {
+        load(hash, policy)?.analysis
+    }
+
+    /// Cue points and energy detected alongside the analysis.
+    public func detectedCues(forHash hash: String, policy: AnalysisPolicy) -> CueAnalyzer.Result? {
+        guard let stored = load(hash, policy), let cues = stored.cues else { return nil }
+        return CueAnalyzer.Result(cues: cues.map { .init(timeMs: $0[0], energy: $0[1]) }, energy: stored.trackEnergy)
+    }
+
+    public func store(_ analysis: TrackAnalysis, cues: CueAnalyzer.Result?, forHash hash: String, policy: AnalysisPolicy) throws {
+        var stored = Stored(analysis)
+        stored.policy = policy.fingerprint
+        stored.cueVersion = CueAnalyzer.version
+        stored.cues = cues?.cues.map { [$0.timeMs, $0.energy] }
+        stored.trackEnergy = cues?.energy
+        try JSONEncoder().encode(stored).write(to: path(hash), options: .atomic)
+    }
+
+    private func load(_ hash: String, _ policy: AnalysisPolicy) -> Stored? {
         guard let data = try? Data(contentsOf: path(hash)),
               let stored = try? JSONDecoder().decode(Stored.self, from: data),
               stored.version == TrackAnalysis.currentVersion,
+              stored.cueVersion == CueAnalyzer.version,
               stored.policy == policy.fingerprint else { return nil }
-        return stored.analysis
-    }
-
-    public func store(_ analysis: TrackAnalysis, forHash hash: String, policy: AnalysisPolicy) throws {
-        var stored = Stored(analysis)
-        stored.policy = policy.fingerprint
-        try JSONEncoder().encode(stored).write(to: path(hash), options: .atomic)
+        return stored
     }
 
     /// Compact on-disk form: waveforms stored as sqrt-companded bytes.
@@ -60,6 +75,10 @@ public final class AnalysisCache: @unchecked Sendable {
         var policy: String?
         var bpmSource: ValueSource?
         var keySource: ValueSource?
+        var cueVersion: Int?
+        /// [timeMs, energy] pairs.
+        var cues: [[Int]]?
+        var trackEnergy: Int?
         var durationSeconds: Double
         var sampleRate: Int
         var bpm: Double
