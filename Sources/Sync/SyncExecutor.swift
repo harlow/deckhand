@@ -24,6 +24,8 @@ public struct SyncExecutor {
     /// ANLZ writer options; see AnlzWriter.Options.
     public var anlzOptions = AnlzWriter.Options()
     public var analysisPolicy = AnalysisPolicy()
+    /// Cover art source; tracks get no artwork when nil.
+    public var artwork: (any ArtworkProvider)?
     /// Rewrite analysis files for all tracks, e.g. after changing anlzOptions.
     public var rewriteAnalysisFiles = false
 
@@ -85,9 +87,16 @@ public struct SyncExecutor {
 
         // 4. Build the database in staging.
         timer.mark("anlz files")
+        var manifest = plan.manifest
+        let (artPaths, orphanedArt) = try writeArtwork(plan, manifest: &manifest)
+        timer.mark("artwork")
         progress(.writingDatabase)
         let contents = OneLibraryDatabase.Contents(
-            tracks: plan.tracks.map { exportTrack($0, analysis: analyses[$0.contentHash]) },
+            tracks: plan.tracks.map {
+                var e = exportTrack($0, analysis: analyses[$0.contentHash])
+                e.artworkPath = artPaths[$0.source.id]
+                return e
+            },
             playlists: plan.playlists.map {
                 ExportPlaylist(playlistId: $0.playlistId, name: $0.source.name, parentId: $0.parentPlaylistId,
                                isFolder: $0.source.isFolder, sequenceNo: $0.sequenceNo, contentIds: $0.contentIds)
@@ -127,7 +136,6 @@ public struct SyncExecutor {
             try FileManager.default.moveItem(at: staging, to: dbURL)
         }
 
-        var manifest = plan.manifest
         manifest.lastSyncedAt = Date()
         try manifest.save(to: volume)
         FileOps.syncFilesystem()
@@ -141,11 +149,51 @@ public struct SyncExecutor {
                 try? FileManager.default.removeItem(at: volume.url(forUsbPath: AnlzPath.directory(forAudioPath: r.usbPath)))
             }
         }
+        for path in orphanedArt {
+            try? FileManager.default.removeItem(at: volume.url(forUsbPath: path))
+            try? FileManager.default.removeItem(at: volume.url(forUsbPath: ArtworkWriter.mediumPath(forSmall: path)))
+        }
         try? FileManager.default.removeItem(at: backup)
         FileOps.removeAppleDoubleFiles(volumeRoot: volume.url, managedPaths: Self.managedPaths)
         FileOps.syncFilesystem()
         timer.mark("cleanup")
         progress(.done)
+    }
+
+    /// Writes each distinct cover once and returns track ID → small-image path, plus image
+    /// paths no longer used (deleted after commit).
+    private func writeArtwork(_ plan: SyncPlan, manifest: inout Manifest) throws -> ([String: String], [String]) {
+        guard let artwork else { return ([:], []) }
+        let previous = manifest.artwork ?? [:]
+        var used: [String: Int] = [:]
+        var next = manifest.nextImageId ?? 1
+        var paths: [String: String] = [:]
+        for t in plan.tracks {
+            guard let data = artwork.artwork(forTrackId: t.source.id) else { continue }
+            let hash = ArtworkWriter.hash(data)
+            let id = used[hash] ?? previous[hash] ?? {
+                defer { next += 1 }
+                return next
+            }()
+            let path = ArtworkWriter.path(imageId: id)
+            if used[hash] == nil {
+                let small = plan.volume.url(forUsbPath: path)
+                let medium = plan.volume.url(forUsbPath: ArtworkWriter.mediumPath(forSmall: path))
+                if !FileManager.default.fileExists(atPath: small.path) || !FileManager.default.fileExists(atPath: medium.path) {
+                    guard let s = ArtworkWriter.jpeg(data, size: ArtworkWriter.smallSize),
+                          let m = ArtworkWriter.jpeg(data, size: ArtworkWriter.mediumSize) else { continue }
+                    try ensureMounted(plan.volume)
+                    try FileOps.writeAtomically(s, to: small)
+                    try FileOps.writeAtomically(m, to: medium)
+                }
+                used[hash] = id
+            }
+            paths[t.source.id] = path
+        }
+        manifest.artwork = used
+        manifest.nextImageId = next
+        let orphaned = previous.filter { used[$0.key] == nil }.map { ArtworkWriter.path(imageId: $0.value) }
+        return (paths, orphaned)
     }
 
     private func ensureMounted(_ volume: Volume) throws {

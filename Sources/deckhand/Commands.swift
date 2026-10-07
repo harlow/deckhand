@@ -151,6 +151,7 @@ struct SyncCommand: ParsableCommand {
         executor.anlzOptions.includeExtendedBeatGrid = extendedBeatgrid
         executor.rewriteAnalysisFiles = rewriteAnalysis
         executor.analysisPolicy = tagOptions.policy
+        executor.artwork = lib.artwork
         try executor.execute(plan, keyFormat: keyFormat)
         print("\nDone. \(plan.tracks.count) tracks in \(plan.playlists.filter { !$0.source.isFolder }.count) playlists on \(v.name).")
         print("Run `deckhand eject \(v.url.path)` before unplugging.")

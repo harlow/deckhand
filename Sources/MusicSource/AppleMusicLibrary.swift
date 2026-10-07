@@ -28,6 +28,7 @@ public enum AppleMusicLibrary {
 
         var playlists: [SourcePlaylist] = []
         var tracks: [String: SourceTrack] = [:]
+        var items: [String: ITLibMediaItem] = [:]
 
         for p in lib.allPlaylists where isUserPlaylist(p) {
             let isFolder = p.kind == .folder
@@ -36,6 +37,7 @@ public enum AppleMusicLibrary {
                 for item in p.items where item.mediaKind == .kindSong {
                     let t = track(item)
                     tracks[t.id] = t
+                    items[t.id] = item
                     ids.append(t.id)
                 }
             }
@@ -47,7 +49,7 @@ public enum AppleMusicLibrary {
                 trackIds: ids
             ))
         }
-        return SourceLibrary(playlists: playlists, tracks: tracks)
+        return SourceLibrary(playlists: playlists, tracks: tracks, artwork: AppleMusicArtwork(library: lib, items: items))
     }
 
     /// Excludes the master library and built-in playlists (Music, Movies, Purchased, ...).
@@ -85,5 +87,25 @@ public enum AppleMusicLibrary {
     private static func hex(_ n: NSNumber) -> String {
         let s = String(n.uint64Value, radix: 16, uppercase: true)
         return String(repeating: "0", count: max(0, 16 - s.count)) + s
+    }
+}
+
+/// Artwork from Apple Music, including art it downloaded that isn't embedded in the file.
+final class AppleMusicArtwork: ArtworkProvider, @unchecked Sendable {
+    // ITLibrary objects aren't documented as thread-safe; serialize access.
+    private let lock = NSLock()
+    private let library: ITLibrary
+    private let items: [String: ITLibMediaItem]
+
+    init(library: ITLibrary, items: [String: ITLibMediaItem]) {
+        self.library = library
+        self.items = items
+    }
+
+    func artwork(forTrackId id: String) -> Data? {
+        lock.withLock {
+            guard let item = items[id], item.hasArtworkAvailable, let art = item.artwork else { return nil }
+            return art.imageData
+        }
     }
 }

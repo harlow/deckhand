@@ -62,14 +62,24 @@ public struct SourcePlaylist: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
+/// Supplies cover art for source tracks, as encoded image data (JPEG/PNG).
+public protocol ArtworkProvider: Sendable {
+    func artwork(forTrackId id: String) -> Data?
+}
+
 /// A snapshot of the source library: all playlists (in source order) and the tracks they reference.
 public struct SourceLibrary: Codable, Sendable {
     public var playlists: [SourcePlaylist]
     public var tracks: [String: SourceTrack]
+    /// Cover art lookup, if the source can provide it. Not persisted.
+    public var artwork: (any ArtworkProvider)?
 
-    public init(playlists: [SourcePlaylist], tracks: [String: SourceTrack]) {
+    enum CodingKeys: String, CodingKey { case playlists, tracks }
+
+    public init(playlists: [SourcePlaylist], tracks: [String: SourceTrack], artwork: (any ArtworkProvider)? = nil) {
         self.playlists = playlists
         self.tracks = tracks
+        self.artwork = artwork
     }
 
     /// Finds playlists by exact name or ID.

@@ -64,7 +64,12 @@ public enum OneLibraryValidator {
                 issues.append("playlist_content references missing playlist \(p)")
             }
         }
-        if try db.query("SELECT * FROM property").count != 1 {
+        for row in try db.query("SELECT path FROM image") {
+            if let path = row["path"]?.string, !FileManager.default.fileExists(atPath: url(path).path) {
+                issues.append("Artwork file missing: \(path)")
+            }
+        }
+                if try db.query("SELECT * FROM property").count != 1 {
             issues.append("property table must have exactly one row")
         }
         return issues

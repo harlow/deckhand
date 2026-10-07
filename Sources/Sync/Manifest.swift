@@ -34,6 +34,9 @@ public struct Manifest: Codable, Sendable {
     public var playlists: [String: Playlist] = [:]
     public var nextContentId = 1
     public var nextPlaylistId = 1
+    /// Artwork content hash → image ID. Optional so older manifests still decode.
+    public var artwork: [String: Int]?
+    public var nextImageId: Int?
 
     public init() {}
 
