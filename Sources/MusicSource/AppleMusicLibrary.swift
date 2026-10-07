@@ -18,7 +18,8 @@ public enum MusicSourceError: Error, CustomStringConvertible {
 /// Reads playlists and tracks from the local Apple Music library via iTunesLibrary.framework.
 /// Read-only; does not launch or script Music.app.
 public enum AppleMusicLibrary {
-    public static func load() throws -> SourceLibrary {
+    /// `allSongs`: also include songs that aren't in any user playlist (see `SourceLibrary.allTrackIds`).
+    public static func load(allSongs: Bool = false) throws -> SourceLibrary {
         let lib: ITLibrary
         do {
             lib = try ITLibrary(apiVersion: "1.1")
@@ -49,7 +50,19 @@ public enum AppleMusicLibrary {
                 trackIds: ids
             ))
         }
-        return SourceLibrary(playlists: playlists, tracks: tracks, artwork: AppleMusicArtwork(library: lib, items: items))
+        var all: [String]?
+        if allSongs {
+            all = []
+            for item in lib.allMediaItems where item.mediaKind == .kindSong {
+                let t = tracks[hex(item.persistentID)] ?? track(item)
+                tracks[t.id] = t
+                items[t.id] = item
+                all!.append(t.id)
+            }
+        }
+        var library = SourceLibrary(playlists: playlists, tracks: tracks, artwork: AppleMusicArtwork(library: lib, items: items))
+        library.allTrackIds = all
+        return library
     }
 
     /// Every song in the library (not only those in user playlists).

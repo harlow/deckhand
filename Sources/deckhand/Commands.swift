@@ -90,6 +90,8 @@ struct SyncCommand: ParsableCommand {
     @Argument(help: "Drive, e.g. /Volumes/DJUSB.") var volume: String
     @Option(name: .long, help: "Playlist name or ID (repeatable). Replaces the drive's saved selection.")
     var playlist: [String] = []
+    @Flag(help: "Sync every song and every playlist; future syncs follow the library automatically.")
+    var entireLibrary = false
     @Flag(help: "Show what would change without writing anything.") var dryRun = false
     @Flag(name: .shortAndLong, help: "Don't ask for confirmation.") var yes = false
     @Flag(help: "List every track change.") var verbose = false
@@ -113,9 +115,12 @@ struct SyncCommand: ParsableCommand {
         guard let manifest = try Manifest.load(from: v) else { throw SyncError.notInitialized(v.name) }
         if !dryRun { try v.checkWritable() }
 
-        let lib = try AppleMusicLibrary.load()
+        let wholeLibrary = entireLibrary || (playlist.isEmpty && manifest.entireLibrary == true)
+        let lib = try AppleMusicLibrary.load(allSongs: wholeLibrary)
         var selected = manifest.selectedPlaylistIds
-        if !playlist.isEmpty {
+        if wholeLibrary {
+            selected = []
+        } else if !playlist.isEmpty {
             selected = try playlist.map { name in
                 guard let p = lib.playlist(named: name) else { throw SyncError.playlistNotFound(name) }
                 return p.id
@@ -126,7 +131,7 @@ struct SyncCommand: ParsableCommand {
 
         let cache = try AnalysisCache()
         let plan = try SyncPlanner(library: lib, cache: cache, policy: tagOptions.policy)
-            .plan(volume: v, selectedPlaylistIds: selected, previous: manifest)
+            .plan(volume: v, selectedPlaylistIds: selected, entireLibrary: wholeLibrary, previous: manifest)
         printPlan(plan)
 
         if dryRun {
@@ -134,6 +139,7 @@ struct SyncCommand: ParsableCommand {
             return
         }
         let selectionChanged = plan.manifest.selectedPlaylistIds != manifest.selectedPlaylistIds
+            || plan.manifest.entireLibrary != manifest.entireLibrary
         if (plan.hasChanges || selectionChanged) && !yes {
             print("\nSync? [Y/n] ", terminator: "")
             let answer = readLine()?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""

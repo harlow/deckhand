@@ -30,6 +30,8 @@ public struct Manifest: Codable, Sendable {
     public var lastSyncedAt: Date?
     /// Source playlist IDs the user selected for this drive.
     public var selectedPlaylistIds: [String] = []
+    /// Sync every song and every playlist (selection follows the library). Optional for older manifests.
+    public var entireLibrary: Bool?
     /// Keyed by source track ID.
     public var tracks: [String: Track] = [:]
     /// Keyed by source playlist ID.

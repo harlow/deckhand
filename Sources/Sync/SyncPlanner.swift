@@ -61,9 +61,14 @@ public struct SyncPlanner {
         self.policy = policy
     }
 
-    public func plan(volume: Volume, selectedPlaylistIds: [String], previous: Manifest, verifyFiles: Bool = true) throws -> SyncPlan {
+    /// `entireLibrary`: sync every playlist plus songs that aren't in any playlist (requires a library
+    /// loaded with all songs).
+    public func plan(volume: Volume, selectedPlaylistIds: [String], entireLibrary: Bool = false, previous: Manifest,
+                     verifyFiles: Bool = true) throws -> SyncPlan {
         var manifest = previous
+        let selectedPlaylistIds = entireLibrary ? library.playlists.map(\.id) : selectedPlaylistIds
         manifest.selectedPlaylistIds = selectedPlaylistIds
+        manifest.entireLibrary = entireLibrary
 
         let playlists = library.selection(Set(selectedPlaylistIds))
         var skipped: [SyncPlan.Skipped] = []
@@ -71,8 +76,12 @@ public struct SyncPlanner {
         var order: [String] = []
         var superseded: [Manifest.Track] = []
 
-        // Tracks, in first-seen playlist order.
-        for p in playlists where !p.isFolder {
+        // Tracks, in first-seen playlist order; then (entire library) songs in no playlist.
+        var groups = playlists.filter { !$0.isFolder }
+        if entireLibrary, let all = library.allTrackIds {
+            groups.append(SourcePlaylist(id: "", name: "Library", trackIds: all))
+        }
+        for p in groups {
             for id in p.trackIds where entries[id] == nil {
                 guard let t = library.tracks[id] else { continue }
                 if let reason = Self.eligibilityProblem(t) {

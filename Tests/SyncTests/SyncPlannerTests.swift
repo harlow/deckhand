@@ -111,4 +111,19 @@ import Testing
         #expect(SyncPlanner.sanitize("AC/DC: Back? <In> \"Black\"") == "AC_DC_ Back_ _In_ _Black_")
         #expect(SyncPlanner.sanitize("...") == "Track")
     }
+
+    @Test func entireLibraryIncludesSongsInNoPlaylist() throws {
+        var lib = library(["A", "B"])
+        lib.allTrackIds = ["A", "B", "C", "D"]
+        let volume = Volume(testRoot: drive)
+        let whole = try SyncPlanner(library: lib, cache: cache)
+            .plan(volume: volume, selectedPlaylistIds: [], entireLibrary: true, previous: Manifest())
+        #expect(whole.tracks.map(\.source.id) == ["A", "B", "C", "D"])
+        #expect(whole.manifest.entireLibrary == true)
+        #expect(whole.playlists.map(\.source.name) == ["House"])
+
+        let selected = try SyncPlanner(library: lib, cache: cache)
+            .plan(volume: volume, selectedPlaylistIds: ["house"], previous: Manifest())
+        #expect(selected.tracks.map(\.source.id) == ["A", "B"])
+    }
 }

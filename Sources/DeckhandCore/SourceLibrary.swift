@@ -71,10 +71,12 @@ public protocol ArtworkProvider: Sendable {
 public struct SourceLibrary: Codable, Sendable {
     public var playlists: [SourcePlaylist]
     public var tracks: [String: SourceTrack]
+    /// Every song in the library in library order, when loaded with all songs (else nil).
+    public var allTrackIds: [String]?
     /// Cover art lookup, if the source can provide it. Not persisted.
     public var artwork: (any ArtworkProvider)?
 
-    enum CodingKeys: String, CodingKey { case playlists, tracks }
+    enum CodingKeys: String, CodingKey { case playlists, tracks, allTrackIds }
 
     public init(playlists: [SourcePlaylist], tracks: [String: SourceTrack], artwork: (any ArtworkProvider)? = nil) {
         self.playlists = playlists
