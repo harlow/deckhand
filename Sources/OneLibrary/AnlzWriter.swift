@@ -10,6 +10,8 @@ public struct AnlzWriter {
         /// Write the extended beat grid (PQT2). Its per-beat payload is not fully
         /// understood; Rekordbox omits it for some files.
         public var includeExtendedBeatGrid = false
+        /// XOR-mask the phrase section the way Rekordbox 6+ USB exports do.
+        public var maskPhrases = true
 
         public init() {}
     }
@@ -27,9 +29,11 @@ public struct AnlzWriter {
     let totalSamples: UInt64
     let options: Options
     let cues: [CuePoint]
+    let phrases: PhraseAnalysis?
 
     public init(audioPath: String, analysis: TrackAnalysis, totalSamples: UInt64, cues: [CuePoint] = [],
-                options: Options = .init()) {
+                phrases: PhraseAnalysis? = nil, options: Options = .init()) {
+        self.phrases = phrases
         self.cues = cues.sorted { $0.timeMs < $1.timeMs }
         self.audioPath = audioPath
         self.analysis = analysis
@@ -61,6 +65,9 @@ public struct AnlzWriter {
         if options.includeExtendedBeatGrid { extSections.append(pqt2()) }
         extSections.append(pwv5(wf.colorDetail()))
         extSections.append(pwv4(wf.colorPreview(count: 1200)))
+        if let phrases, !phrases.phrases.isEmpty {
+            extSections.append(PhraseCodec.encode(phrases, masked: options.maskPhrases))
+        }
         let ext = file(extSections)
 
         let twoEx = file([
