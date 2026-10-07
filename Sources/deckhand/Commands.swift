@@ -300,12 +300,12 @@ struct TagOptions: ParsableArguments {
 struct AnalyzeCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "analyze",
-        abstract: "Analyze tracks ahead of time (BPM, beat grid, key, waveforms) so syncs only copy files.",
+        abstract: "Analyze tracks ahead of time (BPM, beat grid, key, cues, energy, waveforms) so syncs only copy files.",
         discussion: "Results are stored in Deckhand's cache, not in your music files."
     )
 
     @Option(name: .long, help: "Playlist name or ID (repeatable).") var playlist: [String] = []
-    @Flag(help: "Analyze every local track in the Apple Music library.") var all = false
+    @Flag(help: "Analyze every song in the Apple Music library, including ones in no playlist.") var all = false
     @OptionGroup var tagOptions: TagOptions
 
     func validate() throws {
@@ -313,19 +313,17 @@ struct AnalyzeCommand: ParsableCommand {
     }
 
     func run() throws {
-        let lib = try AppleMusicLibrary.load()
-        var ids: [String] = []
+        var tracks: [SourceTrack] = []
         if all {
-            var seen = Set<String>()
-            ids = lib.playlists.flatMap(\.trackIds).filter { seen.insert($0).inserted }
+            tracks = try AppleMusicLibrary.allSongs()
         } else {
+            let lib = try AppleMusicLibrary.load()
             var seen = Set<String>()
             for name in playlist {
                 guard let p = lib.playlist(named: name) else { throw SyncError.playlistNotFound(name) }
-                ids += p.trackIds.filter { seen.insert($0).inserted }
+                tracks += p.trackIds.filter { seen.insert($0).inserted }.compactMap { lib.tracks[$0] }
             }
         }
-        let tracks = ids.compactMap { lib.tracks[$0] }
         let eligible = tracks.filter { SyncPlanner.eligibilityProblem($0) == nil }
         let cache = try AnalysisCache()
         print("Checking \(eligible.count) tracks…")
