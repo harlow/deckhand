@@ -50,7 +50,9 @@
 #define FFTFRAMESIZE 16384
 
 #undef  HOPSIZE
-#define HOPSIZE (FFTFRAMESIZE / 4)
+// Deckhand: upstream uses FFTFRAMESIZE / 4. Half the frames costs ~0.5 points of key accuracy
+// on our evaluation and halves chromagram time.
+#define HOPSIZE (FFTFRAMESIZE / 2)
 
 #undef  DIRECTSKSTRETCH
 #define DIRECTSKSTRETCH 0.8

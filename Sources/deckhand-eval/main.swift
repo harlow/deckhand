@@ -25,6 +25,14 @@ struct Outcome {
 }
 
 let args = CommandLine.arguments
+if args.count >= 4, args[1] == "key-eval" {
+    try evaluateKeys(featuresDir: args[2], mikPath: args[3])
+    exit(0)
+}
+if args.count >= 4, args[1] == "key-features" {
+    try dumpKeyFeatures(root: args[2], out: args[3])
+    exit(0)
+}
 guard args.count >= 2 else {
     FileHandle.standardError.write("usage: deckhand-eval groundtruth.json [limit]\n".data(using: .utf8)!)
     exit(2)

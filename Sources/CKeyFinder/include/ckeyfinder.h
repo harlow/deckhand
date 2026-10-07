@@ -5,9 +5,11 @@
 extern "C" {
 #endif
 
-/// Key of mono audio via libKeyFinder. Returns 0–23 in libKeyFinder order
-/// (A major, A minor, Bb major, Bb minor, ... Ab minor), 24 for silence, or -1 on error.
-int kf_key(const float *mono, int sampleCount, int sampleRate);
+/// libKeyFinder's chromagram: `*hopsOut` rows of 72 bands (C1 … B6, semitone spacing), for audio
+/// already low-passed below ~2.2 kHz and decimated (e.g. 5 kHz). Skips libKeyFinder's own
+/// filtering/resampling, which dominated its cost. Caller frees `*out` with free().
+/// Returns 0 on success, -1 on error.
+int kf_chromagram_prefiltered(const float *mono, int sampleCount, int sampleRate, double **out, int *hopsOut);
 
 #ifdef __cplusplus
 }

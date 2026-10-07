@@ -57,7 +57,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "deckhand-eval",
-            dependencies: ["Analysis"]
+            dependencies: ["Analysis", "CKeyFinder"]
         ),
         .executableTarget(
             name: "deckhand-grid-eval",

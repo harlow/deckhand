@@ -76,7 +76,7 @@ the player's timeline. Non-MP3 formats get no offset (unverified for AAC/M4A).
 | | |
 |---|---|
 | BPM exact (±0.05) | 94% (0% octave errors with tag hints) |
-| Key exact (libKeyFinder) | 67% — Mixed In Key tags agree with Rekordbox 99%, so tags are preferred |
+| Key vs MIK (373 held-out) | 79% exact, 92% where MIK is confident (≥0.8); MIREX 83.9. Learned linear model on libKeyFinder chroma, 0.12 s/track |
 | Grid phase vs MIK (408 held-out) | median 2.2 ms; 95.7% within 10 ms; 2.3% ≥40 ms off |
 | Grid phase vs Rekordbox | 75.5% within 10 ms (MIK itself: 77.5%) |
 | Downbeat agrees with Rekordbox | 75.9% (Rekordbox's own first beat is bar 1 in only 83%) |
@@ -86,4 +86,5 @@ Mixed In Key's beat times are on Core Audio's decoded timeline; add `AudioDecode
 to compare with Rekordbox (then median 3.6 ms apart).
 
 Grid eval: `python3 Scripts/export-grid-groundtruth.py rb.json && swift build -c release --product deckhand-grid-eval && .build/release/deckhand-grid-eval rb.json`.
-Key eval: `python3 Scripts/export-groundtruth.py gt.json && swift build -c release --product deckhand-eval && .build/release/deckhand-eval gt.json`.
+Key model: `python3 Scripts/train-key-model.py` regenerates `KeyModelWeights.swift`; eval with `deckhand-eval key-eval`.
+Key eval (old): `python3 Scripts/export-groundtruth.py gt.json && swift build -c release --product deckhand-eval && .build/release/deckhand-eval gt.json`.
