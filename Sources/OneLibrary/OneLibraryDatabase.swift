@@ -67,12 +67,12 @@ public enum OneLibraryDatabase {
         }
     }
 
-    /// Opens an existing database for reading, e.g. for validation or diffing.
-    static func open(_ path: URL) throws -> SQLiteDatabase {
+    /// Opens an existing database for reading, e.g. for validation or diffing. Never modifies the drive.
+    static func open(_ path: URL, readOnly: Bool = true) throws -> SQLiteDatabase {
         guard FileManager.default.fileExists(atPath: path.path) else {
             throw OneLibraryError.database("No database at \(path.path)")
         }
-        let db = try SQLiteDatabase(path: path.path, key: key)
+        let db = try SQLiteDatabase(path: path.path, key: key, readOnly: readOnly)
         _ = try db.query("SELECT count(*) FROM sqlite_master")
         return db
     }

@@ -56,7 +56,7 @@ import Testing
         try OneLibraryDatabase.write(Self.sampleContents(), to: first)
         do {
             // Simulate the player recording a set.
-            let db = try OneLibraryDatabase.open(first)
+            let db = try OneLibraryDatabase.open(first, readOnly: false)
             try db.execute("INSERT INTO history VALUES (1, 1, 'HISTORY 001', 0, 0)")
             try db.execute("INSERT INTO history_content VALUES (1, 2, 1), (1, 3, 2)")
             try db.execute("UPDATE content SET djPlayCount = 4 WHERE content_id = 2")
@@ -94,5 +94,14 @@ import Testing
                 .compactMap { $0["sql"]?.string?.replacingOccurrences(of: " ", with: "") })
         }
         #expect(try schema(path) == schema(golden))
+    }
+
+    @Test func readingLeavesNoSideFiles() throws {
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".db")
+        defer { try? FileManager.default.removeItem(at: path) }
+        try OneLibraryDatabase.write(Self.sampleContents(), to: path)
+        _ = try OneLibraryDatabase.open(path).query("SELECT count(*) FROM content")
+        #expect(!FileManager.default.fileExists(atPath: path.path + "-wal"))
+        #expect(!FileManager.default.fileExists(atPath: path.path + "-shm"))
     }
 }

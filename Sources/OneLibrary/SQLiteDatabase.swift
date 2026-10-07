@@ -5,9 +5,13 @@ import Foundation
 final class SQLiteDatabase {
     private var db: OpaquePointer?
 
-    init(path: String, key: String?) throws {
-        let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
-        guard sqlite3_open_v2(path, &db, flags, nil) == SQLITE_OK else {
+    /// `readOnly` opens the file as immutable: no locks, and no -wal/-shm side files on the drive.
+    init(path: String, key: String?, readOnly: Bool = false) throws {
+        let flags = readOnly ? SQLITE_OPEN_READONLY | SQLITE_OPEN_URI : SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
+        let target = readOnly
+            ? "file:\(path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path)?mode=ro&immutable=1"
+            : path
+        guard sqlite3_open_v2(target, &db, flags, nil) == SQLITE_OK else {
             defer { sqlite3_close(db) }
             throw OneLibraryError.database(String(cString: sqlite3_errmsg(db)))
         }
