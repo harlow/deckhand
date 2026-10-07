@@ -21,11 +21,11 @@ public final class AnalysisCache: @unchecked Sendable {
         fingerprints = (try? JSONDecoder().decode([String: String].self, from: Data(contentsOf: fp))) ?? [:]
     }
 
-    /// Content hash for a file, reusing a cached hash when path, size and mtime are unchanged.
+    /// Hash of a file's audio payload (ignores tags), reusing a cached hash when path, size and mtime are unchanged.
     public func contentHash(of url: URL) throws -> String {
-        let key = "\(url.path)|\(FileOps.size(url))|\(FileOps.modificationDate(url)?.timeIntervalSince1970 ?? 0)"
+        let key = "\(AudioHash.scheme)\(url.path)|\(FileOps.size(url))|\(FileOps.modificationDate(url)?.timeIntervalSince1970 ?? 0)"
         if let h = lock.withLock({ fingerprints[key] }) { return h }
-        let h = try FileOps.sha256(url)
+        let h = try AudioHash.hash(url)
         lock.withLock { fingerprints[key] = h }
         return h
     }

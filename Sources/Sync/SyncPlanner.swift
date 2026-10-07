@@ -177,7 +177,8 @@ public struct SyncPlanner {
     static func usbPath(for t: SourceTrack, file: URL, hash: String) -> String {
         let base = [t.artist, t.title].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " - ")
         let name = sanitize(base.isEmpty ? file.deletingPathExtension().lastPathComponent : base)
-        return "/Contents/Deckhand/\(hash.prefix(2))/\(name) [\(hash.prefix(8))].\(file.pathExtension.lowercased())"
+        let digest = hash.split(separator: ":").last.map(String.init) ?? hash
+        return "/Contents/Deckhand/\(digest.prefix(2))/\(name) [\(digest.prefix(8))].\(file.pathExtension.lowercased())"
     }
 
     static func sanitize(_ s: String) -> String {

@@ -59,7 +59,7 @@ public struct SyncExecutor {
             try ensureMounted(volume)
             let dst = volume.url(forUsbPath: t.usbPath)
             if FileManager.default.fileExists(atPath: dst.path), FileOps.size(dst) == t.fileSize,
-               (try? FileOps.sha256(dst)) == t.contentHash {
+               (try? AudioHash.hash(dst)) == t.contentHash {
                 continue
             }
             do {

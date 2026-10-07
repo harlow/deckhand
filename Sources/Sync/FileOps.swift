@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 enum FileOps {
@@ -43,17 +42,6 @@ enum FileOps {
         }
         try? fm.removeItem(at: url)
         try fm.moveItem(at: tmp, to: url)
-    }
-
-    /// SHA-256 of file contents, hex.
-    static func sha256(_ url: URL) throws -> String {
-        let h = try FileHandle(forReadingFrom: url)
-        defer { try? h.close() }
-        var hasher = SHA256()
-        while let chunk = try h.read(upToCount: 4 << 20), !chunk.isEmpty {
-            hasher.update(data: chunk)
-        }
-        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
     static func size(_ url: URL) -> Int64 {

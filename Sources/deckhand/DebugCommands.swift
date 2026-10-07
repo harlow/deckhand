@@ -4,13 +4,14 @@ import DeckhandCore
 import Foundation
 import MusicSource
 import OneLibrary
+import Sync
 
 struct DebugCommands: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "debug",
         abstract: "Developer tools.",
         shouldDisplay: false,
-        subcommands: [WriteAnlz.self, AnalyzeTiming.self, MIKSummary.self]
+        subcommands: [WriteAnlz.self, AnalyzeTiming.self, MIKSummary.self, HashCommand.self]
     )
 }
 
@@ -85,6 +86,20 @@ struct MIKSummary: ParsableCommand {
             print("  tempo \(s.tempo ?? 0) key \(s.key?.alphanumeric ?? "-") conf \(s.keyConfidence ?? 0) energy \(s.energy ?? 0)")
             print("  beats \(s.beatTimes.count) first \(s.beatTimes.prefix(4))")
             print("  cues \(s.cues.map { String(format: "%.2f(E%d)", $0.time, $0.energy) }.joined(separator: " "))")
+        }
+    }
+}
+
+/// Prints the audio-only content hash Deckhand uses to identify tracks.
+struct HashCommand: ParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "hash")
+
+    @Argument var files: [String]
+
+    func run() throws {
+        let cache = try AnalysisCache(root: FileManager.default.temporaryDirectory.appendingPathComponent("deckhand-hash-\(UUID().uuidString)"))
+        for f in files {
+            print("\(try cache.contentHash(of: URL(fileURLWithPath: f)).prefix(19))  \((f as NSString).lastPathComponent)")
         }
     }
 }
