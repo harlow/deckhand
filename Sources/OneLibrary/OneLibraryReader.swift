@@ -71,3 +71,11 @@ public struct DeviceLibrary: Sendable {
         return out
     }
 }
+
+/// Artwork referenced by a drive's library database.
+public enum DeviceArtwork {
+    public static func paths(database: URL) throws -> Set<String> {
+        let db = try OneLibraryDatabase.open(database)
+        return Set(try db.query("SELECT path FROM image").compactMap { $0["path"]?.string })
+    }
+}

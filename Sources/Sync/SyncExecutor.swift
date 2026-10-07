@@ -153,7 +153,10 @@ public struct SyncExecutor {
         try FileManager.default.createDirectory(at: rbDir, withIntermediateDirectories: true)
         let staging = rbDir.appendingPathComponent(".deckhand-staging-exportLibrary.db")
         try? FileManager.default.removeItem(at: staging)
-        try OneLibraryDatabase.write(contents, to: staging, previous: dbURL)
+        // Player history refers to content IDs, which only mean the same tracks if Deckhand wrote the
+        // previous database (not, say, a Rekordbox export on a drive being taken over).
+        let deckhandWroteDB = plan.manifest.lastSyncedAt != nil
+        try OneLibraryDatabase.write(contents, to: staging, previous: deckhandWroteDB ? dbURL : nil)
 
         // 5. Validate.
         let issues = try OneLibraryValidator.validate(database: staging, volumeRoot: volume.url)

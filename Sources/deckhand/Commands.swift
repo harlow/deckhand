@@ -562,3 +562,55 @@ final class SyncProgress: @unchecked Sendable {
         copy.update { $0 = nil }
     }
 }
+
+struct CleanupCommand: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "cleanup",
+        abstract: "Remove leftovers from other tools (e.g. a Rekordbox export) that nothing on the drive uses.",
+        discussion: """
+            Only considers audio under /Contents, analysis and artwork under /PIONEER, and Rekordbox's legacy \
+            database files. Never touches Deckhand's files, player settings, or any other folders on the drive.
+            """
+    )
+
+    @Argument var volume: String
+    @Flag(help: "List what would be removed without deleting.") var dryRun = false
+    @Flag(help: "Keep Rekordbox's export.pdb (older CDJs such as the CDJ-3000 read it instead of OneLibrary).")
+    var keepLegacy = false
+    @Flag(name: .shortAndLong, help: "Don't ask for confirmation.") var yes = false
+
+    func run() throws {
+        let v = try Volume(url: URL(fileURLWithPath: volume))
+        guard let manifest = try Manifest.load(from: v), manifest.lastSyncedAt != nil, !manifest.tracks.isEmpty else {
+            throw ValidationError("Sync \(v.name) with Deckhand first; cleanup relies on knowing which files Deckhand uses.")
+        }
+        var cleanup = try DriveCleanup.scan(v, manifest: manifest)
+        if keepLegacy { cleanup.items.removeAll { $0.category == .legacyDatabase } }
+        guard !cleanup.items.isEmpty else {
+            print("Nothing to clean up on \(v.name).")
+            return
+        }
+        print("Leftovers on \(v.name):\n")
+        for category in DriveCleanup.Category.allCases {
+            let items = cleanup.items.filter { $0.category == category }
+            guard !items.isEmpty else { continue }
+            let bytes = items.reduce(0) { $0 + $1.bytes }
+            print("  \(category.rawValue): \(items.count)\(bytes > 0 ? " (\(formatBytes(bytes)))" : "")")
+            if category == .audio || category == .legacyDatabase {
+                for i in items.prefix(10) { print("      \(i.path)") }
+                if items.count > 10 { print("      … and \(items.count - 10) more") }
+            }
+        }
+        print("\nTotal: \(formatBytes(cleanup.bytes)) would be freed.")
+        if dryRun {
+            print("Dry run: nothing deleted.")
+            return
+        }
+        if !yes {
+            print("\nDelete these from \(v.name)? This can't be undone. [y/N] ", terminator: "")
+            guard ["y", "yes"].contains(readLine()?.lowercased() ?? "") else { print("Cancelled."); return }
+        }
+        let failed = cleanup.apply(v)
+        print(failed.isEmpty ? "Removed." : "Removed, except \(failed.count) item(s) that couldn't be deleted.")
+    }
+}

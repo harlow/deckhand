@@ -8,7 +8,7 @@ struct Deckhand: ParsableCommand {
         abstract: "Sync Apple Music playlists to Pioneer/AlphaTheta DJ USB drives.",
         subcommands: [
             PlaylistsCommand.self, DevicesCommand.self, InitCommand.self, AnalyzeCommand.self, SyncCommand.self,
-            StatusCommand.self, ValidateCommand.self, EjectCommand.self, ImportPlaylistsCommand.self, DebugCommands.self,
+            StatusCommand.self, ValidateCommand.self, EjectCommand.self, ImportPlaylistsCommand.self, CleanupCommand.self, DebugCommands.self,
         ]
     )
 }
