@@ -9,6 +9,12 @@ public struct BeatGrid: Sendable, Equatable {
     /// Bar position (1–4) of `firstBeat`.
     public var firstBarPosition: Int
 
+    public init(bpm: Double, firstBeat: Double, firstBarPosition: Int) {
+        self.bpm = bpm
+        self.firstBeat = firstBeat
+        self.firstBarPosition = firstBarPosition
+    }
+
     public var period: Double { 60 / bpm }
 
     /// The same grid with all beats moved later by `seconds`, re-anchored to the earliest beat >= 0.
@@ -33,7 +39,8 @@ public struct BeatGrid: Sendable, Equatable {
 }
 
 public enum BeatAnalyzer {
-    public static let tempoRange = 87.5..<175.0
+    /// One octave, matching Mixed In Key: faster tracks report half time (e.g. 172 → 86).
+    public static let tempoRange = 80.0..<160.0
     /// Prefer an integer BPM whose comb score is at least this fraction of the best score.
     static let integerPreference = 0.97
 
@@ -72,95 +79,20 @@ public enum BeatAnalyzer {
     public static func analyze(_ audio: DecodedAudio, lowBand: [Float], bpmHint: Double? = nil) -> BeatGrid? {
         guard let onsets = onsetFunction(audio) else { return nil }
         guard var grid = fitGrid(beats: trackBeats(onsets, sampleRate: audio.sampleRate), onsets: onsets, lowBand: lowBand, bpmHint: bpmHint) else { return nil }
-        if let kickPhase = kickPhase(audio, period: grid.period, anchor: grid.firstBeat) {
-            grid.firstBeat = kickPhase
-            if grid.firstBeat >= grid.period { grid.firstBeat -= grid.period }
-            if grid.firstBeat < 0 { grid.firstBeat += grid.period }
-            grid.firstBarPosition = downbeatPosition(firstBeat: grid.firstBeat, period: grid.period, lowBand: lowBand)
-        }
-        return grid
+        // The onset comb can lock onto off-beat hi-hats; kicks sit on the beat.
+        let onBeat = gridEnergy(phase: grid.firstBeat, period: grid.period, lowBand: lowBand)
+        let offBeat = gridEnergy(phase: grid.firstBeat + grid.period / 2, period: grid.period, lowBand: lowBand)
+        if offBeat > halfBeatRatio * onBeat { grid = grid.shifted(by: grid.period / 2) }
+        let corrected = grid.shifted(by: -onsetLatency)
+        return BeatGrid(bpm: corrected.bpm, firstBeat: corrected.firstBeat,
+                        firstBarPosition: downbeatPosition(firstBeat: corrected.firstBeat, period: corrected.period, lowBand: lowBand))
     }
 
-    /// Phase (seconds, within one period) of the beat transient. The low band picks which
-    /// half of the beat holds the kick; the full-band attack within that window sets the exact time.
-    /// Returns nil when no clear periodic low-frequency attack exists.
-    static func kickPhase(_ audio: DecodedAudio, period: Double, anchor: Double? = nil) -> Double? {
-        let hop = max(1, audio.sampleRate / 1000)
-        let stepSeconds = Double(hop) / Double(audio.sampleRate)
-        var lowpass = Biquad.lowpass(cutoff: 120, sampleRate: Double(audio.sampleRate))
-        var low = [Double](), full = [Double]()
-        low.reserveCapacity(audio.samples.count / hop + 1)
-        full.reserveCapacity(audio.samples.count / hop + 1)
-        audio.samples.withUnsafeBufferPointer { x in
-            var i = 0
-            while i < x.count {
-                let end = min(x.count, i + hop)
-                var el: Float = 0, ef: Float = 0
-                for j in i..<end {
-                    let y = lowpass.process(x[j])
-                    el += y * y
-                    ef += x[j] * x[j]
-                }
-                low.append(Double(el))
-                full.append(Double(ef))
-                i = end
-            }
-        }
-        guard low.count > 2000 else { return nil }
-
-        let bpm = 60 / period
-        let lowFold = foldedProfile(bpm: bpm, onsets: OnsetFunction(values: flux(low, radius: 6), stepSeconds: stepSeconds), binsPerFrame: 1, smoothingFrames: 2)
-        guard var lowPeak = lowFold.indices.max(by: { lowFold[$0] < lowFold[$1] }) else { return nil }
-        if let anchor {
-            // Strongest low-band attack near the onset-comb beat or its offbeat.
-            let m = lowFold.count
-            let a = Int((anchor / stepSeconds).rounded())
-            let reach = m / 8
-            var best = a
-            for center in [a, a + m / 2] {
-                for o in -reach...reach where lowFold[((center + o) % m + m) % m] > lowFold[((best % m) + m) % m] { best = center + o }
-            }
-            lowPeak = ((best % m) + m) % m
-        }
-        let baseline = lowFold.sorted()[lowFold.count / 2]
-        guard lowFold[lowPeak] > 1.5 * max(baseline, 1e-12) else { return nil }
-
-        // Start of the full-band attack: walk back from its energy peak near the low-band attack
-        // to where the rise begins.
-        let energy = foldedProfile(bpm: bpm, onsets: OnsetFunction(values: smooth(full, radius: 1), stepSeconds: stepSeconds), binsPerFrame: 1, smoothingFrames: 0)
-        let n = energy.count
-        func at(_ i: Int) -> Double { energy[((i % n) + n) % n] }
-        var peak = lowPeak
-        for o in -transientSearchMs...30 where at(lowPeak + o) > at(peak) { peak = lowPeak + o }
-        let floor = (peak - 80...peak).map(at).min() ?? 0
-        let threshold = floor + attackStartFraction * (at(peak) - floor)
-        var start = peak
-        while start > peak - 80, at(start - 1) > threshold { start -= 1 }
-        let best = ((start % n) + n) % n
-        return Double(best) * stepSeconds
-    }
-
-    static let transientSearchMs = 40
-    static let attackStartFraction = 0.1
-
-    static func smooth(_ envelope: [Double], radius: Int) -> [Double] {
-        let n = envelope.count
-        var prefix = [Double](repeating: 0, count: n + 1)
-        for i in 0..<n { prefix[i + 1] = prefix[i] + envelope[i] }
-        return (0..<n).map { i in
-            let lo = max(0, i - radius), hi = min(n, i + radius + 1)
-            return (prefix[hi] - prefix[lo]) / Double(hi - lo)
-        }
-    }
-
-    /// Positive change of an envelope smoothed by a centered moving average of ±`radius` samples.
-    static func flux(_ envelope: [Double], radius: Int) -> [Double] {
-        let n = envelope.count
-        let smoothed = smooth(envelope, radius: radius)
-        var out = [Double](repeating: 0, count: n)
-        for i in 1..<n { out[i] = max(0, smoothed[i] - smoothed[i - 1]) }
-        return out
-    }
+    /// The complex-domain onset function peaks this long after a beat's attack (frames are
+    /// ~23 ms windows timestamped at their centre). Fitted against Mixed In Key grids.
+    static let onsetLatency = 0.015
+    /// Shift by half a beat when the low band is this much stronger on the off-beats.
+    static let halfBeatRatio = 1.3
 
     /// Mean onset value at each phase bin of one beat period, circularly smoothed.
     static func foldedProfile(bpm: Double, onsets: OnsetFunction, binsPerFrame: Double, smoothingFrames: Int) -> [Double] {
@@ -294,6 +226,26 @@ public enum BeatAnalyzer {
         return (bpm * 100).rounded() / 100
     }
 
+    /// Index of the first grid beat whose low-band level reaches `startThreshold` of the track's
+    /// typical level at beats — the first kick.
+    static func firstLoudBeat(firstBeat: Double, period: Double, lowBand: [Float]) -> Int? {
+        let fps = Double(TrackAnalysis.Waveforms.framesPerSecond)
+        var levels: [Float] = []
+        var t = firstBeat
+        while true {
+            let f = Int((t * fps).rounded())
+            if f >= lowBand.count { break }
+            levels.append(lowBand[max(0, f - 1)...min(lowBand.count - 1, f + 2)].max() ?? 0)
+            t += period
+        }
+        guard levels.count > 16 else { return nil }
+        let typical = levels.sorted()[levels.count * 3 / 4]
+        guard typical > 0 else { return nil }
+        return levels.firstIndex { $0 >= startThreshold * typical }
+    }
+
+    static let startThreshold: Float = 0.5
+
     static func median(_ x: [Double]) -> Double? {
         guard !x.isEmpty else { return nil }
         let s = x.sorted()
@@ -345,10 +297,14 @@ public enum BeatAnalyzer {
         candidates.max { gridEnergy(phase: $0, period: period, lowBand: lowBand) < gridEnergy(phase: $1, period: period, lowBand: lowBand) } ?? candidates[0]
     }
 
-    /// Naive downbeat choice: the beat phase (of 4) with the strongest low-band energy.
-    /// Returns the bar position of the first grid beat.
+    /// Bar position of the first grid beat. Dance tracks almost always begin on a downbeat, so the
+    /// first grid beat where audio starts is beat 1 (matches Mixed In Key and Rekordbox ~85% of the time).
     static func downbeatPosition(firstBeat: Double, period: Double, lowBand: [Float]) -> Int {
         guard !lowBand.isEmpty else { return 1 }
+        if let k = firstLoudBeat(firstBeat: firstBeat, period: period, lowBand: lowBand) {
+            // Earlier grid beats are counted back from it.
+            return ((-k) % 4 + 4) % 4 + 1
+        }
         let energies = (0..<4).map { gridEnergy(phase: firstBeat + Double($0) * period, period: 4 * period, lowBand: lowBand) }
         let best = energies.indices.max { energies[$0] < energies[$1] } ?? 0
         // Beat `best` is a downbeat, so the first beat is at bar position (4 - best) % 4 + 1.

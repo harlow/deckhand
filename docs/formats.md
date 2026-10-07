@@ -71,13 +71,19 @@ one more 1152-sample frame. That is ~25 ms (most files) or ~51 ms (LAME). `Audio
 computes it and `TrackAnalyzer` shifts beat times and pads waveforms so `TrackAnalysis` is already on
 the player's timeline. Non-MP3 formats get no offset (unverified for AAC/M4A).
 
-## Analysis accuracy (vs Rekordbox, 150 random tracks)
+## Analysis accuracy
 
 | | |
 |---|---|
 | BPM exact (±0.05) | 94% (0% octave errors with tag hints) |
 | Key exact (libKeyFinder) | 67% — Mixed In Key tags agree with Rekordbox 99%, so tags are preferred |
-| Grid phase median error | 6.8 ms; ~15% of grids 40–110 ms off, 4% half a beat off |
-| Downbeat agreement | ~43% |
+| Grid phase vs MIK (408 held-out) | median 2.2 ms; 95.7% within 10 ms; 2.3% ≥40 ms off |
+| Grid phase vs Rekordbox | 75.5% within 10 ms (MIK itself: 77.5%) |
+| Downbeat agrees with Rekordbox | 75.9% (Rekordbox's own first beat is bar 1 in only 83%) |
+| Tempo range | 80–160 BPM, folding like MIK (172 → 86) |
 
-Re-run: `python3 Scripts/export-groundtruth.py gt.json && swift build -c release --product deckhand-eval && .build/release/deckhand-eval gt.json`.
+Mixed In Key's beat times are on Core Audio's decoded timeline; add `AudioDecoder.mp3TimelineOffset`
+to compare with Rekordbox (then median 3.6 ms apart).
+
+Grid eval: `python3 Scripts/export-grid-groundtruth.py rb.json && swift build -c release --product deckhand-grid-eval && .build/release/deckhand-grid-eval rb.json`.
+Key eval: `python3 Scripts/export-groundtruth.py gt.json && swift build -c release --product deckhand-eval && .build/release/deckhand-eval gt.json`.

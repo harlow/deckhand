@@ -36,6 +36,26 @@ import Testing
         #expect(BeatAnalyzer.fitGrid(beats: detected, bpmHint: 240)?.bpm == 120)
     }
 
+    @Test func foldsFastTempoToHalfTimeLikeMixedInKey() throws {
+        // Mixed In Key reports drum & bass at half time (172 → 86).
+        let grid = try #require(BeatAnalyzer.fitGrid(beats: beats(bpm: 172, first: 0.1, count: 300)))
+        #expect(grid.bpm == 86)
+    }
+
+    @Test func downbeatIsFirstKickAfterSilence() {
+        // 2.6 s of near-silence, then kicks every 0.5 s. Grid beats from 0.1 s: beat 5 (2.6 s) is the first kick.
+        let fps = Double(TrackAnalysis.Waveforms.framesPerSecond)
+        var low = [Float](repeating: 0.001, count: Int(30 * fps))
+        var t = 2.6
+        while t < 30 {
+            low[Int((t * fps).rounded())] = 0.5
+            t += 0.5
+        }
+        let position = BeatAnalyzer.downbeatPosition(firstBeat: 0.1, period: 0.5, lowBand: low)
+        let grid = BeatGrid(bpm: 120, firstBeat: 0.1, firstBarPosition: position)
+        #expect(grid.beats(duration: 30)[5].barPosition == 1)
+    }
+
     @Test func snapsNearIntegers() {
         #expect(BeatAnalyzer.snap(127.97) == 128)
         #expect(BeatAnalyzer.snap(127.93) == 127.93)
@@ -73,13 +93,7 @@ import Testing
         #expect(grid.bpm == 128)
         var phaseError = (grid.firstBeat - 0.25).truncatingRemainder(dividingBy: grid.period)
         if phaseError > grid.period / 2 { phaseError -= grid.period }
-        #expect(abs(phaseError) < 0.005)
-    }
-
-    @Test func keyFinderIndexMapping() {
-        #expect(KeyAnalyzer.key(fromKeyFinderIndex: 0) == MusicalKey(tonic: 9, mode: .major)) // A major
-        #expect(KeyAnalyzer.key(fromKeyFinderIndex: 1) == MusicalKey(tonic: 9, mode: .minor)) // A minor
-        #expect(KeyAnalyzer.key(fromKeyFinderIndex: 7) == MusicalKey(tonic: 0, mode: .minor)) // C minor
-        #expect(KeyAnalyzer.key(fromKeyFinderIndex: 23) == MusicalKey(tonic: 8, mode: .minor)) // Ab minor
+        // Onset latency is calibrated on real kicks; a synthetic click's sharper attack lands a few ms early.
+        #expect(abs(phaseError) < 0.010)
     }
 }

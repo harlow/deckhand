@@ -59,6 +59,10 @@ let package = Package(
             name: "deckhand-eval",
             dependencies: ["Analysis"]
         ),
+        .executableTarget(
+            name: "deckhand-grid-eval",
+            dependencies: ["Analysis"]
+        ),
         .target(
             name: "MusicSource",
             dependencies: ["DeckhandCore", "CSQLCipher"]
