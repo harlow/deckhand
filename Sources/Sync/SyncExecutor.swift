@@ -13,6 +13,7 @@ public struct SyncExecutor {
     public enum Event: Sendable {
         case copying(index: Int, total: Int, title: String)
         case analyzing(index: Int, total: Int, title: String)
+        case analyzed(done: Int, total: Int, title: String)
         case analysisFailed(title: String, error: String)
         case writingDatabase
         case committing
@@ -76,6 +77,7 @@ public struct SyncExecutor {
         let runner = AnalysisRunner(cache: cache, policy: analysisPolicy, mixedInKey: mixedInKey) { event in
             switch event {
             case .started(let i, let n, let title): progress(.analyzing(index: i, total: n, title: title))
+            case .finished(let d, let n, let title): progress(.analyzed(done: d, total: n, title: title))
             case .failed(let title, let error): progress(.analysisFailed(title: title, error: error))
             }
         }

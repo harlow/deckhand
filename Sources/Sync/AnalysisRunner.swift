@@ -40,6 +40,8 @@ public struct AnalysisRunner {
 
     public enum Event: Sendable {
         case started(index: Int, total: Int, title: String)
+        /// A track finished (successfully or not); `done` counts completed tracks.
+        case finished(done: Int, total: Int, title: String)
         case failed(title: String, error: String)
     }
 
@@ -63,6 +65,7 @@ public struct AnalysisRunner {
         let lock = NSLock()
         nonisolated(unsafe) var results: [String: TrackAnalysis] = [:]
         nonisolated(unsafe) var started = 0
+        nonisolated(unsafe) var completed = 0
         let queue = OperationQueue()
         queue.maxConcurrentOperationCount = max(2, ProcessInfo.processInfo.activeProcessorCount - 2)
         for item in pending {
@@ -76,6 +79,8 @@ public struct AnalysisRunner {
                 } catch {
                     progress(.failed(title: item.title, error: "\(error)"))
                 }
+                let done = lock.withLock { completed += 1; return completed }
+                progress(.finished(done: done, total: pending.count, title: item.title))
             }
         }
         queue.waitUntilAllOperationsAreFinished()

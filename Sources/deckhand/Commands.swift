@@ -137,17 +137,8 @@ struct SyncCommand: ParsableCommand {
             }
         }
 
-        var executor = SyncExecutor(cache: cache) { event in
-            switch event {
-            case .copying(let i, let n, let title): print("  copy    [\(i)/\(n)] \(title)")
-            case .analyzing(let i, let n, let title): print("  analyze [\(i)/\(n)] \(title)")
-            case .analysisFailed(let title, let error): warn("  ! analysis failed for \(title): \(error)")
-            case .writingDatabase: print("  writing library database")
-            case .committing: print("  committing")
-            case .removing(let n): print("  removing \(n) orphaned track(s)")
-            case .done: break
-            }
-        }
+        let bars = SyncProgress()
+        var executor = SyncExecutor(cache: cache) { event in bars.handle(event) }
         executor.anlzOptions.includeExtendedBeatGrid = extendedBeatgrid
         executor.rewriteAnalysisFiles = rewriteAnalysis
         executor.analysisPolicy = tagOptions.policy
@@ -156,6 +147,7 @@ struct SyncCommand: ParsableCommand {
         executor.cueMode = cues
         executor.cueSource = cueSource
         let wrote = try executor.execute(plan, keyFormat: keyFormat, force: selectionChanged || rewriteAnalysis)
+        bars.finish()
         if !wrote {
             print("\nAlready up to date.")
             return
@@ -326,18 +318,26 @@ struct AnalyzeCommand: ParsableCommand {
         }
         let eligible = tracks.filter { SyncPlanner.eligibilityProblem($0) == nil }
         let cache = try AnalysisCache()
-        print("Checking \(eligible.count) tracks…")
-        let items = try eligible.map {
-            AnalysisRunner.Item(url: $0.location!, contentHash: try cache.contentHash(of: $0.location!), title: $0.title)
+        let fingerprinting = ProgressBar("Fingerprinting", total: eligible.count)
+        let items = try eligible.map { t -> AnalysisRunner.Item in
+            defer { fingerprinting.advance(t.title) }
+            return AnalysisRunner.Item(url: t.location!, contentHash: try cache.contentHash(of: t.location!), title: t.title)
         }
+        try? cache.saveFingerprints()
+        fingerprinting.finish("\(items.count) tracks")
         let start = Date()
+        let bar = LockedBox<ProgressBar?>(nil)
+        let failures = LockedBox<[String]>([])
         let runner = AnalysisRunner(cache: cache, policy: tagOptions.policy, mixedInKey: tagOptions.mixedInKeyLibrary) { event in
             switch event {
-            case .started(let i, let n, let title): print("  analyze [\(i)/\(n)] \(title)")
-            case .failed(let title, let error): warn("  ! \(title): \(error)")
+            case .started(_, let n, _): bar.update { if $0 == nil { $0 = ProgressBar("Analyzing     ", total: n) } }
+            case .finished(_, _, let title): bar.value?.advance(title)
+            case .failed(let title, let error): failures.update { $0.append("\(title): \(error)") }
             }
         }
         let results = runner.run(items)
+        bar.value?.finish()
+        for f in failures.value { warn("  ! \(f)") }
         let cached = items.count - results.count
         let elapsed = Int(Date().timeIntervalSince(start))
         print("\nAnalyzed \(results.count) tracks in \(elapsed)s; \(cached) already up to date.")
@@ -471,5 +471,58 @@ struct ImportPlaylistsCommand: ParsableCommand {
             }
         }
         print("\nDone. The new playlists are in Music.app; sync them with `deckhand sync <drive> --playlist \"<name>\"`.")
+    }
+}
+
+/// Mutable value shared with progress callbacks running on worker threads.
+final class LockedBox<T>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: T
+
+    init(_ value: T) { stored = value }
+
+    var value: T { lock.withLock { stored } }
+
+    func update(_ body: (inout T) -> Void) { lock.withLock { body(&stored) } }
+}
+
+/// Progress bars for `sync`: one per phase, plain lines for the rest.
+final class SyncProgress: @unchecked Sendable {
+    private let copy = LockedBox<ProgressBar?>(nil)
+    private let analyze = LockedBox<ProgressBar?>(nil)
+    private let failures = LockedBox<[String]>([])
+
+    func handle(_ event: SyncExecutor.Event) {
+        switch event {
+        case .copying(let i, let n, let title):
+            copy.update { if $0 == nil { $0 = ProgressBar("Copying       ", total: n) } }
+            if i > 1 { copy.value?.advance(title) }
+        case .analyzing(_, let n, _):
+            finishCopy()
+            analyze.update { if $0 == nil { $0 = ProgressBar("Analyzing     ", total: n) } }
+        case .analyzed(_, _, let title): analyze.value?.advance(title)
+        case .analysisFailed(let title, let error): failures.update { $0.append("\(title): \(error)") }
+        case .writingDatabase:
+            finishCopy()
+            analyze.value?.finish()
+            for f in failures.value { warn("  ! analysis failed for \(f)") }
+            failures.update { $0.removeAll() }
+            print("  writing library database")
+        case .committing: print("  committing")
+        case .removing(let n): print("  removing \(n) orphaned track(s)")
+        case .done: break
+        }
+    }
+
+    func finish() {
+        finishCopy()
+        analyze.value?.finish()
+    }
+
+    private func finishCopy() {
+        guard let bar = copy.value else { return }
+        bar.advance()
+        bar.finish()
+        copy.update { $0 = nil }
     }
 }
