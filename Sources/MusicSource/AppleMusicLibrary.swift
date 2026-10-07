@@ -52,6 +52,17 @@ public enum AppleMusicLibrary {
         return SourceLibrary(playlists: playlists, tracks: tracks, artwork: AppleMusicArtwork(library: lib, items: items))
     }
 
+    /// Every song in the library (not only those in user playlists).
+    public static func allSongs() throws -> [SourceTrack] {
+        let lib: ITLibrary
+        do {
+            lib = try ITLibrary(apiVersion: "1.1")
+        } catch {
+            throw MusicSourceError.cannotOpenLibrary(error)
+        }
+        return lib.allMediaItems.filter { $0.mediaKind == .kindSong }.map(track)
+    }
+
     /// Excludes the master library and built-in playlists (Music, Movies, Purchased, ...).
     private static func isUserPlaylist(_ p: ITLibPlaylist) -> Bool {
         !p.isMaster && p.distinguishedKind == .kindNone && p.isVisible && p.kind != .genius && p.kind != .geniusMix

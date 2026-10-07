@@ -352,3 +352,76 @@ struct AnalyzeCommand: ParsableCommand {
         if skipped > 0 { print("\(skipped) tracks skipped (no local file, DRM, or unsupported format).") }
     }
 }
+
+struct ImportPlaylistsCommand: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "import-playlists",
+        abstract: "Recreate a drive's existing playlists (e.g. from Rekordbox) in Apple Music.",
+        discussion: "Tracks are matched to songs already in your Apple Music library; nothing is copied or added to the library itself."
+    )
+
+    @Argument(help: "Drive, e.g. /Volumes/RATS.") var volume: String
+    @Option(name: .long, help: "Only these playlists (repeatable). Default: all that don't exist in Apple Music.")
+    var playlist: [String] = []
+    @Flag(help: "Also import playlists whose name already exists in Apple Music (creates a second playlist).")
+    var includeExisting = false
+    @Flag(help: "Show the plan without changing Apple Music.") var dryRun = false
+    @Flag(name: .shortAndLong, help: "Don't ask for confirmation.") var yes = false
+
+    func run() throws {
+        let v = try Volume(url: URL(fileURLWithPath: volume))
+        let device = try DeviceLibrary.read(database: v.url(forUsbPath: "/PIONEER/rekordbox/exportLibrary.db"))
+        let library = try AppleMusicLibrary.load()
+        let existing = Dictionary(library.playlists.map { ($0.name, $0) }, uniquingKeysWith: { a, _ in a })
+        let importer = PlaylistImporter(volume: v, device: device, songs: try AppleMusicLibrary.allSongs(), cache: try AnalysisCache())
+
+        print("Matching \(v.name)'s tracks to Apple Music…")
+        let plan = try importer.plan(existingNames: Set(existing.keys), only: playlist.isEmpty ? nil : Set(playlist))
+        let methods = plan.methods.map { "\($0.value) \($0.key.rawValue)" }.sorted().joined(separator: ", ")
+        print("Matched by: \(methods.isEmpty ? "—" : methods)\n")
+
+        let toCreate = plan.playlists.filter { $0.source.isFolder || includeExisting || !$0.existsInAppleMusic }
+        print("PLAYLIST                     TRACKS  MATCHED  ACTION")
+        for p in plan.playlists {
+            let action = toCreate.contains { $0.source.playlistId == p.source.playlistId }
+                ? (p.source.isFolder ? "create folder" : "create")
+                : "skip (exists in Apple Music)"
+            let name = p.source.name.padding(toLength: 28, withPad: " ", startingAt: 0)
+            print("\(name) \(String(p.source.contentIds.count).leftPad(6))  \(String(p.trackIds.count).leftPad(7))  \(action)")
+        }
+        let unmatched = toCreate.flatMap(\.unmatched)
+        if !unmatched.isEmpty {
+            print("\nNot found in Apple Music (\(unmatched.count)):")
+            for t in unmatched.prefix(30) { print("  ! \(t.artist) — \(t.title)") }
+        }
+        guard !toCreate.filter({ !$0.source.isFolder }).isEmpty else {
+            print("\nNothing to import.")
+            return
+        }
+        if dryRun {
+            print("\nDry run: Apple Music not changed.")
+            return
+        }
+        if !yes {
+            print("\nCreate these playlists in Apple Music? [y/N] ", terminator: "")
+            guard ["y", "yes"].contains(readLine()?.lowercased() ?? "") else { print("Cancelled."); return }
+        }
+
+        var created: [Int: String] = [:]
+        for p in toCreate {
+            let parent = p.source.parentId.flatMap { created[$0] }
+            if p.source.isFolder, let folder = existing[p.source.name], folder.isFolder {
+                created[p.source.playlistId] = folder.id
+                continue
+            }
+            let id = try AppleMusicWriter.createPlaylist(named: p.source.name, isFolder: p.source.isFolder, inFolder: parent)
+            created[p.source.playlistId] = id
+            if !p.source.isFolder {
+                let missing = try AppleMusicWriter.add(trackIds: p.trackIds, toPlaylist: id)
+                print("  created \(p.source.name) (\(p.trackIds.count - missing.count) tracks)")
+                if !missing.isEmpty { warn("  ! \(missing.count) tracks could not be added") }
+            }
+        }
+        print("\nDone. The new playlists are in Music.app; sync them with `deckhand sync <drive> --playlist \"<name>\"`.")
+    }
+}
