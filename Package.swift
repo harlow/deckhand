@@ -60,6 +60,10 @@ let package = Package(
             dependencies: ["Analysis", "CKeyFinder"]
         ),
         .executableTarget(
+            name: "deckhand-cue-eval",
+            dependencies: ["Analysis", "MusicSource"]
+        ),
+        .executableTarget(
             name: "deckhand-grid-eval",
             dependencies: ["Analysis"]
         ),
