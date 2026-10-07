@@ -2,3 +2,5 @@
 .swiftpm/
 *.xcodeproj
 Fixtures/private/
+__pycache__/
+*.pyc
