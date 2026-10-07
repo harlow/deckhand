@@ -46,15 +46,15 @@ public struct AnlzWriter {
             pqtz(),
             pwav(wf.monoPreview(count: 400)),
             pwv2(wf.tinyPreview(count: 100)),
-            pcob(hotCues: true),
-            pcob(hotCues: false),
+            pcob(hot: true, list: legacyHotCues(1...3)),
+            pcob(hot: false, list: cueList(hot: false)),
         ])
 
         var extSections = [
             ppth(),
             pwv3(wf.monoDetail()),
-            pcob(hotCues: true),
-            pcob(hotCues: false),
+            pcob(hot: true, list: legacyHotCues(4...8)),
+            pcob(hot: false, list: []),
             pco2(hotCues: true),
             pco2(hotCues: false),
         ]
@@ -178,24 +178,29 @@ public struct AnlzWriter {
         if case .hot(let n) = c.kind { UInt32(n) } else { 0 }
     }
 
-    /// Legacy cue list (PCOB with PCPT entries), read by older players.
-    private func pcob(hotCues: Bool) -> Data {
-        let list = cueList(hot: hotCues)
-        return section("PCOB", header: {
-            $0.u32(hotCues ? 1 : 0)
+    /// Hot cues in the given slots, highest slot first (Rekordbox's order).
+    private func legacyHotCues(_ slots: ClosedRange<UInt32>) -> [CuePoint] {
+        cueList(hot: true).filter { slots.contains(hotIndex($0)) }.sorted { hotIndex($0) > hotIndex($1) }
+    }
+
+    /// Legacy cue list (PCOB with PCPT entries). Rekordbox puts hot cues A–C and memory cues in
+    /// the .DAT, hot cues D–H in the .EXT.
+    private func pcob(hot: Bool, list: [CuePoint]) -> Data {
+        section("PCOB", header: {
+            $0.u32(hot ? 1 : 0)
             $0.u16(0)
             $0.u16(UInt16(list.count))
-            $0.u32(0xFFFF_FFFF)
+            $0.u32(hot || list.isEmpty ? 0xFFFF_FFFF : 0)
         }, body: { w in
-            for (i, c) in list.enumerated() {
+            for c in list {
                 w.ascii("PCPT")
                 w.u32(0x1C)
                 w.u32(0x38)
                 w.u32(hotIndex(c))
-                w.u32(4) // enabled
+                w.u32(0) // status
                 w.u32(0x10000)
-                w.u16(i == 0 ? 0xFFFF : UInt16(i - 1))
-                w.u16(i == list.count - 1 ? 0xFFFF : UInt16(i + 1))
+                w.u16(0xFFFF)
+                w.u16(0xFFFF)
                 w.u8(1) // single cue, not a loop
                 w.u8(0)
                 w.u16(1000)
@@ -206,9 +211,10 @@ public struct AnlzWriter {
         })
     }
 
-    /// Extended cue list (PCO2 with PCP2 entries): comments and colors, read by nxs2-era and newer players.
+    /// Extended cue list (PCO2 with PCP2 entries): every hot or memory cue, with comment and color.
     private func pco2(hotCues: Bool) -> Data {
-        let list = cueList(hot: hotCues)
+        var list = cueList(hot: hotCues)
+        if hotCues { list.sort { hotIndex($0) > hotIndex($1) } }
         return section("PCO2", header: {
             $0.u32(hotCues ? 1 : 0)
             $0.u16(UInt16(list.count))
@@ -220,24 +226,30 @@ public struct AnlzWriter {
                     comment.utf16BE(text)
                     comment.u16(0)
                 }
-                // Rekordbox pads entries to 0x90 bytes when the comment fits.
-                let length = max(0x90, 48 + comment.count)
+                // Layout as written by Rekordbox 7: 48 fixed bytes + comment + 40 trailing zero bytes.
+                let length = 48 + comment.count + 40
                 let start = w.count
                 w.ascii("PCP2")
                 w.u32(0x10)
                 w.u32(UInt32(length))
                 w.u32(hotIndex(c))
-                w.u8(1)
-                w.zeros(3)
+                w.u8(1) // single cue, not a loop
+                w.u8(0)
+                w.u16(1000)
                 w.u32(UInt32(max(0, c.timeMs)))
-                w.u32(0xFFFF_FFFF)
+                w.u32(0xFFFF_FFFF) // loop end
                 w.u8(0) // color table index
-                w.zeros(7)
+                w.u8(1)
+                w.zeros(6)
                 w.u16(0) // loop numerator
                 w.u16(0) // loop denominator
                 w.u32(UInt32(comment.count))
                 w.bytes(comment.data)
-                w.zeros(4) // color code + RGB: player default
+                let (r, g, b) = c.color ?? (0, 0, 0)
+                w.u8(0)
+                w.u8(r)
+                w.u8(g)
+                w.u8(b)
                 w.zeros(length - (w.count - start))
             }
         })

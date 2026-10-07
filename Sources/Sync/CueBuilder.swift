@@ -31,10 +31,20 @@ enum CueBuilder {
         }
         if mode == .hot || mode == .both {
             out += positions.prefix(hotCueSlots).enumerated().map {
-                CuePoint(kind: .hot($0.offset + 1), timeMs: $0.element.timeMs, comment: "Energy \($0.element.energy)")
+                CuePoint(kind: .hot($0.offset + 1), timeMs: $0.element.timeMs, comment: "Energy \($0.element.energy)",
+                         rgb: color(energy: $0.element.energy))
             }
         }
         return out
+    }
+
+    /// Hot cue pad color by energy: green (≤5), orange (6), red (≥7).
+    static func color(energy: Int) -> [UInt8] {
+        switch energy {
+        case ...5: [0x33, 0xFF, 0x00]
+        case 6: [0xFF, 0x8C, 0x00]
+        default: [0xE6, 0x28, 0x28]
+        }
     }
 
     /// Nearest beat within tolerance, else the original time. `beats` is sorted.
@@ -54,7 +64,7 @@ enum CueBuilder {
     static func fingerprint(_ cues: [CuePoint]) -> String {
         cues.map { c -> String in
             let kind = if case .hot(let n) = c.kind { "h\(n)" } else { "m" }
-            return "\(kind)@\(c.timeMs):\(c.comment ?? "")"
+            return "\(kind)@\(c.timeMs):\(c.comment ?? ""):\(c.rgb ?? [])"
         }.joined(separator: ",")
     }
 }
