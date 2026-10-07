@@ -124,8 +124,15 @@ extension CueAnalyzer {
         }
 
         var out: [NamedCue] = []
+        // Half a bar of slack absorbs tempo rounding; Build is defined relative to Main Drop, so that
+        // pair never conflicts (otherwise an exact 8-bar lead could knock out the main drop).
+        let minGap = minGapBars * barMs - barMs / 2
         for (role, t, kind, lead) in picks.sorted(by: { $0.0.rawValue < $1.0.rawValue }) {
-            if out.contains(where: { abs($0.timeMs - t) < minGapBars * barMs }) { continue }
+            let conflict = out.contains { c in
+                let pair: Set<Int> = [c.slot, role.rawValue]
+                return abs(c.timeMs - t) < minGap && pair != [Role.build.rawValue, Role.mainDrop.rawValue]
+            }
+            if conflict { continue }
             out.append(NamedCue(slot: role.rawValue, name: role.name, timeMs: t, rgb: role.rgb, expectedKind: kind, leadMs: lead))
         }
         return out

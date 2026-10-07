@@ -29,6 +29,12 @@ public struct SyncExecutor {
     /// Which imported cues to write as memory and/or hot cues.
     public var cueMode: CueMode = .both
     public var cueSource: CueSource = .auto
+    public var hotCueStyle: HotCueStyle = .named
+    /// Bars between the "Build" hot cue and the main drop.
+    public var buildLeadBars = 8
+    /// Write phrase analysis (colored phrase bars on the player).
+    public var writePhrases = true
+    public var trackColorRule: TrackColorRule = .energy
     /// Mixed In Key's stored analysis, used as hints when present.
     public var mixedInKey: MixedInKeyLibrary?
     /// Cover art source; tracks get no artwork when nil.
@@ -92,14 +98,18 @@ public struct SyncExecutor {
         for t in plan.tracks {
             guard let a = analyses[t.contentHash] ?? cache.analysis(forHash: t.contentHash, policy: analysisPolicy) else { continue }
             analyses[t.contentHash] = a
+            let sections = cache.sections(forHash: t.contentHash, policy: analysisPolicy)
             let cues = CueBuilder.cues(mik: mixedInKey?.track(for: t.sourceFile),
                                        detected: cache.detectedCues(forHash: t.contentHash, policy: analysisPolicy),
-                                       analysis: a, source: cueSource, mode: cueMode)
-            let fingerprint = "v\(a.version);pqt2=\(anlzOptions.includeExtendedBeatGrid);cues=\(CueBuilder.fingerprint(cues))"
+                                       analysis: a, source: cueSource, mode: cueMode, hotStyle: hotCueStyle,
+                                       sections: sections, buildLeadBars: buildLeadBars)
+            let phrases = writePhrases ? sections.flatMap { StructureAnalyzer.phrases(sections: $0, analysis: a) } : nil
+            let phraseKey = phrases.map { $0.phrases.map { "\($0.beat):\($0.kind)" }.joined(separator: ",") } ?? "-"
+            let fingerprint = "v\(a.version);pqt2=\(anlzOptions.includeExtendedBeatGrid);cues=\(CueBuilder.fingerprint(cues));pssi=\(phraseKey)"
             let stale = manifest.tracks[t.source.id]?.anlzFingerprint != fingerprint
             if t.action == .unchanged && !t.needsAnalysis && !rewriteAnalysisFiles && !stale { continue }
             try ensureMounted(volume)
-            try writeAnlz(for: t, analysis: a, cues: cues, on: volume)
+            try writeAnlz(for: t, analysis: a, cues: cues, phrases: phrases, on: volume)
             manifest.tracks[t.source.id]?.anlzFingerprint = fingerprint
             anlzWritten += 1
         }
@@ -117,6 +127,7 @@ public struct SyncExecutor {
             tracks: plan.tracks.map {
                 var e = exportTrack($0, analysis: analyses[$0.contentHash])
                 e.artworkPath = artPaths[$0.source.id]
+                e.color = trackColorRule.color(energy: cache.detectedCues(forHash: $0.contentHash, policy: analysisPolicy)?.energy)
                 return e
             },
             playlists: plan.playlists.map {
@@ -226,9 +237,11 @@ public struct SyncExecutor {
         }
     }
 
-    private func writeAnlz(for t: SyncPlan.TrackEntry, analysis: TrackAnalysis, cues: [CuePoint], on volume: Volume) throws {
+    private func writeAnlz(for t: SyncPlan.TrackEntry, analysis: TrackAnalysis, cues: [CuePoint], phrases: PhraseAnalysis?,
+                           on volume: Volume) throws {
         let totalSamples = UInt64((analysis.durationSeconds * Double(analysis.sampleRate)).rounded())
-        let files = AnlzWriter(audioPath: t.usbPath, analysis: analysis, totalSamples: totalSamples, cues: cues, options: anlzOptions).build()
+        let files = AnlzWriter(audioPath: t.usbPath, analysis: analysis, totalSamples: totalSamples, cues: cues,
+                               phrases: phrases, options: anlzOptions).build()
         let dir = volume.url(forUsbPath: AnlzPath.directory(forAudioPath: t.usbPath))
         try FileOps.writeAtomically(files.dat, to: dir.appendingPathComponent("ANLZ0000.DAT"))
         try FileOps.writeAtomically(files.ext, to: dir.appendingPathComponent("ANLZ0000.EXT"))

@@ -99,6 +99,12 @@ struct SyncCommand: ParsableCommand {
     @Option(help: "Cues to write: memory, hot (A–H), both, or none.") var cues: CueMode = .both
     @Option(help: "Cue positions: auto (Mixed In Key's if it has the track, else Deckhand's), deckhand, or mik.")
     var cueSource: CueSource = .auto
+    @Option(help: "Hot cue pads: named (A Mix In … H Mix Out, from song structure) or phrase (first 8 phrase cues).")
+    var hotCues: HotCueStyle = .named
+    @Option(help: "Bars between the Build hot cue and the main drop (8, 16 or 32).") var buildLead = 8
+    @Option(help: "Track color tag: energy (blue → red) or none.") var trackColor: TrackColorRule = .energy
+    @Flag(inversion: .prefixedNo, help: "Write phrase analysis (colored Intro/Build/Breakdown/Drop/Outro bars).")
+    var phrases = true
     @Flag(help: .hidden) var extendedBeatgrid = false
     @Flag(help: .hidden) var rewriteAnalysis = false
 
@@ -146,6 +152,10 @@ struct SyncCommand: ParsableCommand {
         executor.mixedInKey = tagOptions.mixedInKeyLibrary
         executor.cueMode = cues
         executor.cueSource = cueSource
+        executor.hotCueStyle = hotCues
+        executor.buildLeadBars = buildLead
+        executor.trackColorRule = trackColor
+        executor.writePhrases = phrases
         let wrote = try executor.execute(plan, keyFormat: keyFormat, force: selectionChanged || rewriteAnalysis)
         bars.finish()
         if !wrote {
@@ -273,6 +283,8 @@ extension String {
 extension OneLibraryDatabase.KeyFormat: ExpressibleByArgument {}
 extension CueMode: ExpressibleByArgument {}
 extension CueSource: ExpressibleByArgument {}
+extension HotCueStyle: ExpressibleByArgument {}
+extension TrackColorRule: ExpressibleByArgument {}
 
 /// How existing file tags feed analysis. Shared by `sync` and `analyze`.
 struct TagOptions: ParsableArguments {

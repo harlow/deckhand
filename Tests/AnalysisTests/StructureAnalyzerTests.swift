@@ -129,3 +129,27 @@ import Testing
         #expect(p.phrases.filter { $0.kind == 5 }.allSatisfy { $0.k1 == 1 })
     }
 }
+
+@Suite struct NamedCueGapTests {
+    @Test func buildDoesNotKnockOutMainDrop() {
+        // 128 BPM grid; sections: intro, drop at bar 16, breakdown at bar 32, main drop at bar 48, outro at bar 80.
+        // Slight tempo drift: local beats near the main drop are a little shorter than the track average,
+        // so an exact 8-bar lead measures just under 8 average bars.
+        var t = 100.0
+        let beats = (0..<400).map { i -> TrackAnalysis.Beat in
+            defer { t += i < 200 ? 467.5 : 470 }
+            return TrackAnalysis.Beat(barPosition: i % 4 + 1, timeMs: Int(t.rounded()), bpm: 128)
+        }
+        let analysis = TrackAnalysis(durationSeconds: 190, sampleRate: 44100, bpm: 128, beats: beats, key: nil,
+                                     waveforms: .init(peak: [], rms: [], low: [], mid: [], high: []))
+        func section(_ k: StructureAnalyzer.Kind, _ bar: Int, _ end: Int) -> StructureAnalyzer.Section {
+            .init(kind: k, startBeat: bar * 4, startMs: beats[bar * 4].timeMs, endMs: beats[min(399, end * 4)].timeMs, energy: 0.5)
+        }
+        let sections = [section(.intro, 0, 16), section(.drop, 16, 32), section(.breakdown, 32, 48),
+                        section(.drop, 48, 80), section(.outro, 80, 99)]
+        let cues = CueAnalyzer.namedHotCues(sections: sections, analysis: analysis, leadBars: 8)
+        let slots = Set(cues.map(\.slot))
+        #expect(slots.contains(CueAnalyzer.Role.build.rawValue))
+        #expect(slots.contains(CueAnalyzer.Role.mainDrop.rawValue))
+    }
+}

@@ -45,14 +45,28 @@ public final class AnalysisCache: @unchecked Sendable {
         load(hash, policy)?.analysis
     }
 
+    /// Song structure detected alongside the analysis.
+    public func sections(forHash hash: String, policy: AnalysisPolicy) -> [StructureAnalyzer.Section]? {
+        load(hash, policy)?.sections?.compactMap { s in
+            StructureAnalyzer.Kind(rawValue: s.kind).map {
+                StructureAnalyzer.Section(kind: $0, startBeat: s.startBeat, startMs: s.startMs, endMs: s.endMs, energy: s.energy)
+            }
+        }
+    }
+
     /// Cue points and energy detected alongside the analysis.
     public func detectedCues(forHash hash: String, policy: AnalysisPolicy) -> CueAnalyzer.Result? {
         guard let stored = load(hash, policy), let cues = stored.cues else { return nil }
         return CueAnalyzer.Result(cues: cues.map { .init(timeMs: $0[0], energy: $0[1]) }, energy: stored.trackEnergy)
     }
 
-    public func store(_ analysis: TrackAnalysis, cues: CueAnalyzer.Result?, forHash hash: String, policy: AnalysisPolicy) throws {
+    public func store(_ analysis: TrackAnalysis, cues: CueAnalyzer.Result?, sections: [StructureAnalyzer.Section]?,
+                      forHash hash: String, policy: AnalysisPolicy) throws {
         var stored = Stored(analysis)
+        stored.structureVersion = StructureAnalyzer.version
+        stored.sections = sections?.map {
+            .init(kind: $0.kind.rawValue, startBeat: $0.startBeat, startMs: $0.startMs, endMs: $0.endMs, energy: $0.energy)
+        }
         stored.policy = policy.fingerprint
         stored.cueVersion = CueAnalyzer.version
         stored.cues = cues?.cues.map { [$0.timeMs, $0.energy] }
@@ -65,6 +79,7 @@ public final class AnalysisCache: @unchecked Sendable {
               let stored = try? JSONDecoder().decode(Stored.self, from: data),
               stored.version == TrackAnalysis.currentVersion,
               stored.cueVersion == CueAnalyzer.version,
+              stored.structureVersion == StructureAnalyzer.version,
               stored.policy == policy.fingerprint else { return nil }
         return stored
     }
@@ -79,6 +94,14 @@ public final class AnalysisCache: @unchecked Sendable {
         /// [timeMs, energy] pairs.
         var cues: [[Int]]?
         var trackEnergy: Int?
+        var structureVersion: Int?
+        var sections: [StoredSection]?
+
+        struct StoredSection: Codable {
+            var kind: String
+            var startBeat, startMs, endMs: Int
+            var energy: Double
+        }
         var durationSeconds: Double
         var sampleRate: Int
         var bpm: Double

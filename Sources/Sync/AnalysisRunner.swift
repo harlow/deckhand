@@ -73,8 +73,9 @@ public struct AnalysisRunner {
                 let index = lock.withLock { started += 1; return started }
                 progress(.started(index: index, total: pending.count, title: item.title))
                 do {
-                    let (a, cues) = try analyze(item.url)
-                    try cache.store(a, cues: cues, forHash: item.contentHash, policy: policy)
+                    let r = try analyze(item.url)
+                    try cache.store(r.analysis, cues: r.cues, sections: r.sections, forHash: item.contentHash, policy: policy)
+                    let a = r.analysis
                     lock.withLock { results[item.contentHash] = a }
                 } catch {
                     progress(.failed(title: item.title, error: "\(error)"))
@@ -88,8 +89,9 @@ public struct AnalysisRunner {
         return results
     }
 
-    /// Decodes once and runs every analysis stage on the same audio.
-    func analyze(_ url: URL) throws -> (TrackAnalysis, CueAnalyzer.Result) {
+    /// Decodes once and runs every analysis stage on the same audio; cue and structure detection
+    /// share one pass of per-beat features.
+    func analyze(_ url: URL) throws -> (analysis: TrackAnalysis, cues: CueAnalyzer.Result, sections: [StructureAnalyzer.Section]) {
         let tags = (policy.keyFromTags || policy.bpmHintFromTags) ? FileTagReader.read(url) : FileTags()
         var hints = AnalysisHints(bpm: policy.bpmHintFromTags ? tags.bpm : nil, key: policy.keyFromTags ? tags.key : nil)
         if let mik = mixedInKey?.track(for: url) {
@@ -98,6 +100,13 @@ public struct AnalysisRunner {
         }
         let audio = try AudioDecoder.decodeMono(url)
         let analysis = TrackAnalyzer.analyze(audio, hints: hints)
-        return (analysis, CueAnalyzer.detect(audio, analysis: analysis))
+        guard analysis.beats.count > 64 else { return (analysis, CueAnalyzer.Result(cues: [], energy: nil), []) }
+        let beatTimes = analysis.beats.map { Double($0.timeMs) / 1000 } + [analysis.durationSeconds]
+        let features = BeatFeatures(audio: audio, waveforms: analysis.waveforms, beatTimes: beatTimes,
+                                    timelineOffset: audio.timelineOffsetSeconds).rows
+        let cues = CueAnalyzer.detect(features: features, beatTimesMs: analysis.beats.map(\.timeMs),
+                                      barPositions: analysis.beats.map(\.barPosition), bpm: analysis.bpm)
+        let sections = StructureAnalyzer.analyze(audio, analysis: analysis, features: features)
+        return (analysis, cues, sections)
     }
 }
