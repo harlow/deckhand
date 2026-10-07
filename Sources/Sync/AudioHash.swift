@@ -6,7 +6,7 @@ import Foundation
 /// it can't parse.
 enum AudioHash {
     /// Prefix identifying the scheme, so hashes from different schemes never compare equal.
-    static let scheme = "a1:"
+    static let scheme = "a2:"
 
     static func hash(_ url: URL) throws -> String {
         let handle = try FileHandle(forReadingFrom: url)
@@ -52,6 +52,7 @@ enum AudioHash {
             let syncsafe = head[6..<10].reduce(UInt64(0)) { $0 << 7 | UInt64($1 & 0x7F) }
             start = 10 + syncsafe + (head[5] & 0x10 != 0 ? 10 : 0)
         }
+        start += try xingFrameLength(h, at: start)
         var end = size
         if end >= 128, try read(h, at: end - 128, 3) == Array("TAG".utf8) { end -= 128 }
         if end >= 32, try read(h, at: end - 32, 8) == Array("APETAGEX".utf8) {
@@ -61,6 +62,27 @@ enum AudioHash {
             end -= tagSize + (hasHeader ? 32 : 0)
         }
         return start < end ? [start..<end] : [0..<size]
+    }
+
+    /// Length of a leading Xing/Info (LAME) metadata frame, or 0. It carries no audio, and taggers
+    /// rewrite its ReplayGain fields.
+    private static func xingFrameLength(_ h: FileHandle, at offset: UInt64) throws -> UInt64 {
+        let f = try read(h, at: offset, 48)
+        guard f.count == 48, f[0] == 0xFF, f[1] & 0xE0 == 0xE0 else { return 0 }
+        let version = (f[1] >> 3) & 0x3 // 3 = MPEG1, 2 = MPEG2, 0 = MPEG2.5
+        let layer = (f[1] >> 1) & 0x3 // 1 = Layer III
+        let bitrateIndex = Int(f[2] >> 4), rateIndex = Int((f[2] >> 2) & 0x3), padding = UInt64((f[2] >> 1) & 0x1)
+        guard layer == 1, version != 1, (1...14).contains(bitrateIndex), rateIndex < 3 else { return 0 }
+        let mpeg1 = version == 3
+        let bitrates = mpeg1 ? [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320]
+            : [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160]
+        let baseRates = [44100, 48000, 32000]
+        let sampleRate = baseRates[rateIndex] / (version == 3 ? 1 : version == 2 ? 2 : 4)
+        let mono = (f[3] >> 6) == 3
+        let sideInfo = mpeg1 ? (mono ? 17 : 32) : (mono ? 9 : 17)
+        let tag = Array(f[(4 + sideInfo)..<(8 + sideInfo)])
+        guard tag == Array("Xing".utf8) || tag == Array("Info".utf8) else { return 0 }
+        return UInt64((mpeg1 ? 144 : 72) * bitrates[bitrateIndex] * 1000 / sampleRate) + padding
     }
 
     /// Walks a chunked container (MP4 atoms, RIFF, IFF) and returns the payload of the wanted chunks.

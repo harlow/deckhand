@@ -34,6 +34,23 @@ import Testing
         #expect(try AudioHash.hash(a) != AudioHash.hash(c))
     }
 
+    /// MPEG-1 Layer III, 128 kbps, 44.1 kHz, stereo: 417-byte frames; Xing/Info tag at offset 36.
+    func infoFrame(replayGain: UInt8) -> [UInt8] {
+        var f = [UInt8](repeating: 0, count: 417)
+        f[0] = 0xFF; f[1] = 0xFB; f[2] = 0x90; f[3] = 0x00
+        f.replaceSubrange(36..<40, with: Array("Info".utf8))
+        f[160] = replayGain
+        return f
+    }
+
+    @Test func mp3IgnoresLameHeaderFrame() throws {
+        let a = try write("x.mp3", id3("t") + infoFrame(replayGain: 1) + audio)
+        let b = try write("y.mp3", id3("t") + infoFrame(replayGain: 9) + audio)
+        let c = try write("z.mp3", id3("t") + infoFrame(replayGain: 1) + audio.dropLast() + [0])
+        #expect(try AudioHash.hash(a) == AudioHash.hash(b))
+        #expect(try AudioHash.hash(a) != AudioHash.hash(c))
+    }
+
     @Test func m4aHashesOnlyMdat() throws {
         func atom(_ type: String, _ payload: [UInt8]) -> [UInt8] { be32(payload.count + 8) + Array(type.utf8) + payload }
         let a = try write("a.m4a", atom("ftyp", Array("M4A ".utf8)) + atom("moov", [1, 2, 3]) + atom("mdat", audio))
