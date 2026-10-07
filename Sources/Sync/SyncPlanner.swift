@@ -4,7 +4,11 @@ import OneLibrary
 
 /// The complete set of changes a sync will make, computed before anything is written.
 public struct SyncPlan: Sendable {
-    public enum Action: String, Sendable { case add, replace, unchanged }
+    public enum Action: String, Sendable {
+        case add, replace, unchanged
+        /// Audio already on the drive outside Deckhand's folder; moved into place instead of copied.
+        case adopt
+    }
     public enum PlaylistAction: String, Sendable { case create, change, unchanged }
 
     public struct TrackEntry: Sendable {
@@ -16,6 +20,8 @@ public struct SyncPlan: Sendable {
         public var fileSize: Int64
         public var action: Action
         public var needsAnalysis: Bool
+        /// For `.adopt`: the existing file's USB-relative path.
+        public var adoptFrom: String? = nil
     }
 
     public struct PlaylistEntry: Sendable {
@@ -42,7 +48,9 @@ public struct SyncPlan: Sendable {
     public var skipped: [Skipped]
     public var manifest: Manifest
 
-    public var bytesToCopy: Int64 { tracks.filter { $0.action != .unchanged }.reduce(0) { $0 + $1.fileSize } }
+    public var bytesToCopy: Int64 {
+        tracks.filter { $0.action == .add || $0.action == .replace }.reduce(0) { $0 + $1.fileSize }
+    }
     public var analysisCount: Int { tracks.filter(\.needsAnalysis).count }
     public var hasChanges: Bool {
         tracks.contains { $0.action != .unchanged } || !removedTracks.isEmpty
@@ -63,8 +71,10 @@ public struct SyncPlanner {
 
     /// `entireLibrary`: sync every playlist plus songs that aren't in any playlist (requires a library
     /// loaded with all songs).
+    /// `adoptable`: audio hash → USB path of existing, unowned files on the drive (see AdoptScanner).
     public func plan(volume: Volume, selectedPlaylistIds: [String], entireLibrary: Bool = false, previous: Manifest,
-                     verifyFiles: Bool = true) throws -> SyncPlan {
+                     adoptable: [String: String] = [:], verifyFiles: Bool = true) throws -> SyncPlan {
+        var adoptable = adoptable
         var manifest = previous
         let selectedPlaylistIds = entireLibrary ? library.playlists.map(\.id) : selectedPlaylistIds
         manifest.selectedPlaylistIds = selectedPlaylistIds
@@ -114,8 +124,13 @@ public struct SyncPlanner {
                 if action == .unchanged && (!anlzPresent || prev?.analysisVersion != TrackAnalysis.currentVersion) {
                     action = .replace
                 }
+                var adoptFrom: String?
+                if action != .unchanged, let existing = adoptable.removeValue(forKey: hash) {
+                    action = .adopt
+                    adoptFrom = existing
+                }
                 entries[id] = .init(source: t, sourceFile: file, contentHash: hash, usbPath: usbPath, contentId: contentId,
-                                    fileSize: FileOps.size(file), action: action, needsAnalysis: !analyzed)
+                                    fileSize: FileOps.size(file), action: action, needsAnalysis: !analyzed, adoptFrom: adoptFrom)
                 order.append(id)
             }
         }

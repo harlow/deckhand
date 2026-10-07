@@ -60,8 +60,20 @@ public struct SyncExecutor {
         if needed > free { throw SyncError.insufficientSpace(needed: needed, available: free) }
 
         let timer = PhaseTimer()
-        // 1. Copy audio.
-        let toCopy = plan.tracks.filter { $0.action != .unchanged }
+        // 1. Adopt (move) audio already on the drive, then copy the rest.
+        for t in plan.tracks where t.action == .adopt {
+            guard let from = t.adoptFrom else { continue }
+            try ensureMounted(volume)
+            let src = volume.url(forUsbPath: from), dst = volume.url(forUsbPath: t.usbPath)
+            try FileManager.default.createDirectory(at: dst.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if FileManager.default.fileExists(atPath: dst.path) { try FileManager.default.removeItem(at: dst) }
+            do {
+                try FileManager.default.moveItem(at: src, to: dst)
+            } catch {
+                throw SyncError.copyFailed(src.path, error)
+            }
+        }
+        let toCopy = plan.tracks.filter { $0.action == .add || $0.action == .replace }
         for (i, t) in toCopy.enumerated() {
             progress(.copying(index: i + 1, total: toCopy.count, title: t.source.title))
             try ensureMounted(volume)

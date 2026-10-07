@@ -126,4 +126,21 @@ import Testing
             .plan(volume: volume, selectedPlaylistIds: ["house"], previous: Manifest())
         #expect(selected.tracks.map(\.source.id) == ["A", "B"])
     }
+
+    @Test func adoptsExistingDriveAudio() throws {
+        let volume = Volume(testRoot: drive)
+        let existing = drive.appendingPathComponent("Contents/Old Artist")
+        try FileManager.default.createDirectory(at: existing, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: source.appendingPathComponent("A.mp3"), to: existing.appendingPathComponent("a-old.mp3"))
+        let adoptable = AdoptScanner.scan(volume, owned: [], cache: cache)
+        #expect(adoptable.count == 1)
+
+        let plan = try SyncPlanner(library: library(["A", "B"]), cache: cache)
+            .plan(volume: volume, selectedPlaylistIds: ["house"], previous: Manifest(), adoptable: adoptable)
+        let byId = Dictionary(uniqueKeysWithValues: plan.tracks.map { ($0.source.id, $0) })
+        #expect(byId["A"]?.action == .adopt)
+        #expect(byId["A"]?.adoptFrom == "/Contents/Old Artist/a-old.mp3")
+        #expect(byId["B"]?.action == .add)
+        #expect(plan.bytesToCopy == FileOps.size(source.appendingPathComponent("B.mp3")))
+    }
 }

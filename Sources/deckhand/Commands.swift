@@ -92,6 +92,8 @@ struct SyncCommand: ParsableCommand {
     var playlist: [String] = []
     @Flag(help: "Sync every song and every playlist; future syncs follow the library automatically.")
     var entireLibrary = false
+    @Flag(help: "Take over audio already on the drive (e.g. from a Rekordbox export) instead of copying it again.")
+    var adopt = false
     @Flag(help: "Show what would change without writing anything.") var dryRun = false
     @Flag(name: .shortAndLong, help: "Don't ask for confirmation.") var yes = false
     @Flag(help: "List every track change.") var verbose = false
@@ -130,8 +132,17 @@ struct SyncCommand: ParsableCommand {
         }
 
         let cache = try AnalysisCache()
+        var adoptable: [String: String] = [:]
+        if adopt {
+            let bar = LockedBox<ProgressBar?>(nil)
+            adoptable = AdoptScanner.scan(v, owned: Set(manifest.tracks.values.map(\.usbPath)), cache: cache) { i, n, name in
+                bar.update { if $0 == nil { $0 = ProgressBar("Scanning drive", total: n) } }
+                bar.value?.advance(name)
+            }
+            bar.value?.finish("\(adoptable.count) existing tracks found")
+        }
         let plan = try SyncPlanner(library: lib, cache: cache, policy: tagOptions.policy)
-            .plan(volume: v, selectedPlaylistIds: selected, entireLibrary: wholeLibrary, previous: manifest)
+            .plan(volume: v, selectedPlaylistIds: selected, entireLibrary: wholeLibrary, previous: manifest, adoptable: adoptable)
         printPlan(plan)
 
         if dryRun {
@@ -140,6 +151,11 @@ struct SyncCommand: ParsableCommand {
         }
         let selectionChanged = plan.manifest.selectedPlaylistIds != manifest.selectedPlaylistIds
             || plan.manifest.entireLibrary != manifest.entireLibrary
+        let adopting = plan.tracks.filter { $0.action == .adopt }.count
+        if adopting > 0 && !yes {
+            print("\n\(adopting) existing audio files on \(v.name) will be moved into /Contents/Deckhand and managed by")
+            print("Deckhand from now on (moved, not copied). Other files on the drive are left alone.")
+        }
         if (plan.hasChanges || selectionChanged) && !yes {
             print("\nSync? [Y/n] ", terminator: "")
             let answer = readLine()?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
@@ -199,11 +215,13 @@ struct SyncCommand: ParsableCommand {
 
         let add = plan.tracks.filter { $0.action == .add }
         let replace = plan.tracks.filter { $0.action == .replace }
+        let adopted = plan.tracks.filter { $0.action == .adopt }
         print("\nTRACKS")
         print("+ \(add.count) new")
+        if !adopted.isEmpty { print("> \(adopted.count) adopted from files already on the drive (moved, not copied)") }
         print("- \(plan.removedTracks.count) orphaned")
         print("~ \(replace.count) changed")
-        print("= \(plan.tracks.count - add.count - replace.count) unchanged")
+        print("= \(plan.tracks.count - add.count - replace.count - adopted.count) unchanged")
         if verbose {
             for t in add { print("  + \(t.source.title)") }
             for t in replace { print("  ~ \(t.source.title)") }
