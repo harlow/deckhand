@@ -64,4 +64,17 @@ import Testing
         #expect(try PhraseCodec.decode(pssi, masked: true) == sample)
         #expect(OneLibraryValidator.checkAnlz(ext, expectedPath: "/Contents/a.mp3") == nil)
     }
+
+    /// Masked phrase sections from a Rekordbox 7 USB export (local fixture, not committed).
+    @Test func matchesRekordboxUsbExport() throws {
+        let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("Fixtures/private/golden-rats/pssi")
+        guard let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return }
+        for url in files where url.pathExtension == "pssi" {
+            let raw = try Data(contentsOf: url)
+            let decoded = try PhraseCodec.decode(raw, masked: true)
+            #expect([1, 2, 3].contains(decoded.mood))
+            #expect(PhraseCodec.encode(decoded, masked: true) == raw, "\(url.lastPathComponent)")
+        }
+    }
 }
