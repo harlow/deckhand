@@ -365,8 +365,25 @@ struct ImportPlaylistsCommand: ParsableCommand {
     var playlist: [String] = []
     @Flag(help: "Also import playlists whose name already exists in Apple Music (creates a second playlist).")
     var includeExisting = false
+    @Flag(help: "Also add drive tracks that aren't in Apple Music (copied to ~/Music/Deckhand Imports first).")
+    var addMissing = false
     @Flag(help: "Show the plan without changing Apple Music.") var dryRun = false
     @Flag(name: .shortAndLong, help: "Don't ask for confirmation.") var yes = false
+
+    /// Deletes `dir` and its subfolders only where they contain no files (staged files Music
+    /// references in place must survive).
+    private func removeEmptyFolders(_ dir: URL) {
+        let fm = FileManager.default
+        for sub in (try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
+        where (try? sub.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+            removeEmptyFolders(sub)
+        }
+        let remaining = ((try? fm.contentsOfDirectory(atPath: dir.path)) ?? []).filter { $0 != ".DS_Store" }
+        if remaining.isEmpty { try? fm.removeItem(at: dir) }
+    }
+
+    /// Formats Music.app can import.
+    static let importable: Set<String> = ["mp3", "m4a", "aac", "wav", "aif", "aiff", "mp4"]
 
     func run() throws {
         let v = try Volume(url: URL(fileURLWithPath: volume))
@@ -376,7 +393,8 @@ struct ImportPlaylistsCommand: ParsableCommand {
         let importer = PlaylistImporter(volume: v, device: device, songs: try AppleMusicLibrary.allSongs(), cache: try AnalysisCache())
 
         print("Matching \(v.name)'s tracks to Apple Music…")
-        let plan = try importer.plan(existingNames: Set(existing.keys), only: playlist.isEmpty ? nil : Set(playlist))
+        let plan = try importer.plan(existingNames: Set(existing.keys), only: playlist.isEmpty ? nil : Set(playlist),
+                                     includeAllTracks: addMissing)
         let methods = plan.methods.map { "\($0.value) \($0.key.rawValue)" }.sorted().joined(separator: ", ")
         print("Matched by: \(methods.isEmpty ? "—" : methods)\n")
 
@@ -389,12 +407,19 @@ struct ImportPlaylistsCommand: ParsableCommand {
             let name = p.source.name.padding(toLength: 28, withPad: " ", startingAt: 0)
             print("\(name) \(String(p.source.contentIds.count).leftPad(6))  \(String(p.trackIds.count).leftPad(7))  \(action)")
         }
-        let unmatched = toCreate.flatMap(\.unmatched)
+        let unmatched = addMissing ? plan.missing : toCreate.flatMap(\.unmatched)
+        let toAdd = addMissing ? plan.missing.filter { Self.importable.contains(($0.usbPath as NSString).pathExtension.lowercased()) } : []
         if !unmatched.isEmpty {
-            print("\nNot found in Apple Music (\(unmatched.count)):")
-            for t in unmatched.prefix(30) { print("  ! \(t.artist) — \(t.title)") }
+            let bytes = Int64(toAdd.reduce(0) { $0 + $1.fileSize })
+            print("\nNot in Apple Music (\(unmatched.count))\(addMissing ? ", \(toAdd.count) will be added (\(formatBytes(bytes)))" : ""):")
+            for t in unmatched.prefix(30) {
+                let skip = addMissing && !toAdd.contains { $0.contentId == t.contentId } ? "  [format Music can't import]" : ""
+                print("  \(addMissing ? "+" : "!") \(t.artist) — \(t.title)\(skip)")
+            }
+            if unmatched.count > 30 { print("  … and \(unmatched.count - 30) more") }
+            if !addMissing { print("  (use --add-missing to add them to Apple Music)") }
         }
-        guard !toCreate.filter({ !$0.source.isFolder }).isEmpty else {
+        guard !toCreate.filter({ !$0.source.isFolder }).isEmpty || !toAdd.isEmpty else {
             print("\nNothing to import.")
             return
         }
@@ -403,12 +428,37 @@ struct ImportPlaylistsCommand: ParsableCommand {
             return
         }
         if !yes {
-            print("\nCreate these playlists in Apple Music? [y/N] ", terminator: "")
+            print("\nUpdate Apple Music as shown? [y/N] ", terminator: "")
             guard ["y", "yes"].contains(readLine()?.lowercased() ?? "") else { print("Cancelled."); return }
         }
 
+        var added: [Int: String] = [:]
+        if !toAdd.isEmpty {
+            let staging = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Music/Deckhand Imports")
+            for (i, t) in toAdd.enumerated() {
+                let src = v.url(forUsbPath: t.usbPath)
+                let folder = SyncPlanner.sanitize(t.artist.isEmpty ? "Unknown Artist" : t.artist)
+                let dst = staging.appendingPathComponent(folder).appendingPathComponent(src.lastPathComponent)
+                do {
+                    try FileManager.default.createDirectory(at: dst.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    if !FileManager.default.fileExists(atPath: dst.path) { try FileManager.default.copyItem(at: src, to: dst) }
+                    let result = try AppleMusicWriter.addFile(dst, title: t.title, artist: t.artist, album: t.album, genre: t.genre)
+                    added[t.contentId] = result.id
+                    // If Music copied the file into its media folder, the staging copy is redundant.
+                    if URL(fileURLWithPath: result.location).standardizedFileURL != dst.standardizedFileURL {
+                        try? FileManager.default.removeItem(at: dst)
+                    }
+                    print("  added [\(i + 1)/\(toAdd.count)] \(t.artist) — \(t.title)")
+                } catch {
+                    warn("  ! could not add \(t.title): \(error)")
+                }
+            }
+            removeEmptyFolders(staging)
+        }
+
         var created: [Int: String] = [:]
-        for p in toCreate {
+        let resolved = Dictionary(uniqueKeysWithValues: PlaylistImporter.resolve(plan, added: added).map { ($0.source.playlistId, $0) })
+        for p in toCreate.map({ resolved[$0.source.playlistId] ?? $0 }) {
             let parent = p.source.parentId.flatMap { created[$0] }
             if p.source.isFolder, let folder = existing[p.source.name], folder.isFolder {
                 created[p.source.playlistId] = folder.id

@@ -181,7 +181,7 @@ public struct SyncPlanner {
         return "/Contents/Deckhand/\(digest.prefix(2))/\(name) [\(digest.prefix(8))].\(file.pathExtension.lowercased())"
     }
 
-    static func sanitize(_ s: String) -> String {
+    public static func sanitize(_ s: String) -> String {
         let illegal = CharacterSet(charactersIn: "/\\:*?\"<>|").union(.controlCharacters)
         var out = String(String.UnicodeScalarView(s.precomposedStringWithCanonicalMapping.unicodeScalars.map {
             illegal.contains($0) ? "_" : $0

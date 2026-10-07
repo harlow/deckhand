@@ -19,6 +19,10 @@ public struct PlaylistImporter {
     public struct Plan: Sendable {
         public var playlists: [PlaylistPlan]
         public var methods: [Method: Int]
+        /// Drive tracks with no Apple Music match (all tracks when `includeAllTracks`, else playlist members).
+        public var missing: [DeviceLibrary.Track]
+        /// Drive content ID → Apple Music track ID.
+        public var matches: [Int: String]
     }
 
     let volume: Volume
@@ -34,10 +38,12 @@ public struct PlaylistImporter {
     }
 
     /// `existingNames`: Apple Music playlist names. `only`: restrict to these playlist names.
-    public func plan(existingNames: Set<String>, only: Set<String>? = nil,
+    /// `includeAllTracks`: also match tracks that aren't in any selected playlist, so `missing`
+    /// covers the whole drive.
+    public func plan(existingNames: Set<String>, only: Set<String>? = nil, includeAllTracks: Bool = false,
                      progress: (Int, Int) -> Void = { _, _ in }) throws -> Plan {
         let wanted = device.playlists.filter { only == nil || only!.contains($0.name) }
-        let needed = Set(wanted.flatMap(\.contentIds))
+        let needed = includeAllTracks ? Set(device.tracks.keys) : Set(wanted.flatMap(\.contentIds))
         var match: [Int: String] = [:]
         var methods: [Method: Int] = [:]
 
@@ -90,7 +96,8 @@ public struct PlaylistImporter {
                          unmatched: p.contentIds.filter { match[$0] == nil }.compactMap { device.tracks[$0] },
                          existsInAppleMusic: existingNames.contains(p.name))
         }
-        return Plan(playlists: plans, methods: methods)
+        let missing = needed.sorted().filter { match[$0] == nil }.compactMap { device.tracks[$0] }
+        return Plan(playlists: plans, methods: methods, missing: missing, matches: match)
     }
 
     static func recordingKey(title: String, artist: String) -> String {
@@ -103,5 +110,16 @@ public struct PlaylistImporter {
     static func norm(_ s: String) -> String {
         s.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
             .unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }.map(String.init).joined()
+    }
+
+    /// Playlist plans after adding `added` (drive content ID → new Apple Music track ID).
+    public static func resolve(_ plan: Plan, added: [Int: String]) -> [PlaylistPlan] {
+        let matches = plan.matches.merging(added) { a, _ in a }
+        return plan.playlists.map { p in
+            var p = p
+            p.trackIds = p.source.contentIds.compactMap { matches[$0] }
+            p.unmatched = p.unmatched.filter { matches[$0.contentId] == nil }
+            return p
+        }
     }
 }

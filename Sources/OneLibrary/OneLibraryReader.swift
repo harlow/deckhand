@@ -6,6 +6,8 @@ public struct DeviceLibrary: Sendable {
         public var contentId: Int
         public var title: String
         public var artist: String
+        public var album: String
+        public var genre: String
         public var durationSeconds: Int
         public var usbPath: String
         public var fileSize: Int
@@ -29,12 +31,16 @@ public struct DeviceLibrary: Sendable {
         let db = try OneLibraryDatabase.open(database)
         var tracks: [Int: Track] = [:]
         let sql = """
-            SELECT c.content_id, c.title, a.name AS artist, c.length, c.path, c.fileSize
-            FROM content c LEFT JOIN artist a ON a.artist_id = c.artist_id_artist
+            SELECT c.content_id, c.title, a.name AS artist, al.name AS album, g.name AS genre, c.length, c.path, c.fileSize
+            FROM content c
+            LEFT JOIN artist a ON a.artist_id = c.artist_id_artist
+            LEFT JOIN album al ON al.album_id = c.album_id
+            LEFT JOIN genre g ON g.genre_id = c.genre_id
             """
         for r in try db.query(sql) {
             guard let id = r["content_id"]?.int, let path = r["path"]?.string else { continue }
             tracks[Int(id)] = Track(contentId: Int(id), title: r["title"]?.string ?? "", artist: r["artist"]?.string ?? "",
+                                    album: r["album"]?.string ?? "", genre: r["genre"]?.string ?? "",
                                     durationSeconds: Int(r["length"]?.int ?? 0), usbPath: path,
                                     fileSize: Int(r["fileSize"]?.int ?? 0))
         }

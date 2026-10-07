@@ -55,6 +55,39 @@ public enum AppleMusicWriter {
         return missing
     }
 
+    /// Adds an audio file to the library and returns the new track's persistent ID and file location
+    /// (Music may copy the file into its media folder, depending on the user's settings).
+    /// Non-nil metadata values overwrite what Music read from the file's tags.
+    public static func addFile(_ url: URL, title: String?, artist: String?, album: String?, genre: String?) throws
+        -> (id: String, location: String) {
+        var sets: [String] = []
+        if let title, !title.isEmpty { sets.append("set name of t to \(quote(title))") }
+        if let artist, !artist.isEmpty { sets.append("set artist of t to \(quote(artist))") }
+        if let album, !album.isEmpty { sets.append("set album of t to \(quote(album))") }
+        if let genre, !genre.isEmpty { sets.append("set genre of t to \(quote(genre))") }
+        // Music returns the existing track for audio it already has; only retitle tracks it just created.
+        let script = """
+            tell application "Music"
+                set t to add (POSIX file \(quote(url.path)))
+                if (date added of t) > ((current date) - 300) then
+                    \(sets.joined(separator: "\n            "))
+                end if
+                return (persistent ID of t) & linefeed & (POSIX path of (location of t as alias))
+            end tell
+            """
+        let result: String
+        do {
+            result = try run(script)
+        } catch {
+            // The first request after Music launches (or while it shows a prompt) can fail; retry once.
+            Thread.sleep(forTimeInterval: 2)
+            result = try run(script)
+        }
+        let parts = result.split(separator: "\n", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { throw AppleMusicWriterError.script("unexpected result adding \(url.lastPathComponent)") }
+        return (parts[0], parts[1])
+    }
+
     private static func quote(_ s: String) -> String {
         "\"" + s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
