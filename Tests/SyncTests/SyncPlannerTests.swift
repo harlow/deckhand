@@ -1,4 +1,5 @@
 import DeckhandCore
+import CryptoKit
 import Foundation
 import OneLibrary
 import Testing
@@ -142,5 +143,36 @@ import Testing
         #expect(byId["A"]?.adoptFrom == "/Contents/Old Artist/a-old.mp3")
         #expect(byId["B"]?.action == .add)
         #expect(plan.bytesToCopy == FileOps.size(source.appendingPathComponent("B.mp3")))
+    }
+
+    @Test func avoidsAnalysisPathCollisions() throws {
+        // Find titles for tracks A and B whose Deckhand paths (which embed each track's real audio
+        // fingerprint) hash to the same ANLZ directory. Varied names are needed: near-identical strings
+        // spread perfectly under this hash.
+        let hashA = try cache.contentHash(of: source.appendingPathComponent("A.mp3"))
+        let hashB = try cache.contentHash(of: source.appendingPathComponent("B.mp3"))
+        func title(_ i: Int) -> String {
+            "Track " + String(Insecure.MD5.hash(data: Data(String(i).utf8)).map { String(format: "%02x", $0) }.joined().prefix(10))
+        }
+        func dir(_ title: String, _ hash: String) -> String {
+            OneLibrary.AnlzPath.directory(forAudioPath: SyncPlanner.usbPath(
+                for: SourceTrack(id: "x", title: title, artist: "A"), file: URL(fileURLWithPath: "/x.mp3"), hash: hash))
+        }
+        var aDirs: [String: String] = [:]
+        for i in 0..<2000 { aDirs[dir(title(i), hashA)] = title(i) }
+        var pair: (String, String)?
+        for j in 2000..<200_000 where pair == nil {
+            if let t1 = aDirs[dir(title(j), hashB)] { pair = (t1, title(j)) }
+        }
+        let (t1, t2) = try #require(pair)
+        var lib = library(["A", "B"])
+        lib.tracks["A"]!.title = t1
+        lib.tracks["A"]!.artist = "A"
+        lib.tracks["B"]!.title = t2
+        lib.tracks["B"]!.artist = "A"
+        let plan = try SyncPlanner(library: lib, cache: cache)
+            .plan(volume: Volume(testRoot: drive), selectedPlaylistIds: ["house"], previous: Manifest())
+        let dirs = plan.tracks.map { OneLibrary.AnlzPath.directory(forAudioPath: $0.usbPath) }
+        #expect(Set(dirs).count == plan.tracks.count)
     }
 }

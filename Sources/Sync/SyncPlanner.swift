@@ -85,6 +85,10 @@ public struct SyncPlanner {
         var entries: [String: SyncPlan.TrackEntry] = [:]
         var order: [String] = []
         var superseded: [Manifest.Track] = []
+        // Players locate analysis files by a hash of the audio path (~200k buckets), so large libraries
+        // get collisions. Deckhand picks its own file names, so it steers new paths clear of them.
+        var anlzOwner: [String: String] = [:]
+        for t in previous.tracks.values { anlzOwner[AnlzPath.directory(forAudioPath: t.usbPath)] = t.usbPath }
 
         // Tracks, in first-seen playlist order; then (entire library) songs in no playlist.
         var groups = playlists.filter { !$0.isFolder }
@@ -112,16 +116,28 @@ public struct SyncPlanner {
                     let present = !verifyFiles || FileManager.default.fileExists(atPath: volume.url(forUsbPath: usbPath).path)
                     action = present ? .unchanged : .replace
                 } else {
-                    usbPath = Self.usbPath(for: t, file: file, hash: hash)
+                    var variant = 1
+                    var candidate = Self.usbPath(for: t, file: file, hash: hash)
+                    while let owner = anlzOwner[AnlzPath.directory(forAudioPath: candidate)], owner != candidate {
+                        variant += 1
+                        candidate = Self.usbPath(for: t, file: file, hash: hash, variant: variant)
+                    }
+                    usbPath = candidate
                     if let prev { superseded.append(prev) }
                     contentId = prev?.contentId ?? manifest.nextContentId
                     if prev == nil { manifest.nextContentId += 1 }
                     action = prev == nil ? .add : .replace
+                    // Already at its exact path (the name embeds the audio fingerprint), e.g. after an
+                    // interrupted sync: nothing to copy.
+                    if prev == nil, verifyFiles, FileManager.default.fileExists(atPath: volume.url(forUsbPath: usbPath).path) {
+                        action = .unchanged
+                    }
                 }
+                anlzOwner[AnlzPath.directory(forAudioPath: usbPath)] = usbPath
                 let analyzed = cache.analysis(forHash: hash, policy: policy) != nil
                 let anlzPresent = !verifyFiles || FileManager.default.fileExists(
                     atPath: volume.url(forUsbPath: AnlzPath.directory(forAudioPath: usbPath) + "/ANLZ0000.DAT").path)
-                if action == .unchanged && (!anlzPresent || prev?.analysisVersion != TrackAnalysis.currentVersion) {
+                if action == .unchanged && prev != nil && (!anlzPresent || prev?.analysisVersion != TrackAnalysis.currentVersion) {
                     action = .replace
                 }
                 var adoptFrom: String?
@@ -197,12 +213,14 @@ public struct SyncPlanner {
         return nil
     }
 
-    /// "/Contents/Deckhand/<hh>/<Artist - Title> [<hash8>].<ext>"
-    static func usbPath(for t: SourceTrack, file: URL, hash: String) -> String {
+    /// "/Contents/Deckhand/<hh>/<Artist - Title> [<hash8>].<ext>"; variants 2+ add "-<n>" to avoid
+    /// analysis-path collisions.
+    static func usbPath(for t: SourceTrack, file: URL, hash: String, variant: Int = 1) -> String {
         let base = [t.artist, t.title].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " - ")
         let name = sanitize(base.isEmpty ? file.deletingPathExtension().lastPathComponent : base)
         let digest = hash.split(separator: ":").last.map(String.init) ?? hash
-        return "/Contents/Deckhand/\(digest.prefix(2))/\(name) [\(digest.prefix(8))].\(file.pathExtension.lowercased())"
+        let tag = variant > 1 ? "\(digest.prefix(8))-\(variant)" : String(digest.prefix(8))
+        return "/Contents/Deckhand/\(digest.prefix(2))/\(name) [\(tag)].\(file.pathExtension.lowercased())"
     }
 
     public static func sanitize(_ s: String) -> String {

@@ -6,7 +6,7 @@ import OneLibrary
 /// player settings, or anything Deckhand owns.
 public struct DriveCleanup {
     public enum Category: String, CaseIterable, Sendable {
-        case audio = "Audio not in your library (Rekordbox leftovers)"
+        case audio = "Audio not used by the library (leftovers)"
         case analysis = "Old analysis files"
         case artwork = "Old artwork"
         case legacyDatabase = "Rekordbox legacy database (export.pdb, read by older CDJs)"
@@ -47,7 +47,7 @@ public struct DriveCleanup {
         }
 
         walk("/Contents") { url, path in
-            guard !path.hasPrefix("/Contents/Deckhand/"), !ownedAudio.contains(path),
+            guard !ownedAudio.contains(path),
                   AdoptScanner.audioExtensions.contains(url.pathExtension.lowercased()) else { return }
             items.append(Item(category: .audio, path: path, bytes: FileOps.size(url)))
         }
