@@ -36,6 +36,12 @@ public enum AudioDecoder {
         do {
             file = try AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: false)
         } catch {
+            // Core Audio rejects some MP3s whose ID3 tag it can't parse (e.g. several large embedded
+            // images). The audio is fine: retry on a temporary copy without the tag.
+            if url.pathExtension.lowercased() == "mp3", let stripped = try? withoutID3(url) {
+                defer { try? FileManager.default.removeItem(at: stripped) }
+                if (try? AVAudioFile(forReading: stripped)) != nil { return try decodeMono(stripped) }
+            }
             throw AudioDecoderError.cannotOpen(url, underlying: error)
         }
 
@@ -129,5 +135,20 @@ public enum AudioDecoder {
         if flags & 8 != 0 { q += 4 }
         guard q + 9 <= frame.endIndex else { return nil }
         return String(decoding: frame[q..<q + 9], as: UTF8.self)
+    }
+}
+
+extension AudioDecoder {
+    /// Writes a temporary copy of an MP3 with its leading ID3v2 tag removed. Returns nil if there is none.
+    static func withoutID3(_ url: URL) throws -> URL? {
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
+        guard data.count > 10, data.prefix(3) == Data("ID3".utf8) else { return nil }
+        let h = [UInt8](data.prefix(10))
+        let size = Int(h[6]) << 21 | Int(h[7]) << 14 | Int(h[8]) << 7 | Int(h[9])
+        let start = 10 + size + (h[5] & 0x10 != 0 ? 10 : 0)
+        guard start < data.count else { return nil }
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("deckhand-\(UUID().uuidString).mp3")
+        try data.subdata(in: start..<data.count).write(to: tmp)
+        return tmp
     }
 }
