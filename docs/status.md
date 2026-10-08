@@ -18,28 +18,19 @@
   export.pdb) still on the stick — `deckhand cleanup /Volumes/RATS --dry-run` not run yet.
 - All 5 Rekordbox-only playlists were imported into Apple Music (Apple Music is canonical).
 
-## Uncommitted work in progress
+## Recently landed (2026-10-08)
 
-1. **Per-drive settings** (`Sources/deckhand/Commands.swift`, `Sources/Sync/Manifest.swift`,
-   `Sources/Sync/SyncExecutor.swift`): sync output flags (`--cue-source`, `--hot-cues`, `--cues`, `--build-lead`,
-   `--key-format`, `--track-color`, `--phrases`) are saved in the drive's manifest and reused; default cue source is
-   now `deckhand`. Verified on the DJTEST image; full `swift test` not yet run. Commit after tests pass.
-
-2. **Fix for the bug below is applied but untested** (`SyncPlanner.swift`: removed the `.replace` on outdated/missing
-   analysis; `SyncExecutor.swift`: a missing ANLZ0000.DAT now counts as stale). Run `swift test`, then commit.
-
-## Known bug (fix applied in working tree, untested)
-
-- **Analysis version bumps force a full audio re-copy.** `SyncPlanner` marks a track `.replace` when
-  `prev.analysisVersion != TrackAnalysis.currentVersion` or its ANLZ .DAT is missing, which counts toward
-  `bytesToCopy` (RATS re-sync failed: "need 31.75 GB"). Fix: drop that `.replace` condition in the planner and,
-  in `SyncExecutor`, also treat a missing ANLZ0000.DAT as stale (the fingerprint check already covers version
-  changes). Then re-sync RATS to apply key model v5 (analysis is cached; only ANLZ files + DB are rewritten).
+- `sync` no longer analyzes by default; it asks if tracks are unanalyzed (`--analyze`/`--no-analyze`), and
+  unanalyzed tracks get tag BPM/key until a later sync writes their analysis files.
+- `deckhand analyze` with no arguments analyzes the whole library.
+- Per-drive output settings are remembered; default cue source is `deckhand`.
+- Fixed: analysis version changes no longer force an audio re-copy (only ANLZ files + DB are rewritten).
 
 ## Next steps
 
-1. Run `swift test --scratch-path .build-main`; commit the settings work + the re-copy fix.
-2. Re-sync RATS (`deckhand sync /Volumes/RATS` — settings are remembered after one run with `--cue-source deckhand`).
+1. `deckhand analyze` (library re-analysis for key model v5), then `deckhand sync /Volumes/RATS --cue-source deckhand`
+   (first run saves the setting; afterwards plain `deckhand sync /Volumes/RATS`).
+2. Deck test: confirm what the OMNIS-DUO does with an unanalyzed track (expected: analyzes on load).
 3. `deckhand cleanup /Volumes/RATS --dry-run`, review, then clean (add `--keep-legacy` only if using older CDJs).
 4. Deck check on OMNIS-DUO: named hot cues (A Mix In, D Build, E Main Drop, H Mix Out matter most), phrase colors,
    track colors, keys. Optional `--hot-cues core` if extra pads feel noisy.

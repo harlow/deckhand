@@ -175,4 +175,18 @@ import Testing
         let dirs = plan.tracks.map { OneLibrary.AnlzPath.directory(forAudioPath: $0.usbPath) }
         #expect(Set(dirs).count == plan.tracks.count)
     }
+
+    @Test func analysisVersionChangeDoesNotRecopyAudio() throws {
+        let volume = Volume(testRoot: drive)
+        let first = try SyncPlanner(library: library(["A", "B"]), cache: cache)
+            .plan(volume: volume, selectedPlaylistIds: ["house"], previous: Manifest())
+        try materialize(first)
+        var previous = first.manifest
+        for id in previous.tracks.keys { previous.tracks[id]!.analysisVersion = TrackAnalysis.currentVersion - 1 }
+
+        let second = try SyncPlanner(library: library(["A", "B"]), cache: cache)
+            .plan(volume: volume, selectedPlaylistIds: ["house"], previous: previous)
+        #expect(second.tracks.allSatisfy { $0.action == .unchanged })
+        #expect(second.bytesToCopy == 0)
+    }
 }

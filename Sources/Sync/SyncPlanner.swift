@@ -135,11 +135,8 @@ public struct SyncPlanner {
                 }
                 anlzOwner[AnlzPath.directory(forAudioPath: usbPath)] = usbPath
                 let analyzed = cache.analysis(forHash: hash, policy: policy) != nil
-                let anlzPresent = !verifyFiles || FileManager.default.fileExists(
-                    atPath: volume.url(forUsbPath: AnlzPath.directory(forAudioPath: usbPath) + "/ANLZ0000.DAT").path)
-                if action == .unchanged && prev != nil && (!anlzPresent || prev?.analysisVersion != TrackAnalysis.currentVersion) {
-                    action = .replace
-                }
+                // Outdated or missing analysis files don't make the audio "changed": the executor rewrites
+                // ANLZ files whenever their inputs differ or they're missing, without touching audio.
                 var adoptFrom: String?
                 if action != .unchanged, let existing = adoptable.removeValue(forKey: hash) {
                     action = .adopt

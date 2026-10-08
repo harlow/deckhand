@@ -21,29 +21,24 @@ Requires macOS 14+. The first run may ask for Media & Apple Music access.
 
 ## Use
 
+Two simple steps — analyze, then sync:
+
 ```sh
-deckhand playlists                         # Apple Music playlists
-deckhand devices                           # mounted USB drives
-deckhand init /Volumes/DJUSB               # mark a FAT32/exFAT drive as Deckhand-managed (never formats)
-deckhand sync /Volumes/DJUSB --playlist "House" --playlist "Friday" --dry-run
-deckhand sync /Volumes/DJUSB               # re-sync the saved selection
-deckhand status /Volumes/DJUSB
-deckhand validate /Volumes/DJUSB
+deckhand analyze                           # analyze the whole Apple Music library (cached; only new tracks next time)
+deckhand init /Volumes/DJUSB               # once per drive: mark it Deckhand-managed (never formats)
+deckhand sync /Volumes/DJUSB --entire-library   # or --playlist "House" --playlist "Friday"
+deckhand sync /Volumes/DJUSB               # later: re-sync with the drive's saved selection and settings
 deckhand eject /Volumes/DJUSB
 ```
 
-Sync is incremental: audio is copied once, analysis (BPM, beat grid, key, waveforms) is cached in
-`~/Library/Application Support/Deckhand` by audio content and reused across drives. The library
-database is rebuilt in a staging file, validated, and swapped in; play history recorded by the player
-is preserved. Deckhand only deletes files it put on the drive.
+`sync` doesn't analyze by default, so it's fast. If some tracks aren't analyzed yet it asks whether to analyze them
+now (`--analyze` / `--no-analyze` to skip the question); unanalyzed tracks show their tag BPM/key and get full
+analysis files on a later sync.
 
-Analysis is Deckhand's own: BPM and beat grid, key (Camelot/classic), and auto cue points with
-energy levels, written as memory cues and colour-coded hot cues A–H (`--cues`, `--cue-source`).
-If Mixed In Key 11 is installed, its stored results are used for tracks it already analyzed
-(`--no-mixed-in-key` to turn off); it's never required.
-
-Tracks that can't be exported (DRM, cloud-only, missing, unsupported format) are listed, never
-silently dropped.
+Other commands: `playlists`, `devices`, `status`, `validate`, `import-playlists` (bring a Rekordbox drive's
+playlists into Apple Music, `--add-missing` to add its tracks), `cleanup` (remove leftovers from another tool),
+`sync --adopt` (take over audio already on a drive instead of copying it). Output settings such as `--cue-source`,
+`--hot-cues`, `--build-lead`, `--key-format`, `--track-color` are remembered per drive.
 
 ## Hardware test (OMNIS-DUO)
 

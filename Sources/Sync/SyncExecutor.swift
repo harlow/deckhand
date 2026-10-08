@@ -28,7 +28,10 @@ public struct SyncExecutor {
     public var analysisPolicy = AnalysisPolicy()
     /// Which imported cues to write as memory and/or hot cues.
     public var cueMode: CueMode = .both
-    public var cueSource: CueSource = .auto
+    public var cueSource: CueSource = .deckhand
+    /// Analyze tracks without cached analysis during sync. When false they're synced with tag BPM/key
+    /// only and get full analysis files on a later sync, after `deckhand analyze`.
+    public var analyzeMissing = true
     public var hotCueStyle: HotCueStyle = .named
     /// Bars between the "Build" hot cue and the main drop.
     public var buildLeadBars = 8
@@ -99,9 +102,9 @@ public struct SyncExecutor {
             case .failed(let title, let error): progress(.analysisFailed(title: title, error: error))
             }
         }
-        var analyses = runner.run(plan.tracks.filter(\.needsAnalysis).map {
+        var analyses = analyzeMissing ? runner.run(plan.tracks.filter(\.needsAnalysis).map {
             .init(url: $0.sourceFile, contentHash: $0.contentHash, title: $0.source.title)
-        })
+        }) : [:]
         timer.mark("analyze")
         try cache.saveFingerprints()
 
@@ -118,7 +121,9 @@ public struct SyncExecutor {
             let phrases = writePhrases ? sections.flatMap { StructureAnalyzer.phrases(sections: $0, analysis: a) } : nil
             let phraseKey = phrases.map { $0.phrases.map { "\($0.beat):\($0.kind)" }.joined(separator: ",") } ?? "-"
             let fingerprint = "v\(a.version);pqt2=\(anlzOptions.includeExtendedBeatGrid);cues=\(CueBuilder.fingerprint(cues));pssi=\(phraseKey)"
-            let stale = manifest.tracks[t.source.id]?.anlzFingerprint != fingerprint
+            let datPresent = FileManager.default.fileExists(
+                atPath: volume.url(forUsbPath: AnlzPath.directory(forAudioPath: t.usbPath) + "/ANLZ0000.DAT").path)
+            let stale = manifest.tracks[t.source.id]?.anlzFingerprint != fingerprint || !datPresent
             if t.action == .unchanged && !t.needsAnalysis && !rewriteAnalysisFiles && !stale { continue }
             try ensureMounted(volume)
             try writeAnlz(for: t, analysis: a, cues: cues, phrases: phrases, on: volume)
@@ -264,6 +269,8 @@ public struct SyncExecutor {
     }
 
     private func exportTrack(_ t: SyncPlan.TrackEntry, analysis: TrackAnalysis?) -> ExportTrack {
+        // Not analyzed yet: show the file's own BPM/key tags until analysis runs.
+        let tags = analysis == nil ? FileTagReader.read(t.sourceFile) : nil
         let s = t.source
         let duration = analysis?.durationSeconds ?? s.durationSeconds ?? 0
         let bitrate = duration > 0 ? Int((Double(t.fileSize) * 8 / duration / 1000).rounded()) : 0
@@ -278,8 +285,8 @@ public struct SyncExecutor {
             discNumber: s.discNumber,
             year: s.year,
             durationSeconds: duration,
-            bpm: analysis?.bpm,
-            key: analysis?.key,
+            bpm: analysis?.bpm ?? tags?.bpm,
+            key: analysis?.key ?? tags?.key,
             rating: s.rating ?? 0,
             comment: s.comment,
             usbPath: t.usbPath,

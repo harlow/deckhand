@@ -38,6 +38,8 @@ public struct Manifest: Codable, Sendable {
     public var playlists: [String: Playlist] = [:]
     public var nextContentId = 1
     public var nextPlaylistId = 1
+    /// Output settings chosen for this drive (cue source, hot cue style, key format, …).
+    public var settings: [String: String]?
     /// Artwork content hash → image ID. Optional so older manifests still decode.
     public var artwork: [String: Int]?
     public var nextImageId: Int?
