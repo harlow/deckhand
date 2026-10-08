@@ -76,7 +76,9 @@ the player's timeline. Non-MP3 formats get no offset (unverified for AAC/M4A).
 | | |
 |---|---|
 | BPM exact (±0.05) | 94% (0% octave errors with tag hints) |
-| Key vs MIK (373 held-out) | 79% exact, 92% where MIK is confident (≥0.8); MIREX 83.9. Learned linear model on libKeyFinder chroma, 0.12 s/track |
+| Key, human-labelled (GiantSteps / GiantSteps+ / FMAK subset) | 69% / 84% / 64% exact (MIREX 75.6 / 88.0 / 71.6) |
+| Key vs MIK where MIK is confident (≥0.8) | 94% |
+| Key model | Linear model on libKeyFinder chroma (trained on Beatport EDM Key + library MIK labels weighted by confidence) + 0.7 × S-KEY (Deezer, MIT; Swift CQT + Core ML). ~0.22 s/track |
 | Grid phase vs MIK (408 held-out) | median 2.2 ms; 95.7% within 10 ms; 2.3% ≥40 ms off |
 | Grid phase vs Rekordbox | 75.5% within 10 ms (MIK itself: 77.5%) |
 | Downbeat agrees with Rekordbox | 75.9% (Rekordbox's own first beat is bar 1 in only 83%) |

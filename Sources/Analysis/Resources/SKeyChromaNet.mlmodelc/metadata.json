@@ -1,0 +1,76 @@
+[
+  {
+    "metadataOutputVersion" : "3.0",
+    "shortDescription" : "S-KEY ChromaNet (Kong et al., ICASSP 2025; Deezer, MIT): 15 s log-CQT -> 24 key probabilities",
+    "outputSchema" : [
+      {
+        "hasShapeFlexibility" : "0",
+        "isOptional" : "0",
+        "dataType" : "Float32",
+        "formattedType" : "MultiArray (Float32 1 × 24)",
+        "shortDescription" : "",
+        "shape" : "[1, 24]",
+        "name" : "probs",
+        "type" : "MultiArray"
+      }
+    ],
+    "storagePrecision" : "Float32",
+    "modelParameters" : [
+
+    ],
+    "specificationVersion" : 8,
+    "mlProgramOperationTypeHistogram" : {
+      "Ios17.mul" : 8,
+      "Ios17.sqrt" : 14,
+      "Ios17.linear" : 14,
+      "Ios17.transpose" : 14,
+      "Ios17.sub" : 14,
+      "Ios17.conv" : 15,
+      "Ios17.add" : 27,
+      "Ios17.realDiv" : 14,
+      "Ios16.reduceMean" : 29,
+      "Ios17.sliceByIndex" : 7,
+      "Ios16.softmax" : 1,
+      "Ios17.pow" : 14,
+      "Ios16.gelu" : 14,
+      "Ios17.reshape" : 1,
+      "Pad" : 7
+    },
+    "computePrecision" : "Mixed (Float32, Int32)",
+    "isUpdatable" : "0",
+    "stateSchema" : [
+
+    ],
+    "availability" : {
+      "macOS" : "14.0",
+      "tvOS" : "17.0",
+      "visionOS" : "1.0",
+      "watchOS" : "10.0",
+      "iOS" : "17.0",
+      "macCatalyst" : "17.0"
+    },
+    "modelType" : {
+      "name" : "MLModelType_mlProgram"
+    },
+    "inputSchema" : [
+      {
+        "hasShapeFlexibility" : "0",
+        "isOptional" : "0",
+        "dataType" : "Float32",
+        "formattedType" : "MultiArray (Float32 1 × 1 × 84 × 646)",
+        "shortDescription" : "",
+        "shape" : "[1, 1, 84, 646]",
+        "name" : "cqt",
+        "type" : "MultiArray"
+      }
+    ],
+    "userDefinedMetadata" : {
+      "com.github.apple.coremltools.conversion_date" : "2026-10-07",
+      "com.github.apple.coremltools.source" : "torch==2.14.1",
+      "com.github.apple.coremltools.version" : "9.0",
+      "com.github.apple.coremltools.source_dialect" : "TorchScript"
+    },
+    "generatedClassName" : "SKeyChromaNet",
+    "method" : "predict"
+  }
+]

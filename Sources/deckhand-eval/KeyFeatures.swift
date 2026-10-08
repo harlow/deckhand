@@ -71,9 +71,8 @@ func evaluateKeys(featuresDir: String, mikPath: String) throws {
             let e = held[i]
             guard let truth = MusicalKey(parsing: e.tag),
                   let decoded = try? AudioDecoder.decodeMono(URL(fileURLWithPath: e.path)) else { continue }
-            let audio = TrackAnalyzer.reducedRate(decoded)
             let start = Date()
-            let pred = KeyAnalyzer.analyze(audio)
+            let pred = KeyAnalyzer.analyze(decoded)
             let seconds = Date().timeIntervalSince(start)
             lock.withLock { results.append((truth, pred, conf[e.path] ?? 0.5, seconds)) }
         }
@@ -92,4 +91,86 @@ func evaluateKeys(featuresDir: String, mikPath: String) throws {
 struct BigMod5 {
     var remainder = 0
     func appending(_ byte: UInt8) -> BigMod5 { BigMod5(remainder: (remainder * 256 + Int(byte)) % 5) }
+}
+
+/// `deckhand-eval key-features-dataset <audio dir> <labels dir> <out dir>`: dumps chromagrams for a
+/// key dataset (e.g. GiantSteps, Beatport EDM Key) whose labels are `<labels dir>/<audio name>.txt`.
+/// Labels are stored verbatim; the training script normalizes them.
+func dumpDatasetKeyFeatures(audioDir: String, labelsDir: String, out: String) throws {
+    let fm = FileManager.default
+    try fm.createDirectory(atPath: out, withIntermediateDirectories: true)
+    let files = try fm.contentsOfDirectory(atPath: audioDir)
+        .filter { !$0.hasPrefix("._") && $0.lowercased().hasSuffix(".mp3") }
+        .sorted()
+    print("\(files.count) audio files")
+
+    struct Entry: Encodable { let i: Int; let path: String; let label: String; let hops: Int }
+    let lock = NSLock()
+    nonisolated(unsafe) var entries: [Entry] = []
+    let workers = max(2, ProcessInfo.processInfo.activeProcessorCount - 1)
+    DispatchQueue.concurrentPerform(iterations: workers) { w in
+        for i in stride(from: w, to: files.count, by: workers) {
+            let name = files[i]
+            let labelPath = (labelsDir as NSString).appendingPathComponent((name as NSString).deletingPathExtension + ".txt")
+            guard let label = try? String(contentsOfFile: labelPath, encoding: .utf8) else { continue }
+            let path = (audioDir as NSString).appendingPathComponent(name)
+            guard let decoded = try? AudioDecoder.decodeMono(URL(fileURLWithPath: path)),
+                  let (values, hops) = KeyAnalyzer.chromagram(TrackAnalyzer.reducedRate(decoded)) else { continue }
+            let data = values.map(Float.init).withUnsafeBufferPointer { Data(buffer: $0) }
+            try? data.write(to: URL(fileURLWithPath: "\(out)/\(i).f32"))
+            lock.withLock {
+                entries.append(Entry(i: i, path: path, label: label.trimmingCharacters(in: .whitespacesAndNewlines), hops: hops))
+            }
+        }
+    }
+    let enc = JSONEncoder()
+    enc.outputFormatting = .prettyPrinted
+    try enc.encode(entries.sorted { $0.i < $1.i }).write(to: URL(fileURLWithPath: "\(out)/index.json"))
+    print("wrote \(entries.count) tracks")
+}
+
+/// `deckhand-eval key-eval-dataset <audio dir> <labels dir> [linear]`: scores the shipping key
+/// analyzer (or, with `linear`, the linear model alone) on a labelled dataset. Labels: `<name>.txt`
+/// ("F minor", "Eb major", GiantSteps+ modal names) or GiantSteps `<id>.LOFI.key` files.
+func evaluateKeyDataset(audioDir: String, labelsDir: String, linearOnly: Bool) throws {
+    let fm = FileManager.default
+    let files = try fm.contentsOfDirectory(atPath: audioDir).filter { !$0.hasPrefix("._") && $0.lowercased().hasSuffix(".mp3") }.sorted()
+    let labelFiles = try fm.contentsOfDirectory(atPath: labelsDir)
+    func label(for name: String) -> MusicalKey? {
+        let base = (name as NSString).deletingPathExtension
+        let id = base.split(separator: " ").first.map(String.init) ?? base
+        let candidates = [base + ".txt", id + ".LOFI.key", id + ".key"]
+        guard let f = candidates.first(where: labelFiles.contains),
+              let text = try? String(contentsOfFile: (labelsDir as NSString).appendingPathComponent(f), encoding: .utf8) else { return nil }
+        let parts = text.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: " ")
+        guard parts.count >= 2, !text.contains("|"), !text.contains("/") else { return nil }
+        let minor: Set<String> = ["minor", "aeolian", "dorian", "phrygian", "locrian"]
+        let major: Set<String> = ["major", "ionian", "mixolydian", "lydian"]
+        let mode = parts[1].lowercased()
+        guard minor.contains(mode) || major.contains(mode) else { return nil }
+        return MusicalKey(parsing: String(parts[0]) + (minor.contains(mode) ? "m" : ""))
+    }
+    let lock = NSLock()
+    nonisolated(unsafe) var results: [(truth: MusicalKey, pred: MusicalKey?, seconds: Double)] = []
+    let workers = ProcessInfo.processInfo.environment["KEY_EVAL_WORKERS"].flatMap(Int.init) ?? 6
+    DispatchQueue.concurrentPerform(iterations: workers) { w in
+        for i in stride(from: w, to: files.count, by: workers) {
+            guard let truth = label(for: files[i]),
+                  let decoded = try? AudioDecoder.decodeMono(URL(fileURLWithPath: (audioDir as NSString).appendingPathComponent(files[i]))) else { continue }
+            let start = Date()
+            let pred = KeyAnalyzer.candidates(decoded, useSKey: !linearOnly).first?.key
+            let seconds = Date().timeIntervalSince(start)
+            lock.withLock { results.append((truth, pred, seconds)) }
+        }
+    }
+    let weights: [KeyRelation: Double] = [.exact: 1, .fifth: 0.5, .relative: 0.3, .parallel: 0.2, .other: 0, .missing: 0]
+    let rel = results.map { relation($0.pred, $0.truth.classic) }
+    let n = Double(max(1, rel.count))
+    let exact = Double(rel.filter { $0 == .exact }.count) / n
+    let mirex = rel.reduce(0) { $0 + weights[$1]! } / n
+    let majors = results.filter { $0.truth.mode == .major }
+    let majorExact = Double(majors.filter { $0.pred == $0.truth }.count) / Double(max(1, majors.count))
+    let secs = results.map(\.seconds).sorted()
+    print(String(format: "n=%d exact %.1f%%  MIREX %.1f  major exact %.1f%% (n=%d)  key analysis median %.3fs/track",
+                 rel.count, 100 * exact, 100 * mirex, 100 * majorExact, majors.count, secs.isEmpty ? 0 : secs[secs.count / 2]))
 }

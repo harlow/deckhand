@@ -53,11 +53,12 @@ let package = Package(
         ),
         .target(
             name: "Analysis",
-            dependencies: ["DeckhandCore", "CQMDSP", "CKeyFinder"]
+            dependencies: ["DeckhandCore", "CQMDSP", "CKeyFinder"],
+            resources: [.copy("Resources/SKeyChromaNet.mlmodelc")]
         ),
         .executableTarget(
             name: "deckhand-eval",
-            dependencies: ["Analysis", "CKeyFinder"]
+            dependencies: ["Analysis", "CKeyFinder", "MusicSource"]
         ),
         .executableTarget(
             name: "deckhand-cue-eval",

@@ -29,6 +29,19 @@ if args.count >= 4, args[1] == "key-eval" {
     try evaluateKeys(featuresDir: args[2], mikPath: args[3])
     exit(0)
 }
+if args.count >= 3, args[1] == "key-review" {
+    try reviewKeys(out: args[2], limit: args.count >= 4 ? Int(args[3]) : nil,
+                   render: args.count >= 5 ? Int(args[4]) ?? 20 : 20)
+    exit(0)
+}
+if args.count >= 4, args[1] == "key-eval-dataset" {
+    try evaluateKeyDataset(audioDir: args[2], labelsDir: args[3], linearOnly: args.count >= 5 && args[4] == "linear")
+    exit(0)
+}
+if args.count >= 5, args[1] == "key-features-dataset" {
+    try dumpDatasetKeyFeatures(audioDir: args[2], labelsDir: args[3], out: args[4])
+    exit(0)
+}
 if args.count >= 4, args[1] == "key-features" {
     try dumpKeyFeatures(root: args[2], out: args[3])
     exit(0)

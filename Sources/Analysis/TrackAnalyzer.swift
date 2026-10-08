@@ -19,7 +19,7 @@ public enum TrackAnalyzer {
         let reduced = reducedRate(audio)
         let grid = BeatAnalyzer.analyze(reduced, lowBand: waveforms.low, bpmHint: hints.bpm)?
             .shifted(by: audio.timelineOffsetSeconds)
-        let key = hints.key ?? KeyAnalyzer.analyze(reduced)
+        let key = hints.key ?? KeyAnalyzer.analyze(audio)
         let duration = audio.durationSeconds + audio.timelineOffsetSeconds
         return TrackAnalysis(
             durationSeconds: duration,
