@@ -25,7 +25,10 @@
    `--key-format`, `--track-color`, `--phrases`) are saved in the drive's manifest and reused; default cue source is
    now `deckhand`. Verified on the DJTEST image; full `swift test` not yet run. Commit after tests pass.
 
-## Known bug to fix next
+2. **Fix for the bug below is applied but untested** (`SyncPlanner.swift`: removed the `.replace` on outdated/missing
+   analysis; `SyncExecutor.swift`: a missing ANLZ0000.DAT now counts as stale). Run `swift test`, then commit.
+
+## Known bug (fix applied in working tree, untested)
 
 - **Analysis version bumps force a full audio re-copy.** `SyncPlanner` marks a track `.replace` when
   `prev.analysisVersion != TrackAnalysis.currentVersion` or its ANLZ .DAT is missing, which counts toward
@@ -35,7 +38,7 @@
 
 ## Next steps
 
-1. Fix the bug above, run `swift test`, commit (with the settings work).
+1. Run `swift test --scratch-path .build-main`; commit the settings work + the re-copy fix.
 2. Re-sync RATS (`deckhand sync /Volumes/RATS` — settings are remembered after one run with `--cue-source deckhand`).
 3. `deckhand cleanup /Volumes/RATS --dry-run`, review, then clean (add `--keep-legacy` only if using older CDJs).
 4. Deck check on OMNIS-DUO: named hot cues (A Mix In, D Build, E Main Drop, H Mix Out matter most), phrase colors,
