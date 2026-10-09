@@ -10,7 +10,7 @@ public enum ValueSource: String, Codable, Sendable {
 
 public struct TrackAnalysis: Codable, Sendable, Equatable {
     /// Bump when any analysis algorithm changes output, to invalidate cached results.
-    public static let currentVersion = 5
+    public static let currentVersion = 6
 
     public var version: Int
     public var durationSeconds: Double

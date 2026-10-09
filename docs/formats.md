@@ -76,9 +76,9 @@ the player's timeline. Non-MP3 formats get no offset (unverified for AAC/M4A).
 | | |
 |---|---|
 | BPM exact (±0.05) | 94% (0% octave errors with tag hints) |
-| Key, human-labelled (GiantSteps / GiantSteps+ / FMAK subset) | 69% / 84% / 64% exact (MIREX 75.6 / 88.0 / 71.6) |
-| Key vs MIK where MIK is confident (≥0.8) | 94% |
-| Key model | Linear model on libKeyFinder chroma (trained on Beatport EDM Key + library MIK labels weighted by confidence) + 0.7 × S-KEY (Deezer, MIT; Swift CQT + Core ML). ~0.22 s/track |
+| Key, human-labelled (GiantSteps / GiantSteps+ / FMAK test zips 060-069 + 110-124) | 69.9% / 85.7% / 65.4% exact (MIREX 75.8 / 88.9 / 73.2); major-key recall 38.5% / 63.5% / 61.4% |
+| Key vs MIK where MIK is confident (≥0.8), held-out album folds | 98.3% (was 94.9% before S-KEY fine-tuning) |
+| Key model | Linear model on libKeyFinder chroma (trained on Beatport EDM Key + library MIK labels weighted by confidence) + 3.8 × fine-tuned S-KEY (Deezer, MIT; Swift CQT + Core ML) + 0.4 minor bias. ~0.12 s/track |
 | Grid phase vs MIK (408 held-out) | median 2.2 ms; 95.7% within 10 ms; 2.3% ≥40 ms off |
 | Grid phase vs Rekordbox | 75.5% within 10 ms (MIK itself: 77.5%) |
 | Downbeat agrees with Rekordbox | 75.9% (Rekordbox's own first beat is bar 1 in only 83%) |
@@ -91,4 +91,5 @@ to compare with Rekordbox (then median 3.6 ms apart).
 
 Grid eval: `python3 Scripts/export-grid-groundtruth.py rb.json && swift build -c release --product deckhand-grid-eval && .build/release/deckhand-grid-eval rb.json`.
 Key model: `python3 Scripts/train-key-model.py` regenerates `KeyModelWeights.swift`; eval with `deckhand-eval key-eval`.
+S-KEY fine-tuning: `Scripts/key-training/` (README there); export with `Scripts/export-skey.py <skey> <checkpoint>`.
 Key eval (old): `python3 Scripts/export-groundtruth.py gt.json && swift build -c release --product deckhand-eval && .build/release/deckhand-eval gt.json`.

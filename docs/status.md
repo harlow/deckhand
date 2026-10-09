@@ -34,28 +34,18 @@
 3. `deckhand cleanup /Volumes/RATS --dry-run`, review, then clean (add `--keep-legacy` only if using older CDJs).
 4. Deck check on OMNIS-DUO: named hot cues (A Mix In, D Build, E Main Drop, H Mix Out matter most), phrase colors,
    track colors, keys. Optional `--hot-cues core` if extra pads feel noisy.
-5. Then: drop MIK fallback by default (BPM/grid already at parity; key now beats the old model on human labels).
+5. Done (2026-10-08): Deckhand's own key/BPM is the default; `--use-mik` opts into MIK tags + database (replaces
+   `--[no-]key-tags`, `--[no-]bpm-hint`, `--[no-]mixed-in-key`). Full analyze ≈ 9 min per 1,000 tracks on this Mac.
 
-## TODO: retrain key model (run on a machine with a GPU / time to spare)
+## Key model retrained (2026-10-08)
 
-Goal: fix major-key recall (35% GiantSteps, 60% FMAK; library is 93% minor) by fine-tuning S-KEY's ChromaNet.
-Current baseline (ensemble linear + 0.7 × S-KEY): GiantSteps 68.9% exact / MIREX 75.6, GiantSteps+ 84.2 / 88.0,
-FMAK subset 64.2 / 71.6, ~94% agreement with confident MIK keys.
-
-1. Data (not in the repo; download to a scratch dir, ~27 GB+):
-   - GiantSteps Key (test only): Zenodo 1095691; GiantSteps+/Beatport EDM Key: Zenodo 1101082 (see mirdata loaders).
-   - FMAKv2 (CC-BY-4.0): Zenodo 10719860 — keep some zips as a test split.
-   - Optional weak labels: library tracks with Mixed In Key confidence ≥ 0.8 (MIK DB on the original Mac only).
-2. Fine-tune ChromaNet from github.com/deezer/skey (MIT) in PyTorch (MPS/CUDA): Beatport EDM Key (minus titles that
-   overlap GiantSteps) + FMAK train split (+ down-weighted MIK labels); transposition augmentation by rolling CQT
-   bins; class-balanced loss for major/minor; early stopping on a validation split. Keep the architecture unchanged.
-   GiantSteps (orig and +) and FMAK test zips are strictly test-only.
-3. Re-tune the ensemble weight α (and optionally a major/minor bias) by cross-validation on training data.
-4. Ship only if human-label accuracy improves and confident-MIK agreement drops ≤ ~1 point:
-   `Scripts/export-skey.py` (extend to take a checkpoint) → `Sources/Analysis/Resources/SKeyChromaNet.mlmodelc`;
-   verify Swift vs PyTorch parity on ≥ 40 clips; bump `TrackAnalysis.currentVersion`; `swift test`.
-   Report exact / MIREX / major recall / minor recall per test set, before vs after.
-   Existing tools: `Scripts/train-key-model.py` (linear head), `deckhand-eval key-eval-dataset`.
+S-KEY's ChromaNet fine-tuned on Beatport EDM Key + FMAK + confident MIK library labels (`Scripts/key-training/`,
+architecture unchanged); ensemble re-tuned to 3.8 × S-KEY + 0.4 minor bias. Analysis version 6 (re-analyze).
+Test results, shipped → new (exact / MIREX / major recall):
+GiantSteps 68.9 / 75.6 / 35.2 → 69.9 / 75.8 / 38.5; GiantSteps+ 84.1 / 87.9 / 56.2 → 85.5 / 88.7 / 62.5;
+FMAK test 65.0 / 72.8 / 59.8 → 65.4 / 73.2 / 61.4; confident-MIK agreement (held-out) 94.9 → 98.3.
+Swift vs PyTorch parity checked on 354 clips (max |Δp| 5e-4). Major-key recall is still the weak spot.
+Training data and checkouts were deleted afterwards; `Scripts/key-training/setup.sh` recreates them (~43 GB).
 
 ## Working notes
 

@@ -6,11 +6,14 @@ import Foundation
 ///  * a linear model over libKeyFinder's 72-band chromagram (C1–B6), rotation-equivariant (one weight
 ///    vector per mode, applied to the chroma rotated to each tonic), trained on human-labelled EDM keys
 ///    plus Mixed In Key labels weighted by MIK confidence (KeyModelWeights.swift, Scripts/train-key-model.py);
-///  * S-KEY, a self-supervised CNN (SKey.swift), weighted by `skeyWeight` in log-probability space.
+///  * S-KEY, a self-supervised CNN (SKey.swift) fine-tuned on human-labelled keys (Beatport EDM Key, FMAK)
+///    plus confident Mixed In Key labels (Scripts/key-training), weighted by `skeyWeight` in
+///    log-probability space.
 public enum KeyAnalyzer {
-    /// Weight of S-KEY's log-probabilities relative to the linear model's; chosen by cross-validation
-    /// on Beatport EDM Key (human labels).
-    static let skeyWeight = 0.7
+    /// Weight of S-KEY's log-probabilities relative to the linear model's, and a log-score bonus for minor
+    /// keys; tuned on the key-training validation split (Beatport EDM Key, FMAK, held-out MIK labels).
+    static let skeyWeight = 3.8
+    static let minorBias = 0.4
 
     /// Pass full-rate audio (≥ 22.05 kHz) so S-KEY can run; lower rates fall back to the linear model.
     public static func analyze(_ audio: DecodedAudio) -> MusicalKey? {
@@ -65,12 +68,22 @@ public enum KeyAnalyzer {
         var s = logSoftmax(scores(x))
         if useSKey, audio.sampleRate >= SKey.sampleRate, let p = SKey.probabilities(audio) {
             for i in 0..<24 { s[i] += skeyWeight * log(max(p[i], 1e-6)) }
+            for i in stride(from: 1, to: 24, by: 2) { s[i] += minorBias }
         }
         let m = s.max()!
         let e = s.map { exp($0 - m) }
         let total = e.reduce(0, +)
         return e.indices.map { (MusicalKey(tonic: $0 / 2, mode: $0 % 2 == 1 ? .minor : .major), e[$0] / total) }
             .sorted { $0.probability > $1.probability }
+    }
+
+    /// Ensemble inputs, for offline evaluation and training: the linear model's log-probabilities,
+    /// S-KEY's probabilities, and the log-CQT clips S-KEY saw (each 84 × 646, row-major). Same indexing
+    /// as `candidates`.
+    public static func components(_ audio: DecodedAudio) -> (linear: [Double], skey: [Double]?, clips: [[Float]])? {
+        guard let x = chromaProfile(TrackAnalyzer.reducedRate(audio)) else { return nil }
+        let clips = audio.sampleRate >= SKey.sampleRate ? SKey.clips(audio) ?? [] : []
+        return (logSoftmax(scores(x)), clips.isEmpty ? nil : SKey.probabilities(clips: clips), clips)
     }
 
     static func logSoftmax(_ s: [Double]) -> [Double] {

@@ -42,6 +42,14 @@ if args.count >= 5, args[1] == "key-features-dataset" {
     try dumpDatasetKeyFeatures(audioDir: args[2], labelsDir: args[3], out: args[4])
     exit(0)
 }
+if args.count >= 4, args[1] == "key-dump" {
+    try dumpKeyComponents(list: args[2], out: args[3])
+    exit(0)
+}
+if args.count >= 3, args[1] == "mik-keys" {
+    try dumpMixedInKeyKeys(out: args[2])
+    exit(0)
+}
 if args.count >= 4, args[1] == "key-features" {
     try dumpKeyFeatures(root: args[2], out: args[3])
     exit(0)

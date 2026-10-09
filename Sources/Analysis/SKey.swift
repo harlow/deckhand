@@ -17,18 +17,13 @@ enum SKey {
     /// 24 key probabilities indexed tonic * 2 + (minor ? 1 : 0), averaged over up to `maxClips`
     /// 15 s clips. Nil if the model is unavailable or the audio is too short/silent.
     static func probabilities(_ audio: DecodedAudio) -> [Double]? {
-        guard let model = Model.shared, var x = resampled(audio), x.count >= sampleRate * 2 else { return nil }
-        var peak: Float = 0
-        vDSP_maxmgv(x, 1, &peak, vDSP_Length(x.count))
-        guard peak > 0 else { return nil }
-        var scale = 1 / peak
-        vDSP_vsmul(x, 1, &scale, &x, 1, vDSP_Length(x.count))
+        guard Model.shared != nil, let cqts = clips(audio) else { return nil }
+        return probabilities(clips: cqts)
+    }
 
-        let cqts = clipStarts(x.count).map { start -> [Float] in
-            var clip = Array(x[start..<min(x.count, start + clipSamples)])
-            if clip.count < clipSamples { clip += [Float](repeating: 0, count: clipSamples - clip.count) }
-            return SKeyCQT.logCQT(clip)
-        }
+    /// Mean ChromaNet output over `clips` (from `clips(_:)`), in Deckhand's key order.
+    static func probabilities(clips cqts: [[Float]]) -> [Double]? {
+        guard let model = Model.shared else { return nil }
         let outputs = model.predict(cqts)
         guard !outputs.isEmpty else { return nil }
         var sum = [Double](repeating: 0, count: 24)
@@ -36,6 +31,21 @@ enum SKey {
             for (i, v) in p.enumerated() { sum[deckhandIndex[i]] += v }
         }
         return sum.map { $0 / Double(outputs.count) }
+    }
+
+    /// Log-CQTs (`bins × frames`, row-major) of the clips ChromaNet sees; nil if too short or silent.
+    static func clips(_ audio: DecodedAudio) -> [[Float]]? {
+        guard var x = resampled(audio), x.count >= sampleRate * 2 else { return nil }
+        var peak: Float = 0
+        vDSP_maxmgv(x, 1, &peak, vDSP_Length(x.count))
+        guard peak > 0 else { return nil }
+        var scale = 1 / peak
+        vDSP_vsmul(x, 1, &scale, &x, 1, vDSP_Length(x.count))
+        return clipStarts(x.count).map { start -> [Float] in
+            var clip = Array(x[start..<min(x.count, start + clipSamples)])
+            if clip.count < clipSamples { clip += [Float](repeating: 0, count: clipSamples - clip.count) }
+            return SKeyCQT.logCQT(clip)
+        }
     }
 
     /// Up to `maxClips` clip starts spread evenly between 10% and 90% of the track.

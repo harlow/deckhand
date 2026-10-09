@@ -3,6 +3,7 @@ import CKeyFinder
 import CryptoKit
 import DeckhandCore
 import Foundation
+import MusicSource
 
 /// `deckhand-eval key-features <music root> <out dir>`: dumps libKeyFinder chromagrams and
 /// tag keys for every tagged audio file, for offline key-model experiments.
@@ -173,4 +174,55 @@ func evaluateKeyDataset(audioDir: String, labelsDir: String, linearOnly: Bool) t
     let secs = results.map(\.seconds).sorted()
     print(String(format: "n=%d exact %.1f%%  MIREX %.1f  major exact %.1f%% (n=%d)  key analysis median %.3fs/track",
                  rel.count, 100 * exact, 100 * mirex, 100 * majorExact, majors.count, secs.isEmpty ? 0 : secs[secs.count / 2]))
+}
+
+/// `deckhand-eval key-dump <paths.txt> <out dir>`: for each audio file listed (one path per line),
+/// writes the key ensemble's inputs as the shipping code computes them, for offline S-KEY fine-tuning:
+/// `index.jsonl` lines {path, linear (24 log-probs), skey (24 probs or null), clips, file} and
+/// `<file>` with the clips' log-CQTs as float16 (clips × 84 × 646). Resumable: listed paths
+/// already in the index are skipped.
+func dumpKeyComponents(list: String, out: String) throws {
+    let fm = FileManager.default
+    try fm.createDirectory(atPath: out, withIntermediateDirectories: true)
+    let indexPath = (out as NSString).appendingPathComponent("index.jsonl")
+    struct Entry: Codable { let path: String; let linear: [Double]; let skey: [Double]?; let clips: Int; let file: String }
+    let done = Set(((try? String(contentsOfFile: indexPath, encoding: .utf8)) ?? "").split(separator: "\n")
+        .compactMap { try? JSONDecoder().decode(Entry.self, from: Data($0.utf8)).path })
+    let paths = try String(contentsOfFile: list, encoding: .utf8).split(separator: "\n").map(String.init)
+        .filter { !$0.isEmpty && !done.contains($0) }
+    if !fm.fileExists(atPath: indexPath) { fm.createFile(atPath: indexPath, contents: nil) }
+    let index = try FileHandle(forWritingTo: URL(fileURLWithPath: indexPath))
+    index.seekToEndOfFile()
+    let lock = NSLock()
+    nonisolated(unsafe) var finished = 0
+    let workers = ProcessInfo.processInfo.environment["KEY_EVAL_WORKERS"].flatMap(Int.init) ?? 8
+    DispatchQueue.concurrentPerform(iterations: workers) { w in
+        for i in stride(from: w, to: paths.count, by: workers) {
+            let path = paths[i]
+            guard let audio = try? AudioDecoder.decodeMono(URL(fileURLWithPath: path)),
+                  let c = KeyAnalyzer.components(audio) else { continue }
+            let file = Insecure.SHA1.hash(data: Data(path.utf8)).map { String(format: "%02x", $0) }.joined() + ".f16"
+            var half = [Float16]()
+            half.reserveCapacity(c.clips.count * 84 * 646)
+            for clip in c.clips { half += clip.map(Float16.init) }
+            try? half.withUnsafeBytes { Data($0) }.write(to: URL(fileURLWithPath: (out as NSString).appendingPathComponent(file)))
+            guard let line = try? JSONEncoder().encode(Entry(path: path, linear: c.linear, skey: c.skey, clips: c.clips.count, file: file)) else { continue }
+            lock.withLock {
+                index.write(line + Data("\n".utf8))
+                finished += 1
+                if finished % 100 == 0 { print("\(finished)/\(paths.count)") }
+            }
+        }
+    }
+    try index.close()
+    print("dumped \(finished) of \(paths.count)")
+}
+
+/// `deckhand-eval mik-keys <out.json>`: Mixed In Key's key and confidence per file, [{path, key, conf}].
+func dumpMixedInKeyKeys(out: String) throws {
+    guard let lib = MixedInKeyLibrary.load() else { throw NSError(domain: "mik", code: 1, userInfo: [NSLocalizedDescriptionKey: "no MIK library"]) }
+    struct Row: Encodable { let path: String; let key: String; let conf: Double? }
+    let rows = lib.tracks.compactMap { path, t in t.key.map { Row(path: path, key: $0.classic, conf: t.keyConfidence) } }
+    try JSONEncoder().encode(rows).write(to: URL(fileURLWithPath: out))
+    print("\(rows.count) MIK keys")
 }

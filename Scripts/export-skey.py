@@ -8,7 +8,9 @@ Writes:
 The CQT front-end is reimplemented in Swift (SKeyCQT.swift) from the same buffers; ChromaNet runs in
 Core ML on fixed 15 s clips (84 bins x 646 frames at 22.05 kHz, hop 512).
 
-Usage: python3 Scripts/export-skey.py <path to deezer/skey checkout>
+Usage: python3 Scripts/export-skey.py <path to deezer/skey checkout> [fine-tuned checkpoint.pt]
+  The optional checkpoint ({"chromanet": state_dict}) replaces ChromaNet's weights; the CQT front-end
+  is always S-KEY's.
 Needs: torch, nnAudio, einops, coremltools (macOS for compiling).
 """
 import os, subprocess, sys, tempfile
@@ -21,6 +23,8 @@ sys.path.insert(0, sys.argv[1])
 from skey.key_detection import load_checkpoint, load_model_components  # noqa: E402
 
 hcqt, net, _ = load_model_components(load_checkpoint(None), torch.device("cpu"))
+if len(sys.argv) > 2:
+    net.load_state_dict(torch.load(sys.argv[2], map_location="cpu")["chromanet"])
 for p in net.parameters():
     p.requires_grad_(False)
 
