@@ -25,12 +25,10 @@ public struct SyncExecutor {
     let progress: @Sendable (Event) -> Void
     /// ANLZ writer options; see AnlzWriter.Options.
     public var anlzOptions = AnlzWriter.Options()
-    public var analysisPolicy = AnalysisPolicy()
     /// Which imported cues to write as memory and/or hot cues.
     public var cueMode: CueMode = .both
-    public var cueSource: CueSource = .deckhand
-    /// Analyze tracks without cached analysis during sync. When false they're synced with tag BPM/key
-    /// only and get full analysis files on a later sync, after `deckhand analyze`.
+    /// Analyze tracks without cached analysis during sync. When false they're synced without BPM/key
+    /// and get them, with full analysis files, on a later sync after `deckhand analyze`.
     public var analyzeMissing = true
     public var hotCueStyle: HotCueStyle = .named
     /// Bars between the "Build" hot cue and the main drop.
@@ -38,8 +36,6 @@ public struct SyncExecutor {
     /// Write phrase analysis (colored phrase bars on the player).
     public var writePhrases = true
     public var trackColorRule: TrackColorRule = .energy
-    /// Mixed In Key's stored analysis, used as hints when present.
-    public var mixedInKey: MixedInKeyLibrary?
     /// Cover art source; tracks get no artwork when nil.
     public var artwork: (any ArtworkProvider)?
     /// Rewrite analysis files for all tracks, e.g. after changing anlzOptions.
@@ -95,7 +91,7 @@ public struct SyncExecutor {
         timer.mark("copy")
         // 2. Analyze and 3. write ANLZ files for new/replaced tracks.
         let progress = self.progress
-        let runner = AnalysisRunner(cache: cache, policy: analysisPolicy, mixedInKey: mixedInKey) { event in
+        let runner = AnalysisRunner(cache: cache) { event in
             switch event {
             case .started(let i, let n, let title): progress(.analyzing(index: i, total: n, title: title))
             case .finished(let d, let n, let title): progress(.analyzed(done: d, total: n, title: title))
@@ -111,12 +107,11 @@ public struct SyncExecutor {
         var manifest = plan.manifest
         var anlzWritten = 0
         for t in plan.tracks {
-            guard let a = analyses[t.contentHash] ?? cache.analysis(forHash: t.contentHash, policy: analysisPolicy) else { continue }
+            guard let a = analyses[t.contentHash] ?? cache.analysis(forHash: t.contentHash) else { continue }
             analyses[t.contentHash] = a
-            let sections = cache.sections(forHash: t.contentHash, policy: analysisPolicy)
-            let cues = CueBuilder.cues(mik: mixedInKey?.track(for: t.sourceFile),
-                                       detected: cache.detectedCues(forHash: t.contentHash, policy: analysisPolicy),
-                                       analysis: a, source: cueSource, mode: cueMode, hotStyle: hotCueStyle,
+            let sections = cache.sections(forHash: t.contentHash)
+            let cues = CueBuilder.cues(detected: cache.detectedCues(forHash: t.contentHash),
+                                       analysis: a, mode: cueMode, hotStyle: hotCueStyle,
                                        sections: sections, buildLeadBars: buildLeadBars)
             let phrases = writePhrases ? sections.flatMap { StructureAnalyzer.phrases(sections: $0, analysis: a) } : nil
             let phraseKey = phrases.map { $0.phrases.map { "\($0.beat):\($0.kind)" }.joined(separator: ",") } ?? "-"
@@ -144,7 +139,7 @@ public struct SyncExecutor {
             tracks: plan.tracks.map {
                 var e = exportTrack($0, analysis: analyses[$0.contentHash])
                 e.artworkPath = artPaths[$0.source.id]
-                e.color = trackColorRule.color(energy: cache.detectedCues(forHash: $0.contentHash, policy: analysisPolicy)?.energy)
+                e.color = trackColorRule.color(energy: cache.detectedCues(forHash: $0.contentHash)?.energy)
                 return e
             },
             playlists: plan.playlists.map {
@@ -269,8 +264,6 @@ public struct SyncExecutor {
     }
 
     private func exportTrack(_ t: SyncPlan.TrackEntry, analysis: TrackAnalysis?) -> ExportTrack {
-        // Not analyzed yet: show the file's own BPM/key tags until analysis runs.
-        let tags = analysis == nil ? FileTagReader.read(t.sourceFile) : nil
         let s = t.source
         let duration = analysis?.durationSeconds ?? s.durationSeconds ?? 0
         let bitrate = duration > 0 ? Int((Double(t.fileSize) * 8 / duration / 1000).rounded()) : 0
@@ -285,8 +278,8 @@ public struct SyncExecutor {
             discNumber: s.discNumber,
             year: s.year,
             durationSeconds: duration,
-            bpm: analysis?.bpm ?? tags?.bpm,
-            key: analysis?.key ?? tags?.key,
+            bpm: analysis?.bpm,
+            key: analysis?.key,
             rating: s.rating ?? 0,
             comment: s.comment,
             usbPath: t.usbPath,

@@ -61,12 +61,10 @@ public struct SyncPlan: Sendable {
 public struct SyncPlanner {
     let library: SourceLibrary
     let cache: AnalysisCache
-    let policy: AnalysisPolicy
 
-    public init(library: SourceLibrary, cache: AnalysisCache, policy: AnalysisPolicy = AnalysisPolicy()) {
+    public init(library: SourceLibrary, cache: AnalysisCache) {
         self.library = library
         self.cache = cache
-        self.policy = policy
     }
 
     /// `entireLibrary`: sync every playlist plus songs that aren't in any playlist (requires a library
@@ -134,7 +132,7 @@ public struct SyncPlanner {
                     }
                 }
                 anlzOwner[AnlzPath.directory(forAudioPath: usbPath)] = usbPath
-                let analyzed = cache.analysis(forHash: hash, policy: policy) != nil
+                let analyzed = cache.analysis(forHash: hash) != nil
                 // Outdated or missing analysis files don't make the audio "changed": the executor rewrites
                 // ANLZ files whenever their inputs differ or they're missing, without touching audio.
                 var adoptFrom: String?

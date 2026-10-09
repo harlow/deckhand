@@ -21,21 +21,21 @@
 ## Recently landed (2026-10-08)
 
 - `sync` no longer analyzes by default; it asks if tracks are unanalyzed (`--analyze`/`--no-analyze`), and
-  unanalyzed tracks get tag BPM/key until a later sync writes their analysis files.
+  unanalyzed tracks sync without BPM/key/cues until a later sync writes their analysis files.
 - `deckhand analyze` with no arguments analyzes the whole library.
-- Per-drive output settings are remembered; default cue source is `deckhand`.
+- Per-drive output settings are remembered.
 - Fixed: analysis version changes no longer force an audio re-copy (only ANLZ files + DB are rewritten).
 
 ## Next steps
 
-1. `deckhand analyze` (library re-analysis for key model v5), then `deckhand sync /Volumes/RATS --cue-source deckhand`
-   (first run saves the setting; afterwards plain `deckhand sync /Volumes/RATS`).
+1. `deckhand analyze` (library re-analysis for analysis version 6), then `deckhand sync /Volumes/RATS`.
 2. Deck test: confirm what the OMNIS-DUO does with an unanalyzed track (expected: analyzes on load).
 3. `deckhand cleanup /Volumes/RATS --dry-run`, review, then clean (add `--keep-legacy` only if using older CDJs).
 4. Deck check on OMNIS-DUO: named hot cues (A Mix In, D Build, E Main Drop, H Mix Out matter most), phrase colors,
    track colors, keys. Optional `--hot-cues core` if extra pads feel noisy.
-5. Done (2026-10-08): Deckhand's own key/BPM is the default; `--use-mik` opts into MIK tags + database (replaces
-   `--[no-]key-tags`, `--[no-]bpm-hint`, `--[no-]mixed-in-key`). Full analyze ≈ 9 min per 1,000 tracks on this Mac.
+5. Done (2026-10-09): Mixed In Key and file tags no longer feed sync or analysis at all (`--use-mik`,
+   `--cue-source` and the unanalyzed-track tag fallback were removed). Key, BPM and cues are always Deckhand's;
+   MIK is only the answer key for the eval tools. Full analyze ≈ 9 min per 1,000 tracks on this Mac.
 
 ## Key model retrained (2026-10-08)
 

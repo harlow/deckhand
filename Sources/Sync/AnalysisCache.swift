@@ -40,14 +40,14 @@ public final class AnalysisCache: @unchecked Sendable {
         root.appendingPathComponent("analysis").appendingPathComponent("\(hash).json")
     }
 
-    /// Cached analysis made by the current algorithm versions under `policy`.
-    public func analysis(forHash hash: String, policy: AnalysisPolicy) -> TrackAnalysis? {
-        load(hash, policy)?.analysis
+    /// Cached analysis made by the current algorithm versions.
+    public func analysis(forHash hash: String) -> TrackAnalysis? {
+        load(hash)?.analysis
     }
 
     /// Song structure detected alongside the analysis.
-    public func sections(forHash hash: String, policy: AnalysisPolicy) -> [StructureAnalyzer.Section]? {
-        load(hash, policy)?.sections?.compactMap { s in
+    public func sections(forHash hash: String) -> [StructureAnalyzer.Section]? {
+        load(hash)?.sections?.compactMap { s in
             StructureAnalyzer.Kind(rawValue: s.kind).map {
                 StructureAnalyzer.Section(kind: $0, startBeat: s.startBeat, startMs: s.startMs, endMs: s.endMs, energy: s.energy)
             }
@@ -55,34 +55,37 @@ public final class AnalysisCache: @unchecked Sendable {
     }
 
     /// Cue points and energy detected alongside the analysis.
-    public func detectedCues(forHash hash: String, policy: AnalysisPolicy) -> CueAnalyzer.Result? {
-        guard let stored = load(hash, policy), let cues = stored.cues else { return nil }
+    public func detectedCues(forHash hash: String) -> CueAnalyzer.Result? {
+        guard let stored = load(hash), let cues = stored.cues else { return nil }
         return CueAnalyzer.Result(cues: cues.map { .init(timeMs: $0[0], energy: $0[1]) }, energy: stored.trackEnergy)
     }
 
     public func store(_ analysis: TrackAnalysis, cues: CueAnalyzer.Result?, sections: [StructureAnalyzer.Section]?,
-                      forHash hash: String, policy: AnalysisPolicy) throws {
+                      forHash hash: String) throws {
         var stored = Stored(analysis)
         stored.structureVersion = StructureAnalyzer.version
         stored.sections = sections?.map {
             .init(kind: $0.kind.rawValue, startBeat: $0.startBeat, startMs: $0.startMs, endMs: $0.endMs, energy: $0.energy)
         }
-        stored.policy = policy.fingerprint
         stored.cueVersion = CueAnalyzer.version
         stored.cues = cues?.cues.map { [$0.timeMs, $0.energy] }
         stored.trackEnergy = cues?.energy
         try JSONEncoder().encode(stored).write(to: path(hash), options: .atomic)
     }
 
-    private func load(_ hash: String, _ policy: AnalysisPolicy) -> Stored? {
+    private func load(_ hash: String) -> Stored? {
         guard let data = try? Data(contentsOf: path(hash)),
               let stored = try? JSONDecoder().decode(Stored.self, from: data),
               stored.version == TrackAnalysis.currentVersion,
               stored.cueVersion == CueAnalyzer.version,
               stored.structureVersion == StructureAnalyzer.version,
-              stored.policy == policy.fingerprint else { return nil }
+              stored.policy.map({ $0 == Self.ownAnalysisPolicy }) ?? true else { return nil }
         return stored
     }
+
+    /// Entries written while key/tempo could come from file tags or Mixed In Key recorded how; only
+    /// pure Deckhand analysis is valid now.
+    private static let ownAnalysisPolicy = "key-tags=0;bpm-hint=0;mik=0"
 
     /// Compact on-disk form: waveforms stored as sqrt-companded bytes.
     private struct Stored: Codable {

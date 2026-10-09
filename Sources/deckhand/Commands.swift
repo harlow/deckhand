@@ -101,10 +101,7 @@ struct SyncCommand: ParsableCommand {
     // drive's saved value (or the default).
     @Option(help: "Key display on the player: classic (Am) or alphanumeric (8A). Default classic.")
     var keyFormat: OneLibraryDatabase.KeyFormat?
-    @OptionGroup var tagOptions: TagOptions
     @Option(help: "Cues to write: memory, hot (A–H), both, or none. Default both.") var cues: CueMode?
-    @Option(help: "Cue positions: deckhand, auto (Mixed In Key's if it has the track, else Deckhand's), or mik. Default deckhand.")
-    var cueSource: CueSource?
     @Option(help: "Hot cue pads: named (A Mix In … H Mix Out, from song structure) or phrase (first 8 phrase cues). Default named.")
     var hotCues: HotCueStyle?
     @Option(help: "Bars between the Build hot cue and the main drop (8, 16 or 32). Default 8.") var buildLead: Int?
@@ -145,7 +142,7 @@ struct SyncCommand: ParsableCommand {
             }
             bar.value?.finish("\(adoptable.count) existing tracks found")
         }
-        var plan = try SyncPlanner(library: lib, cache: cache, policy: tagOptions.policy)
+        var plan = try SyncPlanner(library: lib, cache: cache)
             .plan(volume: v, selectedPlaylistIds: selected, entireLibrary: wholeLibrary, previous: manifest, adoptable: adoptable)
         printPlan(plan)
 
@@ -155,7 +152,7 @@ struct SyncCommand: ParsableCommand {
         }
         let selectionChanged = plan.manifest.selectedPlaylistIds != manifest.selectedPlaylistIds
             || plan.manifest.entireLibrary != manifest.entireLibrary
-        let settings = OutputSettings(saved: manifest.settings ?? [:], keyFormat: keyFormat, cues: cues, cueSource: cueSource,
+        let settings = OutputSettings(saved: manifest.settings ?? [:], keyFormat: keyFormat, cues: cues,
                                       hotCues: hotCues, buildLead: buildLead, trackColor: trackColor, phrases: phrases)
         let settingsChanged = settings.dictionary != (manifest.settings ?? [:])
         plan.manifest.settings = settings.dictionary
@@ -169,7 +166,7 @@ struct SyncCommand: ParsableCommand {
                 let answer = readLine()?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
                 analyzeNow = answer.isEmpty || answer == "y" || answer == "yes"
             } else {
-                print("\n\(pending) track(s) aren't analyzed yet; they'll sync with tag BPM/key only. Run `deckhand analyze`, then sync again.")
+                print("\n\(pending) track(s) aren't analyzed yet; they'll sync without BPM, key or cues. Run `deckhand analyze`, then sync again.")
             }
         }
         let adopting = plan.tracks.filter { $0.action == .adopt }.count
@@ -190,13 +187,9 @@ struct SyncCommand: ParsableCommand {
         var executor = SyncExecutor(cache: cache) { event in bars.handle(event) }
         executor.anlzOptions.includeExtendedBeatGrid = extendedBeatgrid
         executor.rewriteAnalysisFiles = rewriteAnalysis
-        executor.analysisPolicy = tagOptions.policy
         executor.artwork = lib.artwork
-        // MIK cue positions need its library even when key and tempo are Deckhand's.
-        executor.mixedInKey = settings.cueSource == .deckhand ? tagOptions.mixedInKeyLibrary : MixedInKeyLibrary.load()
         executor.analyzeMissing = analyzeNow
         executor.cueMode = settings.cues
-        executor.cueSource = settings.cueSource
         executor.hotCueStyle = settings.hotCues
         executor.buildLeadBars = settings.buildLead
         executor.trackColorRule = settings.trackColor
@@ -330,20 +323,8 @@ extension String {
 
 extension OneLibraryDatabase.KeyFormat: ExpressibleByArgument {}
 extension CueMode: ExpressibleByArgument {}
-extension CueSource: ExpressibleByArgument {}
 extension HotCueStyle: ExpressibleByArgument {}
 extension TrackColorRule: ExpressibleByArgument {}
-
-/// Where key and tempo come from. Shared by `sync` and `analyze`.
-struct TagOptions: ParsableArguments {
-    @Flag(help: "Take key and tempo from Mixed In Key (its database, else the tags it wrote into your files) instead of Deckhand's detection. Analysis is cached separately for each choice, so pass it to both analyze and sync.")
-    var useMik = false
-
-    var policy: AnalysisPolicy { useMik ? .mixedInKey : AnalysisPolicy() }
-
-    /// Loaded only when enabled; nil if MIK isn't installed.
-    var mixedInKeyLibrary: MixedInKeyLibrary? { useMik ? MixedInKeyLibrary.load() : nil }
-}
 
 struct AnalyzeCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
@@ -355,7 +336,6 @@ struct AnalyzeCommand: ParsableCommand {
     @Option(name: .long, help: "Only these playlists (repeatable). Default: the whole Apple Music library.")
     var playlist: [String] = []
     @Flag(help: .hidden) var all = false
-    @OptionGroup var tagOptions: TagOptions
 
     func run() throws {
         var tracks: [SourceTrack] = []
@@ -381,7 +361,7 @@ struct AnalyzeCommand: ParsableCommand {
         let start = Date()
         let bar = LockedBox<ProgressBar?>(nil)
         let failures = LockedBox<[String]>([])
-        let runner = AnalysisRunner(cache: cache, policy: tagOptions.policy, mixedInKey: tagOptions.mixedInKeyLibrary) { event in
+        let runner = AnalysisRunner(cache: cache) { event in
             switch event {
             case .started(_, let n, _): bar.update { if $0 == nil { $0 = ProgressBar("Analyzing     ", total: n) } }
             case .finished(_, _, let title): bar.value?.advance(title)
@@ -394,11 +374,6 @@ struct AnalyzeCommand: ParsableCommand {
         let cached = items.count - results.count
         let elapsed = Int(Date().timeIntervalSince(start))
         print("\nAnalyzed \(results.count) tracks in \(elapsed)s; \(cached) already up to date.")
-        if !results.isEmpty {
-            let keyTags = results.values.filter { $0.keySource == .fileTag }.count
-            let bpmHints = results.values.filter { $0.bpmSource == .analysisWithTagHint }.count
-            if keyTags + bpmHints > 0 { print("Key from Mixed In Key: \(keyTags)   BPM guided by Mixed In Key: \(bpmHints)") }
-        }
         let skipped = tracks.count - eligible.count
         if skipped > 0 { print("\(skipped) tracks skipped (no local file, DRM, or unsupported format).") }
     }
@@ -636,17 +611,15 @@ struct CleanupCommand: ParsableCommand {
 struct OutputSettings {
     var keyFormat: OneLibraryDatabase.KeyFormat
     var cues: CueMode
-    var cueSource: CueSource
     var hotCues: HotCueStyle
     var buildLead: Int
     var trackColor: TrackColorRule
     var phrases: Bool
 
-    init(saved: [String: String], keyFormat: OneLibraryDatabase.KeyFormat?, cues: CueMode?, cueSource: CueSource?,
+    init(saved: [String: String], keyFormat: OneLibraryDatabase.KeyFormat?, cues: CueMode?,
          hotCues: HotCueStyle?, buildLead: Int?, trackColor: TrackColorRule?, phrases: Bool?) {
         self.keyFormat = keyFormat ?? saved["keyFormat"].flatMap(OneLibraryDatabase.KeyFormat.init(rawValue:)) ?? .classic
         self.cues = cues ?? saved["cues"].flatMap(CueMode.init(rawValue:)) ?? .both
-        self.cueSource = cueSource ?? saved["cueSource"].flatMap(CueSource.init(rawValue:)) ?? .deckhand
         self.hotCues = hotCues ?? saved["hotCues"].flatMap(HotCueStyle.init(rawValue:)) ?? .named
         self.buildLead = buildLead ?? saved["buildLead"].flatMap(Int.init) ?? 8
         self.trackColor = trackColor ?? saved["trackColor"].flatMap(TrackColorRule.init(rawValue:)) ?? .energy
@@ -654,12 +627,12 @@ struct OutputSettings {
     }
 
     var dictionary: [String: String] {
-        ["keyFormat": keyFormat.rawValue, "cues": cues.rawValue, "cueSource": cueSource.rawValue, "hotCues": hotCues.rawValue,
+        ["keyFormat": keyFormat.rawValue, "cues": cues.rawValue, "hotCues": hotCues.rawValue,
          "buildLead": String(buildLead), "trackColor": trackColor.rawValue, "phrases": String(phrases)]
     }
 
     var summary: String {
-        "cues \(cues.rawValue) from \(cueSource.rawValue), hot cues \(hotCues.rawValue) (build lead \(buildLead) bars), "
+        "cues \(cues.rawValue), hot cues \(hotCues.rawValue) (build lead \(buildLead) bars), "
             + "keys \(keyFormat.rawValue), track color \(trackColor.rawValue), phrases \(phrases ? "on" : "off")"
     }
 }

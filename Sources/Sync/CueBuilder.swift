@@ -1,7 +1,6 @@
 import Analysis
 import DeckhandCore
 import Foundation
-import MusicSource
 
 /// Which cue types to write to the device.
 public enum CueMode: String, Sendable, CaseIterable {
@@ -17,40 +16,16 @@ public enum HotCueStyle: String, Sendable, CaseIterable {
     case phrase
 }
 
-/// Where cue positions come from.
-public enum CueSource: String, Sendable, CaseIterable {
-    /// Mixed In Key's cues when it has the track, otherwise Deckhand's.
-    case auto
-    /// Always Deckhand's own detection.
-    case deckhand
-    /// Only Mixed In Key's cues; tracks it doesn't have get none.
-    case mik
-}
-
-/// Turns imported cue positions into device cues.
+/// Turns detected cue positions into device cues.
 enum CueBuilder {
     /// Players have eight hot cue pads (A–H).
     static let hotCueSlots = 8
-    /// Imported cues within this distance of a beat snap onto it.
-    static let snapToleranceMs = 150
 
-    static func cues(mik: MixedInKeyLibrary.Track?, detected: CueAnalyzer.Result?, analysis: TrackAnalysis?,
-                     source: CueSource, mode: CueMode, hotStyle: HotCueStyle = .phrase,
-                     sections: [StructureAnalyzer.Section]? = nil, buildLeadBars: Int = 8) -> [CuePoint] {
+    static func cues(detected: CueAnalyzer.Result?, analysis: TrackAnalysis?, mode: CueMode,
+                     hotStyle: HotCueStyle = .phrase, sections: [StructureAnalyzer.Section]? = nil,
+                     buildLeadBars: Int = 8) -> [CuePoint] {
         guard mode != .none else { return [] }
-        let beats = analysis?.beats.map(\.timeMs) ?? []
-        let useMIK = source == .mik || (source == .auto && !(mik?.cues.isEmpty ?? true))
-
-        var positions: [(timeMs: Int, energy: Int)] = []
-        if useMIK {
-            // MIK times are on the decoded timeline; snapping onto our (player-timeline) beats absorbs the offset.
-            for cue in mik?.cues ?? [] {
-                let t = snap(Int((cue.time * 1000).rounded()), to: beats)
-                if positions.last?.timeMs != t { positions.append((t, cue.energy)) }
-            }
-        } else {
-            positions = (detected?.cues ?? []).map { ($0.timeMs, $0.energy) }
-        }
+        let positions = (detected?.cues ?? []).map { (timeMs: $0.timeMs, energy: $0.energy) }
 
         var out: [CuePoint] = []
         if mode == .memory || mode == .both {
@@ -76,19 +51,6 @@ enum CueBuilder {
         case 6: [0xFF, 0x8C, 0x00]
         default: [0xE6, 0x28, 0x28]
         }
-    }
-
-    /// Nearest beat within tolerance, else the original time. `beats` is sorted.
-    static func snap(_ t: Int, to beats: [Int]) -> Int {
-        guard !beats.isEmpty else { return t }
-        var lo = 0, hi = beats.count - 1
-        while lo < hi {
-            let mid = (lo + hi) / 2
-            if beats[mid] < t { lo = mid + 1 } else { hi = mid }
-        }
-        let candidates = [beats[lo], beats[max(0, lo - 1)]]
-        let nearest = candidates.min { abs($0 - t) < abs($1 - t) }!
-        return abs(nearest - t) <= snapToleranceMs ? nearest : t
     }
 
     /// Changes whenever the cues written for a track would change.

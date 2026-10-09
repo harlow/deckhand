@@ -11,7 +11,7 @@ struct DebugCommands: ParsableCommand {
         commandName: "debug",
         abstract: "Developer tools.",
         shouldDisplay: false,
-        subcommands: [WriteAnlz.self, AnalyzeTiming.self, MIKSummary.self, HashCommand.self]
+        subcommands: [WriteAnlz.self, AnalyzeTiming.self, HashCommand.self]
     )
 }
 
@@ -63,30 +63,6 @@ struct AnalyzeTiming: ParsableCommand {
         _ = time("waveform") { WaveformAnalyzer.analyze(decoded) }
         let a = time("total") { TrackAnalyzer.analyze(decoded) }
         print("duration \(Int(decoded.durationSeconds))s  bpm \(a.bpm)  key \(a.key?.classic ?? "-")")
-    }
-}
-
-/// Summarizes what Deckhand can read from Mixed In Key's database.
-struct MIKSummary: ParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "mik")
-
-    func run() throws {
-        let start = Date()
-        guard let mik = MixedInKeyLibrary.load() else {
-            print("No readable Mixed In Key 11 database.")
-            return
-        }
-        let t = mik.tracks.values
-        print("tracks \(t.count) in \(String(format: "%.1f", Date().timeIntervalSince(start)))s")
-        print("with key \(t.filter { $0.key != nil }.count), tempo \(t.filter { $0.tempo != nil }.count), "
-            + "beats \(t.filter { !$0.beatTimes.isEmpty }.count), cues \(t.filter { !$0.cues.isEmpty }.count), "
-            + "energy \(t.filter { $0.energy != nil }.count)")
-        if let (path, s) = mik.tracks.first(where: { !$0.value.beatTimes.isEmpty }) {
-            print((path as NSString).lastPathComponent)
-            print("  tempo \(s.tempo ?? 0) key \(s.key?.alphanumeric ?? "-") conf \(s.keyConfidence ?? 0) energy \(s.energy ?? 0)")
-            print("  beats \(s.beatTimes.count) first \(s.beatTimes.prefix(4))")
-            print("  cues \(s.cues.map { String(format: "%.2f(E%d)", $0.time, $0.energy) }.joined(separator: " "))")
-        }
     }
 }
 

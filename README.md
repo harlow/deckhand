@@ -37,7 +37,7 @@ analysis files on a later sync.
 
 Other commands: `playlists`, `devices`, `status`, `validate`, `import-playlists` (bring a Rekordbox drive's
 playlists into Apple Music, `--add-missing` to add its tracks), `cleanup` (remove leftovers from another tool),
-`sync --adopt` (take over audio already on a drive instead of copying it). Output settings such as `--cue-source`,
+`sync --adopt` (take over audio already on a drive instead of copying it). Output settings such as
 `--hot-cues`, `--build-lead`, `--key-format`, `--track-color` are remembered per drive.
 
 ## Hardware test (OMNIS-DUO)
