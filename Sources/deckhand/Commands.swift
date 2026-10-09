@@ -163,7 +163,7 @@ struct SyncCommand: ParsableCommand {
         let pending = plan.analysisCount
         var analyzeNow = analyze ?? false
         if pending > 0, analyze == nil {
-            let minutes = max(1, Int((Double(pending) * 0.35 / Double(max(1, ProcessInfo.processInfo.activeProcessorCount - 2)) / 60).rounded(.up)))
+            let minutes = max(1, Int((Double(pending) * 4.0 / Double(max(1, ProcessInfo.processInfo.activeProcessorCount - 2)) / 60).rounded(.up)))
             if !yes && !dryRun && isatty(STDIN_FILENO) != 0 {
                 print("\n\(pending) track(s) aren't analyzed yet (about \(minutes) min). Analyze them now? [Y/n] ", terminator: "")
                 let answer = readLine()?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
@@ -192,7 +192,8 @@ struct SyncCommand: ParsableCommand {
         executor.rewriteAnalysisFiles = rewriteAnalysis
         executor.analysisPolicy = tagOptions.policy
         executor.artwork = lib.artwork
-        executor.mixedInKey = tagOptions.mixedInKeyLibrary
+        // MIK cue positions need its library even when key and tempo are Deckhand's.
+        executor.mixedInKey = settings.cueSource == .deckhand ? tagOptions.mixedInKeyLibrary : MixedInKeyLibrary.load()
         executor.analyzeMissing = analyzeNow
         executor.cueMode = settings.cues
         executor.cueSource = settings.cueSource
@@ -333,19 +334,15 @@ extension CueSource: ExpressibleByArgument {}
 extension HotCueStyle: ExpressibleByArgument {}
 extension TrackColorRule: ExpressibleByArgument {}
 
-/// How existing file tags feed analysis. Shared by `sync` and `analyze`.
+/// Where key and tempo come from. Shared by `sync` and `analyze`.
 struct TagOptions: ParsableArguments {
-    @Flag(inversion: .prefixedNo, help: "Use the file's key tag (e.g. from Mixed In Key) instead of detecting the key.")
-    var keyTags = true
-    @Flag(inversion: .prefixedNo, help: "Use the file's BPM tag to choose the tempo and pin the beat grid.")
-    var bpmHint = true
-    @Flag(inversion: .prefixedNo, help: "Use Mixed In Key's stored analysis (tempo, key) when it has the track.")
-    var mixedInKey = true
+    @Flag(help: "Take key and tempo from Mixed In Key (its database, else the tags it wrote into your files) instead of Deckhand's detection. Analysis is cached separately for each choice, so pass it to both analyze and sync.")
+    var useMik = false
 
-    var policy: AnalysisPolicy { AnalysisPolicy(keyFromTags: keyTags, bpmHintFromTags: bpmHint, useMixedInKey: mixedInKey) }
+    var policy: AnalysisPolicy { useMik ? .mixedInKey : AnalysisPolicy() }
 
     /// Loaded only when enabled; nil if MIK isn't installed.
-    var mixedInKeyLibrary: MixedInKeyLibrary? { mixedInKey ? MixedInKeyLibrary.load() : nil }
+    var mixedInKeyLibrary: MixedInKeyLibrary? { useMik ? MixedInKeyLibrary.load() : nil }
 }
 
 struct AnalyzeCommand: ParsableCommand {
@@ -400,7 +397,7 @@ struct AnalyzeCommand: ParsableCommand {
         if !results.isEmpty {
             let keyTags = results.values.filter { $0.keySource == .fileTag }.count
             let bpmHints = results.values.filter { $0.bpmSource == .analysisWithTagHint }.count
-            print("Key from file tags: \(keyTags)   BPM guided by file tags: \(bpmHints)")
+            if keyTags + bpmHints > 0 { print("Key from Mixed In Key: \(keyTags)   BPM guided by Mixed In Key: \(bpmHints)") }
         }
         let skipped = tracks.count - eligible.count
         if skipped > 0 { print("\(skipped) tracks skipped (no local file, DRM, or unsupported format).") }

@@ -101,8 +101,13 @@ public enum BeatAnalyzer {
         var sums = [Double](repeating: 0, count: binCount)
         var counts = [Double](repeating: 0, count: binCount)
         onsets.values.withUnsafeBufferPointer { df in
+            // i - k·period via fused multiply-add equals truncatingRemainder exactly, without the
+            // per-frame fmod that dominated this, the analyzer's hottest loop.
+            var k = 0.0
             for i in 0..<df.count {
-                let ph = Double(i).truncatingRemainder(dividingBy: periodFrames)
+                let x = Double(i)
+                var ph = x.addingProduct(-k, periodFrames)
+                if ph >= periodFrames { k += 1; ph = x.addingProduct(-k, periodFrames) }
                 let bin = min(binCount - 1, Int(ph * binsPerFrame))
                 sums[bin] += df[i]
                 counts[bin] += 1

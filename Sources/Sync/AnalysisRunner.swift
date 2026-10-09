@@ -3,16 +3,19 @@ import DeckhandCore
 import Foundation
 import MusicSource
 
-/// How file tags are used during analysis.
+/// How existing key/tempo data feeds analysis. The default is Deckhand's own detection only.
 public struct AnalysisPolicy: Sendable, Equatable {
     /// Use the file's key tag when present instead of detecting the key.
-    public var keyFromTags = true
+    public var keyFromTags = false
     /// Use the file's BPM tag to choose tempo and pin the beat grid.
-    public var bpmHintFromTags = true
+    public var bpmHintFromTags = false
     /// Prefer Mixed In Key's stored analysis (precise tempo, key) over file tags when available.
-    public var useMixedInKey = true
+    public var useMixedInKey = false
 
-    public init(keyFromTags: Bool = true, bpmHintFromTags: Bool = true, useMixedInKey: Bool = true) {
+    /// Key and tempo from Mixed In Key: its database, else the tags it wrote into the files.
+    public static let mixedInKey = AnalysisPolicy(keyFromTags: true, bpmHintFromTags: true, useMixedInKey: true)
+
+    public init(keyFromTags: Bool = false, bpmHintFromTags: Bool = false, useMixedInKey: Bool = false) {
         self.keyFromTags = keyFromTags
         self.bpmHintFromTags = bpmHintFromTags
         self.useMixedInKey = useMixedInKey
