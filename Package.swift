@@ -56,17 +56,23 @@ let package = Package(
             dependencies: ["DeckhandCore", "CQMDSP", "CKeyFinder"],
             resources: [.copy("Resources/SKeyChromaNet.mlmodelc")]
         ),
+        // Evaluation-only readers for reference labels (Mixed In Key's database, file tags).
+        // Only the deckhand-*-eval tools depend on this; sync and the app never do.
+        .target(
+            name: "EvalSupport",
+            dependencies: ["DeckhandCore", "CSQLCipher"]
+        ),
         .executableTarget(
             name: "deckhand-eval",
-            dependencies: ["Analysis", "CKeyFinder", "MusicSource"]
+            dependencies: ["Analysis", "CKeyFinder", "EvalSupport"]
         ),
         .executableTarget(
             name: "deckhand-cue-eval",
-            dependencies: ["Analysis", "MusicSource"]
+            dependencies: ["Analysis", "EvalSupport"]
         ),
         .executableTarget(
             name: "deckhand-structure-eval",
-            dependencies: ["Analysis"]
+            dependencies: ["Analysis", "EvalSupport"]
         ),
         .executableTarget(
             name: "deckhand-grid-eval",
@@ -74,7 +80,7 @@ let package = Package(
         ),
         .target(
             name: "MusicSource",
-            dependencies: ["DeckhandCore", "CSQLCipher"]
+            dependencies: ["DeckhandCore"]
         ),
         .target(
             name: "Sync",
@@ -96,5 +102,6 @@ let package = Package(
         .testTarget(name: "OneLibraryTests", dependencies: ["OneLibrary"]),
         .testTarget(name: "AnalysisTests", dependencies: ["Analysis"]),
         .testTarget(name: "SyncTests", dependencies: ["Sync"]),
+        .testTarget(name: "EvalSupportTests", dependencies: ["EvalSupport"]),
     ]
 )

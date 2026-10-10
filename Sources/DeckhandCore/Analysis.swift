@@ -1,13 +1,5 @@
 /// Format-independent analysis output for one audio file.
 /// Exporters translate this into device-specific files (e.g. Pioneer ANLZ).
-/// Where an analysis value came from.
-public enum ValueSource: String, Codable, Sendable {
-    case analysis
-    case fileTag
-    /// Measured from audio, with a file tag choosing the tempo octave and search range.
-    case analysisWithTagHint
-}
-
 public struct TrackAnalysis: Codable, Sendable, Equatable {
     /// Bump when any analysis algorithm changes output, to invalidate cached results.
     public static let currentVersion = 6
@@ -20,15 +12,10 @@ public struct TrackAnalysis: Codable, Sendable, Equatable {
     public var beats: [Beat]
     public var key: MusicalKey?
     public var waveforms: Waveforms
-    public var bpmSource: ValueSource
-    public var keySource: ValueSource
 
     public init(version: Int = TrackAnalysis.currentVersion, durationSeconds: Double, sampleRate: Int,
-                bpm: Double, beats: [Beat], key: MusicalKey?, waveforms: Waveforms,
-                bpmSource: ValueSource = .analysis, keySource: ValueSource = .analysis) {
+                bpm: Double, beats: [Beat], key: MusicalKey?, waveforms: Waveforms) {
         self.version = version
-        self.bpmSource = bpmSource
-        self.keySource = keySource
         self.durationSeconds = durationSeconds
         self.sampleRate = sampleRate
         self.bpm = bpm

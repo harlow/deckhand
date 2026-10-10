@@ -216,11 +216,24 @@ final class LibraryModel {
         self.rows = rows
         allIds = (lib.allTrackIds ?? Array(lib.tracks.keys)).filter { rows[$0] != nil }
             .sorted { rows[$0]!.dateAdded > rows[$1]!.dateAdded }
-        playlists = lib.playlists
+        playlists = Self.demoNamed(lib.playlists)
         artwork = lib.artwork
         status = nil
         loadState = .loaded
         updateScope()
+    }
+
+    /// With `DECKHAND_DEMO=1`, shows placeholder playlist names (for screenshots). Display only: Music and
+    /// drives are addressed by playlist ID, so these names are never written anywhere.
+    private static func demoNamed(_ playlists: [SourcePlaylist]) -> [SourcePlaylist] {
+        guard ProcessInfo.processInfo.environment["DECKHAND_DEMO"] == "1" else { return playlists }
+        let names = ["Friday Warmup", "Peak Time", "Deep House", "Disco Edits", "Afterhours", "Sunday Sessions", "Rooftop", "Open Format",
+                     "Garage Classics", "Breaks", "Italo", "Closing Tracks", "Edits & Bootlegs", "Balearic"]
+        return playlists.enumerated().map { i, p in
+            var p = p
+            p.name = names[i % names.count]
+            return p
+        }
     }
 
     private struct Loaded: Sendable {

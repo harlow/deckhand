@@ -4,6 +4,9 @@ import Foundation
 
 /// Read-only access to analysis stored by Mixed In Key 11 (`Collection11.mikdb`, a Core Data SQLite store).
 ///
+/// Evaluation tooling only: MIK's keys, grids, and cues are the answer key that Deckhand's own analysis
+/// is scored and trained against (deckhand-eval, deckhand-cue-eval, Scripts/). Sync never reads it.
+///
 /// The format is undocumented and may change between MIK versions; every read is defensive and
 /// failures just mean "no MIK data".
 public final class MixedInKeyLibrary: @unchecked Sendable {

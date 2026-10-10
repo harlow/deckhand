@@ -66,7 +66,10 @@ public struct Volume: Sendable {
         return f.contains("fat") || f.contains("exfat") || f.contains("ms-dos")
     }
 
+    /// Paths can come from a drive's own manifest or database, so `.` and `..` components are dropped to keep the
+    /// result inside the volume.
     public func url(forUsbPath path: String) -> URL {
-        url.appendingPathComponent(String(path.drop(while: { $0 == "/" })))
+        let parts = path.split(separator: "/").filter { $0 != "." && $0 != ".." }
+        return url.appendingPathComponent(parts.joined(separator: "/"))
     }
 }

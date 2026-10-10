@@ -2,24 +2,14 @@ import AudioToolbox
 import DeckhandCore
 import Foundation
 
-/// Tag values that can steer or replace analysis.
-public struct AnalysisHints: Sendable, Equatable {
-    public var bpm: Double?
-    public var key: MusicalKey?
-
-    public init(bpm: Double? = nil, key: MusicalKey? = nil) {
-        self.bpm = bpm
-        self.key = key
-    }
-
-    public static let none = AnalysisHints()
-}
+// Evaluation tooling only: sync and analysis never read file tags. The eval tools use tags as reference
+// labels (keys written by Mixed In Key, TBPM) and as optional BPM hints for experiments.
 
 /// DJ-relevant tags read from an audio file (ID3, MP4, AIFF).
 public struct FileTags: Sendable, Equatable {
     public var bpm: Double?
     public var key: MusicalKey?
-    /// Mixed In Key energy level (1–10), parsed from the comment.
+    /// Energy level (1–10) as written into the comment by Mixed In Key.
     public var energy: Int?
 
     public init(bpm: Double? = nil, key: MusicalKey? = nil, energy: Int? = nil) {

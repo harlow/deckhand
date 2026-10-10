@@ -1,6 +1,20 @@
 import DeckhandCore
 import Foundation
 
+/// Optional inputs that steer or replace analysis. Sync always analyzes with `.none`; the eval tools use
+/// hints to test the tempo search against reference BPMs, or to skip key detection when it isn't scored.
+public struct AnalysisHints: Sendable, Equatable {
+    public var bpm: Double?
+    public var key: MusicalKey?
+
+    public init(bpm: Double? = nil, key: MusicalKey? = nil) {
+        self.bpm = bpm
+        self.key = key
+    }
+
+    public static let none = AnalysisHints()
+}
+
 public enum TrackAnalyzer {
     public static func analyze(url: URL) throws -> TrackAnalysis {
         try analyze(url: url, hints: .none)
@@ -27,9 +41,7 @@ public enum TrackAnalyzer {
             bpm: grid?.bpm ?? 0,
             beats: grid?.beats(duration: duration) ?? [],
             key: key,
-            waveforms: padded(waveforms, seconds: audio.timelineOffsetSeconds),
-            bpmSource: hints.bpm != nil && grid != nil ? .analysisWithTagHint : .analysis,
-            keySource: hints.key != nil ? .fileTag : .analysis
+            waveforms: padded(waveforms, seconds: audio.timelineOffsetSeconds)
         )
     }
 

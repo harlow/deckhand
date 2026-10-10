@@ -383,10 +383,10 @@ struct ImportPlaylistsCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "import-playlists",
         abstract: "Recreate a drive's existing playlists (e.g. from Rekordbox) in Apple Music.",
-        discussion: "Tracks are matched to songs already in your Apple Music library; nothing is copied or added to the library itself."
+        discussion: "Tracks are matched to songs already in your Apple Music library; with --add-missing, tracks that aren't found are copied to ~/Music/Deckhand Imports and added."
     )
 
-    @Argument(help: "Drive, e.g. /Volumes/RATS.") var volume: String
+    @Argument(help: "Drive, e.g. /Volumes/DJUSB.") var volume: String
     @Option(name: .long, help: "Only these playlists (repeatable). Default: all that don't exist in Apple Music.")
     var playlist: [String] = []
     @Flag(help: "Also import playlists whose name already exists in Apple Music (creates a second playlist).")

@@ -3,7 +3,7 @@ import Observation
 import os
 
 /// In-app log shown in the Console window (View → Show Console), mirrored to the system log
-/// (subsystem com.deckhand.app) so Console.app sees it too.
+/// (subsystem rocks.deckhand.app) so Console.app sees it too.
 @MainActor @Observable
 final class AppLog {
     static let shared = AppLog()
@@ -37,7 +37,7 @@ final class AppLog {
 
 /// Logging entry points, callable from any thread.
 enum Log {
-    private static let system = Logger(subsystem: "com.deckhand.app", category: "app")
+    private static let system = Logger(subsystem: "rocks.deckhand.app", category: "app")
 
     static func info(_ category: String, _ message: String) { post(.info, category, message) }
     static func warning(_ category: String, _ message: String) { post(.warning, category, message) }

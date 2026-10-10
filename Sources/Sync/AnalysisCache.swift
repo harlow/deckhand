@@ -99,16 +99,14 @@ public final class AnalysisCache: @unchecked Sendable {
         return stored
     }
 
-    /// Entries written while key/tempo could come from file tags or Mixed In Key recorded how; only
-    /// pure Deckhand analysis is valid now.
+    /// Older entries recorded a fingerprint of which external inputs (since removed) were allowed;
+    /// only this one, pure Deckhand analysis, is still valid. New entries omit it.
     private static let ownAnalysisPolicy = "key-tags=0;bpm-hint=0;mik=0"
 
     /// Compact on-disk form: waveforms stored as sqrt-companded bytes.
     private struct Stored: Codable {
         var version: Int
         var policy: String?
-        var bpmSource: ValueSource?
-        var keySource: ValueSource?
         var cueVersion: Int?
         /// [timeMs, energy] pairs.
         var cues: [[Int]]?
@@ -135,8 +133,6 @@ public final class AnalysisCache: @unchecked Sendable {
             bpm = a.bpm
             beats = a.beats
             key = a.key
-            bpmSource = a.bpmSource
-            keySource = a.keySource
             peak = Self.pack(a.waveforms.peak)
             rms = Self.pack(a.waveforms.rms)
             low = Self.pack(a.waveforms.low)
@@ -145,13 +141,10 @@ public final class AnalysisCache: @unchecked Sendable {
         }
 
         var analysis: TrackAnalysis {
-            var a = TrackAnalysis(version: version, durationSeconds: durationSeconds, sampleRate: sampleRate, bpm: bpm,
+            TrackAnalysis(version: version, durationSeconds: durationSeconds, sampleRate: sampleRate, bpm: bpm,
                           beats: beats, key: key,
                           waveforms: .init(peak: Self.unpack(peak), rms: Self.unpack(rms), low: Self.unpack(low),
                                            mid: Self.unpack(mid), high: Self.unpack(high)))
-            a.bpmSource = bpmSource ?? .analysis
-            a.keySource = keySource ?? .analysis
-            return a
         }
 
         static func pack(_ x: [Float]) -> Data {

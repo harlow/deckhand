@@ -36,8 +36,8 @@ import Testing
         #expect(BeatAnalyzer.fitGrid(beats: detected, bpmHint: 240)?.bpm == 120)
     }
 
-    @Test func foldsFastTempoToHalfTimeLikeMixedInKey() throws {
-        // Mixed In Key reports drum & bass at half time (172 → 86).
+    @Test func foldsFastTempoToHalfTime() throws {
+        // Drum & bass reports at half time (172 → 86).
         let grid = try #require(BeatAnalyzer.fitGrid(beats: beats(bpm: 172, first: 0.1, count: 300)))
         #expect(grid.bpm == 86)
     }

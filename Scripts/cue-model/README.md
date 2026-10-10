@@ -1,7 +1,8 @@
 # Cue / energy model
 
-Trains `Sources/Analysis/CueModelData.swift` against Mixed In Key's cue points and energy levels
-(read-only from MIK 11's database via `MixedInKeyLibrary`).
+Trains `Sources/Analysis/CueModelData.swift` using Mixed In Key's cue points and energy levels as
+labels, read (read-only) from a local MIK 11 database by `MixedInKeyLibrary` in the eval-only
+`EvalSupport` target. MIK is needed only for training and evaluation; the trained model runs without it.
 
 ```sh
 swift build -c release --product deckhand-cue-eval

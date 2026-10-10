@@ -1,6 +1,6 @@
 import DeckhandCore
 import Testing
-@testable import Analysis
+@testable import EvalSupport
 
 @Suite struct FileTagsTests {
     @Test(arguments: [
@@ -19,7 +19,7 @@ import Testing
         #expect(FileTagReader.parseKey(text) == expected)
     }
 
-    @Test func mixedInKeyComment() {
+    @Test func keyAndEnergyComment() {
         #expect(FileTagReader.keyFromComment("12A - Energy 6") == MusicalKey(tonic: 1, mode: .minor))
         #expect(FileTagReader.energyFromComment("12A - Energy 6") == 6)
         #expect(FileTagReader.keyFromComment("Purchased at Beatport.com") == nil)

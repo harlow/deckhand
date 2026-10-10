@@ -1,12 +1,12 @@
 import DeckhandCore
 import Foundation
 
-/// Automatic cue points and energy levels, modeled on Mixed In Key's: cues on phrase boundaries
+/// Automatic cue points and energy levels: cues on phrase boundaries
 /// (multiples of 4 bars) where the music changes, each labeled with the energy (1–10) of the
 /// section it starts, plus an overall track energy.
 ///
-/// Candidates are scored by a gradient-boosted model trained against MIK's cues on the user's
-/// library (see Scripts/cue-model). Feature code here must match `feats3.py` exactly.
+/// Candidates are scored by a gradient-boosted model trained against Mixed In Key's cues on the user's
+/// library as reference labels (see Scripts/cue-model). Feature code here must match `feats3.py` exactly.
 public enum CueAnalyzer {
     public struct DetectedCue: Sendable, Equatable {
         public var timeMs: Int
@@ -75,7 +75,7 @@ public enum CueAnalyzer {
             let e = j - i >= 4 ? models.energy.raw(segmentFeatures(g, i, j, td)) : 6
             cues.append(DetectedCue(timeMs: beatTimesMs[i], energy: max(1, min(10, Int(e.rounded())))))
         }
-        // MIK's track energy tracks the second-highest section energy.
+        // Track energy is the second-highest section energy (best match to the reference labels).
         let sorted = cues.map(\.energy).sorted()
         let energy = sorted.count > 1 ? sorted[sorted.count - 2] : sorted.last
         return Result(cues: cues, energy: energy)

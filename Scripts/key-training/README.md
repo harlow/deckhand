@@ -5,8 +5,9 @@ The architecture stays the same, so the Swift CQT front-end and Core ML export d
 
 The workspace defaults to `~/Data/deckhand-key` (override with `KEY_DATA`). It needs about 60 GB.
 
-1. `./setup.sh` sets up the Python env, the deezer/skey and GiantSteps label checkouts, and Mixed In Key
-   labels (`deckhand-eval mik-keys`). It also starts the downloads: GiantSteps+ (Zenodo 1095691),
+1. `./setup.sh` sets up the Python env, the deezer/skey and GiantSteps label checkouts, and exports
+   Mixed In Key labels from a local MIK 11 database (`deckhand-eval mik-keys`) for training and
+   validation. It also starts the downloads: GiantSteps+ (Zenodo 1095691),
    Beatport EDM Key (1101082) and FMAK (10719860), about 43 GB.
 2. `nohup ./pipeline.sh > $KEY_DATA/pipeline.log &` unpacks each download as it arrives. It runs
    `manifest.py` (labels and splits), `prep.py` (per-clip 99-bin VQT for training) and
@@ -24,11 +25,23 @@ The workspace defaults to `~/Data/deckhand-key` (override with `KEY_DATA`). It n
 Splits (see `manifest.py`):
 
 - **Test, never trained or tuned on:** GiantSteps (original and + labels) and FMAK zips 060-069 and 110-124.
-- **Validation:** 10% of Beatport and of the FMAK training zips, plus library album folders with
+- **Validation:** 10% of Beatport and of the FMAK training zips, plus Mixed In Key-labelled album folders with
   MD5 ≡ 0 (mod 5).
 - **Excluded from training:** Beatport tracks that overlap GiantSteps by ID or title.
 
-The shipped linear model was trained on all of Beatport and the library. Its validation numbers on
+The shipped linear model was trained on all of Beatport and the MIK-labelled library. Its validation numbers on
 those two sets are therefore optimistic, which is why α tuning also uses FMAK val.
 
-Results from 2026-10-08 are in `docs/status.md`.
+## Results
+
+Shipped model before → after fine-tuning (exact / MIREX / major-key recall, %, from `evaluate.py`):
+
+| Test set | Before | After |
+|---|---|---|
+| GiantSteps | 68.9 / 75.6 / 35.2 | 69.9 / 75.8 / 38.5 |
+| GiantSteps+ | 84.1 / 87.9 / 56.2 | 85.5 / 88.7 / 62.5 |
+| FMAK test zips | 65.0 / 72.8 / 59.8 | 65.4 / 73.2 / 61.4 |
+| Agreement with confident Mixed In Key labels (held-out) | 94.9 | 98.3 |
+
+The Swift port matches PyTorch on 354 clips (max |Δp| 5e-4). End-to-end Swift numbers are in
+[docs/formats.md](../../docs/formats.md#analysis-accuracy). Major-key recall is still the weak spot.

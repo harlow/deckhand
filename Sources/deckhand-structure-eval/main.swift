@@ -1,5 +1,6 @@
 import Analysis
 import DeckhandCore
+import EvalSupport
 import Foundation
 
 // Evaluates Deckhand's song-structure analysis against Rekordbox phrase analysis (PSSI).

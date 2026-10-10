@@ -25,10 +25,10 @@ public struct CuePoint: Codable, Sendable, Equatable {
     }
 }
 
-/// Curated / imported DJ metadata that isn't derived from Deckhand's own audio analysis.
+/// Cue points and energy level for a track (produced by `CueAnalyzer`).
 public struct TrackEnrichment: Codable, Sendable, Equatable {
     public var cues: [CuePoint]
-    /// Energy level 1–10 (Mixed In Key scale).
+    /// Overall track energy, 1–10.
     public var energy: Int?
 
     public init(cues: [CuePoint] = [], energy: Int? = nil) {

@@ -5,3 +5,8 @@ Fixtures/private/
 __pycache__/
 *.pyc
 /build/
+.DS_Store
+.env*
+/.vscode/
+.claude/
+*.mlpackage

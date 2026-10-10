@@ -39,7 +39,7 @@ public struct BeatGrid: Sendable, Equatable {
 }
 
 public enum BeatAnalyzer {
-    /// One octave, matching Mixed In Key: faster tracks report half time (e.g. 172 → 86).
+    /// One octave: faster tracks report half time (e.g. 172 → 86), as the reference labels (Mixed In Key) do.
     public static let tempoRange = 80.0..<160.0
     /// Prefer an integer BPM whose comb score is at least this fraction of the best score.
     static let integerPreference = 0.97
@@ -74,7 +74,7 @@ public enum BeatAnalyzer {
     }
 
     /// Fits a constant-tempo grid. `lowBand` is a 150 fps low-frequency envelope used to pick downbeats.
-    /// `bpmHint` (e.g. from a file tag, possibly half- or double-time) selects the tempo octave
+    /// `bpmHint` (eval tooling only; possibly half- or double-time) selects the tempo octave
     /// and limits the search to within `hintTolerance` of it.
     public static func analyze(_ audio: DecodedAudio, lowBand: [Float], bpmHint: Double? = nil) -> BeatGrid? {
         guard let onsets = onsetFunction(audio) else { return nil }
@@ -89,7 +89,7 @@ public enum BeatAnalyzer {
     }
 
     /// The complex-domain onset function peaks this long after a beat's attack (frames are
-    /// ~23 ms windows timestamped at their centre). Fitted against Mixed In Key grids.
+    /// ~23 ms windows timestamped at their centre). Fitted against reference (Mixed In Key) grids.
     static let onsetLatency = 0.015
     /// Shift by half a beat when the low band is this much stronger on the off-beats.
     static let halfBeatRatio = 1.3

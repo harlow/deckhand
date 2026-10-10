@@ -24,7 +24,7 @@ cat > $APP/Contents/Info.plist <<'EOF'
 <dict>
     <key>CFBundleName</key><string>Deckhand</string>
     <key>CFBundleDisplayName</key><string>Deckhand</string>
-    <key>CFBundleIdentifier</key><string>com.deckhand.app</string>
+    <key>CFBundleIdentifier</key><string>rocks.deckhand.app</string>
     <key>CFBundleExecutable</key><string>DeckhandApp</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>

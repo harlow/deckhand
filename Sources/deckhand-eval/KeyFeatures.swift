@@ -2,8 +2,8 @@ import Analysis
 import CKeyFinder
 import CryptoKit
 import DeckhandCore
+import EvalSupport
 import Foundation
-import MusicSource
 
 /// `deckhand-eval key-features <music root> <out dir>`: dumps libKeyFinder chromagrams and
 /// tag keys for every tagged audio file, for offline key-model experiments.

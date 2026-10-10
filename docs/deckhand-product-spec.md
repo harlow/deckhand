@@ -1,12 +1,29 @@
 # Deckhand — Product & Technical Specification
 
-**Status:** Draft v0.1  
-**Date:** October 7, 2026  
-**Working name:** Deckhand  
+**Status:** Original design spec, written before implementation (v0.1, October 7, 2026)  
 **Primary platform:** macOS  
 **Initial hardware target:** AlphaTheta OMNIS-DUO  
 **Primary source library:** Apple Music.app (formerly iTunes)  
 **Core promise:** Build and sync DJ-ready USB drives from Apple Music playlists without opening Rekordbox.
+
+> **Note.** This is the plan Deckhand was built from, kept as a design record. The principles and sync
+> design still hold, but where it differs from the code, the code wins. Current behavior is documented in
+> the [README](../README.md), [formats.md](formats.md), [mac-app.md](mac-app.md) and
+> [status.md](status.md). The main differences:
+>
+> - Hardware compatibility is proven: the OMNIS-DUO browses and plays Deckhand drives, with album art, hot
+>   cues and play history. Sections 26, 27 and 35 describe that milestone as still to come.
+> - The scope grew past v1 (section 6): Deckhand writes hot and memory cues, named hot cues from song
+>   structure, phrase analysis, energy-based track colors and ratings, and the Mac app has playback,
+>   library browsing and rating.
+> - Section 9's SQLite data model became a JSON manifest per drive (`/.deckhand/manifest.json`) plus an
+>   on-disk analysis cache keyed by audio hash.
+> - Section 16's CLI was a sketch. The real commands also include `analyze`, `import-playlists`, `cleanup`
+>   and `ratings`; the "global flags" (`--json`, `--quiet`, `--no-delete`) and `sync --rebuild` don't
+>   exist. Run `deckhand help` for the current list.
+> - Section 17's minimal GUI was replaced by the fuller Mac app in [mac-app.md](mac-app.md).
+> - Analysis uses vendored GPL libraries (qm-dsp, libKeyFinder) plus Deckhand's own trained models, so the
+>   project is GPL.
 
 ---
 
@@ -1222,7 +1239,7 @@ Safely unmounts the drive.
 
 ## 17. Minimal GUI
 
-> Superseded by the fuller Mac app concept in [mac-app.md](mac-app.md) (2026-10-09).
+> Superseded by the Mac app in [mac-app.md](mac-app.md).
 
 A GUI is not required to prove the product.
 
@@ -1257,7 +1274,7 @@ Do not duplicate sync logic in the GUI.
 
 A strong initial implementation would be:
 
-A single Swift package with one target per subsystem:
+A single Swift package with one target per subsystem (planned layout; the shipped package is shown after it):
 
 ```text
 deckhand/
@@ -1295,6 +1312,24 @@ deckhand/
 │   └── deckhand-cli/
 │
 └── App/               # optional later (SwiftUI)
+```
+
+As built, `Package.swift` has these targets:
+
+```text
+Sources/
+├── DeckhandCore/        shared model (tracks, analysis, keys, phrases, ratings backup)
+├── MusicSource/         Apple Music via iTunesLibrary.framework; AppleScript writer
+├── Analysis/            decoding, beat grid, key (libKeyFinder + S-KEY Core ML), cues, structure, waveforms
+├── CQMDSP/              vendored qm-dsp (GPL)
+├── CKeyFinder/          vendored libKeyFinder (GPL) with an Accelerate FFT backend
+├── CSQLCipher/          system library: Homebrew sqlcipher
+├── OneLibrary/          exportLibrary.db, ANLZ files, validation
+├── Sync/                planner, executor, manifest, analysis cache, adopt, cleanup
+├── deckhand/            CLI (swift-argument-parser)
+├── DeckhandApp/         SwiftUI Mac app
+├── EvalSupport/         eval-only: Mixed In Key reader and file-tag reader
+└── deckhand-eval, deckhand-cue-eval, deckhand-structure-eval, deckhand-grid-eval/   eval tools
 ```
 
 ### Language decision

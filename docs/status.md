@@ -1,62 +1,47 @@
-# Deckhand — status (2026-10-07)
+# Project status
 
-## Working and committed
+## Works
 
-- Sync Apple Music → OneLibrary USB; confirmed on OMNIS-DUO: browse/play, album art, hot cues, play history kept.
-- Analysis (all Deckhand's own): beat grid (≈MIK parity), BPM, key (ensemble linear + S-KEY; GiantSteps 69% exact,
-  94% agreement with confident MIK), auto cues + energy, song structure → named hot cues A–H, phrase colors (PSSI),
-  energy track colors. Details/numbers: `docs/formats.md`.
-- Commands: `playlists devices init analyze [--all] sync [--entire-library] [--adopt] status validate eject
-  import-playlists [--add-missing] cleanup`.
-- Last commit: `8cf2f37` (key ensemble) / `51ab041` (ID3 decode fallback) — see `git log`.
+- **Sync** from Apple Music to a OneLibrary USB drive. Confirmed on an AlphaTheta OMNIS-DUO: browsing,
+  playback, album art, hot cues, and play history (the deck's history and play counts survive later syncs).
+- **Analysis**, all done by Deckhand itself: BPM and beat grid, key (linear model plus a fine-tuned S-KEY
+  ensemble), waveforms, auto cues and track energy, song structure turned into named hot cues A–H, phrase
+  colors (PSSI) and energy-based track colors. Accuracy numbers are in [formats.md](formats.md#analysis-accuracy).
+- **CLI**: `playlists`, `devices`, `init`, `analyze`, `sync`, `status`, `validate`, `eject`,
+  `import-playlists`, `cleanup`, `ratings backup|restore`. Run `deckhand help <command>` for flags.
+  - `sync` doesn't analyze by default. It asks when tracks aren't analyzed yet (`--analyze` /
+    `--no-analyze` answer up front). Unanalyzed tracks are synced without BPM, key or cues until a
+    later sync writes their analysis.
+  - Output settings (`--key-format`, `--cues`, `--hot-cues`, `--build-lead`, `--track-color`,
+    `--[no-]phrases`) are remembered per drive.
+  - A change in analysis version rewrites only the analysis files and database, not the audio.
+  - `sync --adopt` takes over audio already on the drive (e.g. from a Rekordbox export) instead of
+    copying it again; `cleanup` then removes what the old export left behind.
+- **Mac app** (first pass): library browser with waveforms, keys, energy and filters, player and queue,
+  star ratings and Quick Rate, analysis and sync. See [mac-app.md](mac-app.md).
 
-## RATS stick
+## Known limitations
 
-- Fully Deckhand-managed: `sync --entire-library --adopt --cue-source deckhand` completed — 2,164 tracks,
-  11 playlists, validates OK. 1,980 files adopted (moved), 184 copied. 28 DRM tracks skipped.
-- Built with key model v4 (before the S-KEY ensemble). Rekordbox leftovers (≈178 old audio files, old ANLZ/artwork,
-  export.pdb) still on the stick — `deckhand cleanup /Volumes/RATS --dry-run` not run yet.
-- All 5 Rekordbox-only playlists were imported into Apple Music (Apple Music is canonical).
+- Only the OMNIS-DUO has been tested. Other OneLibrary players (XDJ-AZ, OPUS-QUAD, CDJ-3000X) should
+  work; players that only read the legacy `export.pdb` (CDJ-3000 and older) aren't supported.
+- Major-key recall is the weakest part of key detection (see [formats.md](formats.md#analysis-accuracy)).
+- The MP3 timeline offset is verified; AAC/M4A files get no offset and that is unverified.
+- Analysis can't be corrected by hand yet.
+- In the app, a drive's playlists must be chosen once with `deckhand sync <drive>` in Terminal.
+- Full library analysis takes roughly 9 minutes per 1,000 tracks on an Apple Silicon Mac.
 
-## Recently landed (2026-10-08)
+## Next
 
-- `sync` no longer analyzes by default; it asks if tracks are unanalyzed (`--analyze`/`--no-analyze`), and
-  unanalyzed tracks sync without BPM/key/cues until a later sync writes their analysis files.
-- `deckhand analyze` with no arguments analyzes the whole library.
-- Per-drive output settings are remembered.
-- Fixed: analysis version changes no longer force an audio re-copy (only ANLZ files + DB are rewritten).
+1. Fixing analysis by hand (BPM halving/doubling, downbeat, key, cues) in the Mac app.
+2. Smart crates (saved filters that sync like playlists).
+3. Genre families for the filter (see [genres.md](genres.md)).
 
-## Next steps
+The longer list is in [mac-app.md](mac-app.md#more-features).
 
-1. `deckhand analyze` (library re-analysis for analysis version 6), then `deckhand sync /Volumes/RATS`.
-2. Deck test: confirm what the OMNIS-DUO does with an unanalyzed track (expected: analyzes on load).
-3. `deckhand cleanup /Volumes/RATS --dry-run`, review, then clean (add `--keep-legacy` only if using older CDJs).
-4. Deck check on OMNIS-DUO: named hot cues (A Mix In, D Build, E Main Drop, H Mix Out matter most), phrase colors,
-   track colors, keys. Optional `--hot-cues core` if extra pads feel noisy.
-5. Done (2026-10-09): Mixed In Key and file tags no longer feed sync or analysis at all (`--use-mik`,
-   `--cue-source` and the unanalyzed-track tag fallback were removed). Key, BPM and cues are always Deckhand's;
-   MIK is only the answer key for the eval tools. Full analyze ≈ 9 min per 1,000 tracks on this Mac.
+## Development notes
 
-## Mac app (design stage)
-
-Concept, mockups and feature list in `docs/mac-app.md`. First pass built (`Sources/DeckhandApp`,
-`Scripts/build-app.sh`): playlists, track table with waveforms/key/energy, filters, player + queue,
-analyze banner and a sync sheet that runs the CLI. Next: editing analysis by hand, then smart crates.
-
-## Key model retrained (2026-10-08)
-
-S-KEY's ChromaNet fine-tuned on Beatport EDM Key + FMAK + confident MIK library labels (`Scripts/key-training/`,
-architecture unchanged); ensemble re-tuned to 3.8 × S-KEY + 0.4 minor bias. Analysis version 6 (re-analyze).
-Test results, shipped → new (exact / MIREX / major recall):
-GiantSteps 68.9 / 75.6 / 35.2 → 69.9 / 75.8 / 38.5; GiantSteps+ 84.1 / 87.9 / 56.2 → 85.5 / 88.7 / 62.5;
-FMAK test 65.0 / 72.8 / 59.8 → 65.4 / 73.2 / 61.4; confident-MIK agreement (held-out) 94.9 → 98.3.
-Swift vs PyTorch parity checked on 354 clips (max |Δp| 5e-4). Major-key recall is still the weak spot.
-Training data and checkouts were deleted afterwards; `Scripts/key-training/setup.sh` recreates them (~43 GB).
-
-## Working notes
-
-- Build with a private scratch path when agents/others build concurrently: `swift build --scratch-path .build-main`.
-  If you get odd "Undefined symbols" link errors, delete that scratch dir and rebuild.
-- For syncing real drives, build from committed code (e.g. a `git worktree`) so in-progress edits don't ship.
-- Fixtures from the user's Rekordbox stick live in `Fixtures/private/` (git-ignored, personal data — don't commit).
-- MIK database is read-only answer key: `~/Library/Application Support/Mixedinkey/Collection11.mikdb`.
+- If several builds run at once (e.g. two checkouts or agents), give each its own scratch path:
+  `swift build --scratch-path .build-main`. Odd "Undefined symbols" link errors usually go away after
+  deleting that scratch directory and rebuilding.
+- When syncing a real drive during development, build from committed code (e.g. a `git worktree`) so
+  half-finished edits don't end up on the stick.

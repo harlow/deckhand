@@ -1,7 +1,7 @@
 import Analysis
 import DeckhandCore
+import EvalSupport
 import Foundation
-import MusicSource
 
 // Evaluates Deckhand's automatic cue points and energy levels against Mixed In Key.
 //
