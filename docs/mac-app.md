@@ -35,15 +35,20 @@ App icon: the "Platter" mark, drawn by `Scripts/make-icon.swift` at build time. 
 - **Context menu:** Play, Play Next, Add to Up Next, Add to Playlist (via Music), Rating, Show in Finder,
   Remove from Playlist.
 - **Star ratings:** shared with Apple Music in both directions. Click stars in the list (or use the Rating
-  submenu) to set them in Music; the app re-reads Music when it becomes active. Sync writes ratings to the
-  drive, and a rating or title change alone is enough to rewrite the drive's database.
+  submenu, or ⌥0–⌥5) to set them in Music. The list and the sync dot change at once; Music's answer, read
+  back after the write, replaces it, and an error (no Automation access, Music not answering, track not
+  found) is shown rather than ignored. Sync writes ratings to the drive, and a rating or title change alone is
+  enough to rewrite the drive's database.
 - **Drag and drop:** drag tracks (or the whole selection) onto a sidebar playlist to add them in Apple Music,
   skipping tracks it already has; or onto Up Next to queue them.
 - **Analysis banner:** when tracks aren't analyzed, Analyze Library runs `deckhand analyze` and reloads
   the results when it finishes.
-- **Sync:** the toolbar shows the chosen drive's pending changes and a Sync button, which runs
-  `deckhand sync <drive> -y --analyze` in the background. Progress (and Cancel) appears at the top of the
-  right-hand pane.
+- **Sync:** the toolbar shows the chosen drive's pending changes and a Sync button (blue only when something
+  is pending), which runs `deckhand sync <drive> -y --analyze --require-live` in the background once any
+  ratings still being written have reached Music. Progress (and Cancel) appears at the top of the right-hand
+  pane. Afterwards the drive shows up to date at once if the sync said so; the app then reads Music and the
+  drive again, and if anything is still pending a note above the track list says what (with Sync Again).
+  See [Sync status](#sync-status) below.
 
 ![Deckhand keyboard shortcuts](images/keyboard-shortcuts.png)
 
@@ -109,10 +114,54 @@ day, kept 60 days) at launch and after each Quick Rate session, only when they'v
 
 The track list is an `NSTableView` (`TrackTable.swift`) with fixed-height rows and SwiftUI cells hosted
 only for visible rows; SwiftUI's `Table` measured every row up front and froze for over a minute on a
-library of ~2,000 tracks. Drive reads run off the main thread (USB manifests can take seconds).
+library of ~2,000 tracks. Drive reads run off the main thread (USB manifests can take seconds), and so do
+status evaluations and every Apple Event.
 
 View → Show Console (⌥⌘C) logs slow steps, freezes over 250 ms, actions and job output. The same log goes
 to the system log: `/usr/bin/log show --predicate 'subsystem == "rocks.deckhand.app"'`.
+
+### Sync status
+
+Every dot, playlist badge, "N to sync", byte count, "won't fit" and the Sync button's colour come from one value:
+the engine's `SyncStatus.evaluate` (through `SyncPlanner.evaluate`, exactly as `deckhand status` and `deckhand
+sync` decide), run off the main thread on the app's library, the drive's manifest and files, and the drive's
+saved settings. `DeckhandAppCore` holds the parts that don't need a UI, and its tests cover the races below.
+
+- **Facts without hashing.** The app never hashes to evaluate: audio its background analysis load hasn't hashed
+  yet is *unknown*, shown as neither synced nor pending, and the evaluation runs again as hashes arrive. Until the
+  first evaluation lands the drive shows "Checking…". Retained, failed and ineligible tracks show as the engine
+  sees them (hover the dot for why).
+- **Ordering.** Evaluations can finish out of order; the newest one issued wins (`StatusStore`). Drive reads
+  carry sequence tokens (`ReadLedger`), so a slow read never overwrites a newer one or a selection edit the app
+  just saved.
+- **After a sync.** The CLI's last line, `@result {...}`, says whether its own self-check was clean. If so the app
+  shows the drive clean at once; evaluations begun before the sync ended are dropped. Then it reads Music and the
+  drive again and evaluates ("verification"); that replaces the optimistic status, and if anything is still
+  pending (and nothing was edited during the sync) a note above the track list lists it. The same lines go to the
+  Console.
+- **Music's live data.** iTunesLibrary reads a copy of the library that Music's agent updates in batches; it
+  trails edits by seconds, and some records stay stale indefinitely (Music back-fills comments and genres from
+  file tags without passing them on). So every field the drive's database takes from Music (title, artist,
+  album, album artist, genre, track/disc number, year, rating, comment) is read live with raw Apple Events
+  (~250 ms for 2,000 tracks) and laid over the snapshot, normalized like iTunesLibrary's values so an unchanged
+  track compares equal. Dates and file locations always come from the snapshot (Apple Events report some dates
+  an hour off, and paths in another Unicode form). `deckhand sync` and `status` read the library the same way,
+  so the app and the CLI see the same data. `deckhand debug music-live` lists where the snapshot and Music differ.
+- **Ratings.** Set in the app, a rating shows at once (`RatingOverlay`). `MusicBridge` writes it — coalesced per
+  track, the last one wins — then reads it back; the row takes Music's value. A library read that ran before the
+  write can't put the old rating back (reads and writes carry the bridge's sequence numbers), and Sync waits for
+  queued ratings first.
+- **Reloads.** The library is read again when Music's agent posts `com.apple.AMPLibraryAgent.libraryChanged`
+  (debounced), a few seconds after the app's own writes, after every sync, and when the app becomes active.
+- **Access.** At launch the app checks whether it may control Music (`AEDeterminePermissionToAutomateTarget`)
+  and asks once if it hasn't. If Music is running but can't be read (access refused, no answer), a banner says
+  the list and status may trail recent edits, with Open Settings for Automation. If Music isn't running, the
+  snapshot is current (nothing is waiting to reach it) and no banner shows. The app's Sync passes
+  `--require-live`: if Music can't be read then, the CLI stops before writing and prints `@live {...}`, and the
+  app offers **Sync Anyway (May Be Stale)**, which syncs from the snapshot.
+- **Selection edits** (adding or removing playlists, All Tracks) show at once and are saved with `Manifest.edit`;
+  the view then takes what was saved. During the app's own sync they wait and are saved when it finishes; if
+  another Deckhand is syncing the drive, the edit is undone with an explanation.
 
 ### Not built yet
 
@@ -186,11 +235,11 @@ they placed by hand. It needs a reader for Rekordbox's `master.db` or `rekordbox
 ## Architecture
 
 - **Apple Music stays the source of truth** for files, playlists, ratings and play counts.
-  - **Reading:** the iTunesLibrary framework (`AppleMusicLibrary`). It is read-only and only returns data
-    to a code-signed app.
-  - **Writing** (playlists, adding and removing tracks, ratings): Music's AppleScript
-    (`AppleMusicWriter`, also used by `import-playlists`). It's slow for bulk edits but fine for one-off
-    changes.
+  - **Reading:** the iTunesLibrary framework (`AppleMusicLibrary`), with Music's live values laid over it
+    (`MusicLive`, below). iTunesLibrary is read-only and only returns data to a code-signed app.
+  - **Writing:** ratings as raw Apple Events (`MusicEvents`); playlists and adding and removing tracks with
+    Music's AppleScript (`AppleMusicWriter`, also used by `import-playlists`), slow for bulk edits but fine for
+    one-off changes. In the app all of it, reads included, goes through `MusicBridge`'s one serial queue.
 - **Deckhand's cache** holds everything Music can't: key, energy, beat grid, cues, sections/phrases and
   waveforms (peak/RMS and three bands). The app reads what `deckhand analyze` produces.
 - **Stack:** a SwiftUI app target in this package, built on the `Sync` library (and through it

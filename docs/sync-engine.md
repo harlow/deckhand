@@ -20,12 +20,18 @@ It returns a `ChangeSet`. Everything else reads that:
   finishes or fails, a copy's real size, the art turns out unchanged), it recomputes the affected database rows
   with the same `SyncStatus.exportTrack` evaluate fingerprints, so the result is what evaluate would decide given
   those facts.
-- `deckhand status [--json]`, `deckhand sync --dry-run` and the post-sync self-check print it. The app (phase 2)
-  will compute it off the main thread.
+- `deckhand status [--json]`, `deckhand sync --dry-run` and the post-sync self-check print it.
+- The app evaluates it off the main thread with `SyncPlanner.evaluate` and facts gathered without hashing
+  (`SyncPlanner.facts(…, hashing: false)`: audio not hashed yet is `unknown`); see [mac-app.md](mac-app.md#sync-status).
 
 The invariant, enforced by tests: **after a successful sync, reading the facts again, probing the drive again and
 evaluating is clean.** `deckhand sync` does exactly that after writing, warns about anything still pending, and
 prints a final `@result {...}` line (generation, clean, counts) for the app.
+
+The library comes from iTunesLibrary with Music's live values laid over it (`AppleMusicLibrary.loadLive`, see
+`MusicLive`): the snapshot can trail Music, and a stale field would make the next evaluation pending again. If
+Music is running but can't be read, `deckhand sync` warns and uses the snapshot, or with `--require-live` (as the
+app runs it) prints `@live {...}` and stops before writing.
 
 ## Change categories
 
