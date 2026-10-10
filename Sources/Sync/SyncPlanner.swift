@@ -18,7 +18,8 @@ public struct SyncPlanner {
     public func plan(volume: Volume, manifest: Manifest, profile: OutputProfile, selection: Selection? = nil,
                      adoptable: [String: String] = [:], retryFailedAnalysis: Bool = false) -> ChangeSet {
         let scope = SyncStatus.scope(library: library, selection: selection ?? Selection(manifest))
-        let facts = facts(for: scope.trackIds, manifest: manifest, retryFailedAnalysis: retryFailedAnalysis)
+        let facts = facts(for: scope.trackIds, manifest: manifest, retryFailedAnalysis: retryFailedAnalysis,
+                          checkArtwork: profile.artwork)
         let probe = DriveProbe.scan(volume, manifest: manifest)
         return Self.evaluate(library: library, volume: volume, manifest: manifest, facts: facts, probe: probe, profile: profile,
                              selection: selection, adoptable: adoptable)
@@ -58,13 +59,15 @@ public struct SyncPlanner {
 
     /// Facts for the given tracks: hashes (cached by path, size and modification time), analysis summaries and
     /// recorded failures. A track whose file can't be read is looked up by the audio the drive holds.
-    public func facts(for ids: [String], manifest: Manifest, retryFailedAnalysis: Bool = false) -> [String: TrackFacts] {
+    public func facts(for ids: [String], manifest: Manifest, retryFailedAnalysis: Bool = false,
+                      checkArtwork: Bool = true) -> [String: TrackFacts] {
         var out: [String: TrackFacts] = [:]
         out.reserveCapacity(ids.count)
         for id in ids {
             guard let t = library.tracks[id] else { continue }
             out[id] = Self.facts(for: t, previousHash: manifest.tracks[id]?.contentHash, cache: cache,
-                                 retryFailedAnalysis: retryFailedAnalysis)
+                                 retryFailedAnalysis: retryFailedAnalysis, recorded: manifest.tracks[id],
+                                 artwork: checkArtwork ? library.artwork : nil)
         }
         try? cache.save()
         return out
@@ -72,8 +75,10 @@ public struct SyncPlanner {
 
     /// One track's facts. Without `hashing`, audio the cache hasn't hashed at its current size and modification
     /// time is `.unknown` instead of being read (the app hashes in the background and evaluates again).
+    /// With `recorded` and `artwork`, art whose recorded key no longer matches is read and hashed (`artworkHash`).
     public static func facts(for t: SourceTrack, previousHash: String?, cache: AnalysisCache,
-                             retryFailedAnalysis: Bool = false, hashing: Bool = true) -> TrackFacts {
+                             retryFailedAnalysis: Bool = false, hashing: Bool = true,
+                             recorded: Manifest.Track? = nil, artwork: (any ArtworkProvider)? = nil) -> TrackFacts {
         var f = TrackFacts(audio: .unknown)
         var hash: String?
         if let reason = unavailableReason(t) {
@@ -85,6 +90,10 @@ public struct SyncPlanner {
                 guard let h else { return f }
                 f.audio = .ok(hash: h, size: a.size, modified: a.modified)
                 hash = h
+                if let artwork, let r = recorded, r.contentHash == h, let recordedKey = r.artworkKey {
+                    let key = SyncStatus.artworkKey(hash: h, size: a.size, modified: a.modified, trackModified: t.modifiedDate)
+                    if key != recordedKey { f.artworkHash = artHashes.hash(trackId: t.id, key: key, artwork) }
+                }
             } catch {
                 f.audio = .unavailable("Couldn't read \(url.path): \(error)")
             }
@@ -96,6 +105,32 @@ public struct SyncPlanner {
             if f.analysis == nil, !retryFailedAnalysis { f.analysisFailure = cache.analysisFailure(forHash: h) }
         }
         return f
+    }
+
+    /// Art hashes by art source, track and art key, so a drifted key costs one read per library load rather than
+    /// one per evaluation.
+    private static let artHashes = ArtHashMemo()
+
+    private final class ArtHashMemo: @unchecked Sendable {
+        private struct Key: Hashable {
+            var source: ObjectIdentifier
+            var trackId: String
+            var artKey: String
+        }
+
+        private let lock = NSLock()
+        private var hashes: [Key: String?] = [:]
+
+        func hash(trackId: String, key: String, _ artwork: any ArtworkProvider) -> String? {
+            let k = Key(source: ObjectIdentifier(artwork as AnyObject), trackId: trackId, artKey: key)
+            if let h = lock.withLock({ hashes[k] }) { return h }
+            let h = artwork.artwork(forTrackId: trackId).map(ArtworkWriter.hash)
+            lock.withLock {
+                if hashes.count > 20_000 { hashes.removeAll() }
+                hashes[k] = h
+            }
+            return h
+        }
     }
 
     /// Why a track can't be exported right now, or nil if it can.

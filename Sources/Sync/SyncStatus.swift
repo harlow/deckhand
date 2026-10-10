@@ -18,11 +18,16 @@ public struct TrackFacts: Sendable, Equatable {
     public var analysis: AnalysisFacts?
     /// Why the current analyzer failed on the audio, if it did. Not retried until the analyzer changes.
     public var analysisFailure: String?
+    /// The cover art's hash (inner nil: no art), read only when the manifest's art key no longer matches. Music
+    /// bumps a track's modification date for edits like ratings, and its library snapshot can catch up after the
+    /// sync that wrote them; art that hashes the same as recorded then needs no check.
+    public var artworkHash: String??
 
-    public init(audio: Audio, analysis: AnalysisFacts? = nil, analysisFailure: String? = nil) {
+    public init(audio: Audio, analysis: AnalysisFacts? = nil, analysisFailure: String? = nil, artworkHash: String?? = nil) {
         self.audio = audio
         self.analysis = analysis
         self.analysisFailure = analysisFailure
+        self.artworkHash = artworkHash
     }
 }
 
@@ -502,7 +507,8 @@ public enum SyncStatus {
                     && (imageId == nil || !drive.hasImage(t.artworkPath!) || !drive.hasImage(ArtworkWriter.mediumPath(forSmall: t.artworkPath!)))
                 if case .ok(let hash, let size, let modified) = t.facts.audio {
                     t.artworkKey = artworkKey(hash: hash, size: size, modified: modified, trackModified: t.source.modifiedDate)
-                    if record?.artworkKey != t.artworkKey || imagesMissing { c.insert(.artworkCheck) }
+                    let artUnchanged = record != nil && t.facts.artworkHash == .some(record?.artworkHash)
+                    if (record?.artworkKey != t.artworkKey && !artUnchanged) || imagesMissing { c.insert(.artworkCheck) }
                 } else {
                     // Retained: the art stays as last read, unless its images went missing.
                     t.artworkKey = record?.artworkKey

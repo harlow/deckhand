@@ -33,7 +33,8 @@ public enum StatusEvaluator {
         facts.reserveCapacity(scope.trackIds.count)
         for id in scope.trackIds {
             guard let t = inputs.library.tracks[id] else { continue }
-            facts[id] = SyncPlanner.facts(for: t, previousHash: m.tracks[id]?.contentHash, cache: cache, hashing: false)
+            facts[id] = SyncPlanner.facts(for: t, previousHash: m.tracks[id]?.contentHash, cache: cache, hashing: false,
+                                          recorded: m.tracks[id], artwork: inputs.library.artwork)
         }
         let changes = SyncPlanner.evaluate(library: inputs.library, volume: inputs.volume, manifest: m, facts: facts,
                                            probe: inputs.probe, profile: profile)

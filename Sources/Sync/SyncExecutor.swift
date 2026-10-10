@@ -348,6 +348,8 @@ public struct SyncExecutor {
                 result.artworkChecked.append(id)
             } else {
                 hash = manifest.tracks[id]?.artworkHash
+                // Evaluate found the art unchanged under a new key (or kept a retained track's): record the key.
+                if let key = tracks[i].artworkKey { manifest.tracks[id]?.artworkKey = key }
             }
             guard let h = hash else {
                 tracks[i].artworkPath = nil

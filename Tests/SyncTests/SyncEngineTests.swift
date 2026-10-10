@@ -112,11 +112,18 @@ import Testing
         #expect(first.artwork?.count == 1)
         let oldImage = ArtworkWriter.path(imageId: first.artwork!.values.first!)
 
-        // Unchanged art, new modification date: checked, nothing rewritten but the manifest.
+        // Unchanged art, new modification date (Music bumps it for ratings, and its snapshot can catch up after
+        // the sync): the art is reread and hashes the same, so nothing is pending.
         h.edit("A") { _ in }
         let same = try h.sync()
-        #expect(same.before.track("A")?.changes == [.artworkCheck])
-        #expect(!same.before.needsDatabaseWrite && !same.result.wroteDatabase && same.result.manifest != nil)
+        #expect(same.before.track("A")?.changes.isEmpty == true)
+        #expect(same.before.isClean && !same.result.wroteDatabase)
+        // The drifted key is recorded by the next sync that saves the manifest.
+        h.edit("A") { $0.rating = 3 }
+        let rated = try h.sync()
+        #expect(rated.before.track("A")?.changes == [.record])
+        let key = try h.manifest().tracks["A"]?.artworkKey
+        #expect(key != nil && key == rated.before.track("A")?.artworkKey)
 
         // New art for A.
         h.art["A"] = TestArtwork.png(0.9)
