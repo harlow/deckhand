@@ -115,7 +115,7 @@ private struct AllTracksRow: View {
         .onHover { hovering = $0 }
         .contextMenu {
             if hasDrive {
-                Button(on ? "Only Sync Songs in Playlists to \(drive)" : "Sync All Tracks to \(drive)") {
+                Button(on ? "Remove All Tracks from \(drive)" : "Add All Tracks to \(drive)") {
                     library.setEntireLibraryOnDrive(!on)
                 }
             }
