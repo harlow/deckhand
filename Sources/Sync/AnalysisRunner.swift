@@ -31,9 +31,14 @@ public struct AnalysisRunner {
         self.progress = progress
     }
 
-    /// Analyzes items not already cached. Returns results for all analyzed items.
-    public func run(_ items: [Item]) -> [String: TrackAnalysis] {
-        let pending = items.filter { !cache.isAnalyzed($0.contentHash) }
+    /// Analyzes items not already cached, skipping audio the current analyzer already failed on unless
+    /// `retryFailed`. Failures are recorded in the cache. Returns results for all analyzed items.
+    public func run(_ items: [Item], retryFailed: Bool = false) -> [String: TrackAnalysis] {
+        var seen = Set<String>()
+        let pending = items.filter {
+            seen.insert($0.contentHash).inserted && !cache.isAnalyzed($0.contentHash)
+                && (retryFailed || cache.analysisFailure(forHash: $0.contentHash) == nil)
+        }
         guard !pending.isEmpty else { return [:] }
         let lock = NSLock()
         nonisolated(unsafe) var results: [String: TrackAnalysis] = [:]
@@ -51,6 +56,7 @@ public struct AnalysisRunner {
                     let a = r.analysis
                     lock.withLock { results[item.contentHash] = a }
                 } catch {
+                    cache.recordFailure("\(error)", forHash: item.contentHash)
                     progress(.failed(title: item.title, error: "\(error)"))
                 }
                 let done = lock.withLock { completed += 1; return completed }
