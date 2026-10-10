@@ -154,7 +154,7 @@ extension LibraryModel {
     /// leaving out tracks skipped in the last 30 days.
     func startReview(player: Player) {
         let now = Date()
-        let unrated = visibleRows(playing: player.current)
+        let unrated = listing(playing: player.current).rows
             .filter { $0.rating == 0 && (snoozedUntil($0.id).map { $0 <= now } ?? true) }
         guard !unrated.isEmpty else {
             flash("Nothing to rate here: every track in \(title) is rated or skipped")

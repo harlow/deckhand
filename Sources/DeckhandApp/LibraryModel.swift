@@ -95,10 +95,12 @@ struct TrackFilter: Equatable {
 final class LibraryModel {
     let cache: AnalysisCache? = try? AnalysisCache()
 
-    private(set) var rows: [String: TrackRow] = [:] { didSet { invalidateSync() } }
+    private(set) var rows: [String: TrackRow] = [:] { didSet { invalidateSync(); contentVersion &+= 1 } }
     /// Library order: newest first.
-    private(set) var allIds: [String] = []
-    private(set) var playlists: [SourcePlaylist] = [] { didSet { invalidateSync() } }
+    private(set) var allIds: [String] = [] { didSet { contentVersion &+= 1 } }
+    private(set) var playlists: [SourcePlaylist] = [] { didSet { invalidateSync(); contentVersion &+= 1 } }
+    /// Bumped whenever rows, allIds or playlists change; keys the memoized listing.
+    private var contentVersion = 0
     private(set) var drives: [Drive] = [] { didSet { invalidateSync() } }
     private(set) var status: String?
     private(set) var artwork: (any ArtworkProvider)?
@@ -129,6 +131,7 @@ final class LibraryModel {
         }
     }
     var filter = TrackFilter()
+    var sort: TrackSort?
 
     private var scope: Set<String> = [] { didSet { invalidateSync() } }
 
@@ -137,11 +140,13 @@ final class LibraryModel {
     @ObservationIgnored private var syncCache: [String: SyncState] = [:]
     @ObservationIgnored private var playlistSyncCache: [String: PlaylistSync] = [:]
     @ObservationIgnored private var pendingCache: Int?
+    @ObservationIgnored private var syncGeneration = 0
 
     private func invalidateSync() {
         syncCache.removeAll(keepingCapacity: true)
         playlistSyncCache.removeAll(keepingCapacity: true)
         pendingCache = nil
+        syncGeneration &+= 1
     }
 
     var activeDrive: Drive? { drives.first { $0.id == activeDriveId } }
@@ -185,20 +190,63 @@ final class LibraryModel {
             Log.error("library", "Couldn't read Apple Music: \(error)")
             return
         }
-        Log.measure("library", "Building rows") { apply(lib) }
+        await apply(lib)
         backUpRatings()
         let start = Date()
         await loadAnalysis()
         Log.info("analysis", "Loaded cached analysis in \(String(format: "%.1f", Date().timeIntervalSince(start))) s; \(unanalyzedCount) tracks not analyzed")
     }
 
+    /// Re-reads Apple Music. Touches nothing on the main thread when the library hasn't changed.
     func reloadLibrary() async {
-        guard let lib = try? await Task.detached(operation: { try AppleMusicLibrary.load(allSongs: true) }).value else { return }
-        apply(lib)
+        let start = Date()
+        guard let (lib, signature) = try? await Task.detached(operation: { () throws -> (SourceLibrary, Int) in
+            let lib = try AppleMusicLibrary.load(allSongs: true)
+            return (lib, Self.signature(of: lib))
+        }).value else { return }
+        guard signature != librarySignature else {
+            Log.info("library", "Apple Music unchanged (checked in \(Int(Date().timeIntervalSince(start) * 1000)) ms)")
+            return
+        }
+        await apply(lib, signature: signature)
     }
 
-    private func apply(_ lib: SourceLibrary) {
-        var rows = self.rows
+    @ObservationIgnored private var librarySignature: Int?
+
+    nonisolated private static func signature(of lib: SourceLibrary) -> Int {
+        var h = Hasher()
+        h.combine(lib.tracks)
+        h.combine(lib.playlists)
+        h.combine(lib.allTrackIds)
+        return h.finalize()
+    }
+
+    /// Builds rows off the main thread; only assigns them on it.
+    private func apply(_ lib: SourceLibrary, signature: Int? = nil) async {
+        let start = Date()
+        let snapshot = rows, version = contentVersion
+        let built = await Task.detached { (Self.merge(lib, into: snapshot), signature ?? Self.signature(of: lib)) }.value
+        var merged = built.0
+        // Rows changed meanwhile (analysis loaded, a rating set): merge into the current ones instead.
+        if contentVersion != version { merged = Self.merge(lib, into: rows) }
+        Log.measure("library", "Assigning rows") {
+            if merged.changed { rows = merged.rows }
+            if allIds != merged.allIds { allIds = merged.allIds }
+            let named = Self.demoNamed(lib.playlists)
+            if playlists != named { playlists = named }
+            artwork = lib.artwork
+            status = nil
+            loadState = .loaded
+            updateScope()
+        }
+        librarySignature = built.1
+        Log.info("library", "Applied Apple Music in \(Int(Date().timeIntervalSince(start) * 1000)) ms\(merged.changed ? "" : " (rows unchanged)")")
+    }
+
+    nonisolated private static func merge(_ lib: SourceLibrary, into old: [String: TrackRow])
+        -> (rows: [String: TrackRow], allIds: [String], changed: Bool) {
+        var rows = old
+        var changed = false
         for t in lib.tracks.values {
             guard let url = t.location else { continue }
             if var row = rows[t.id] {
@@ -207,20 +255,16 @@ final class LibraryModel {
                 row.title = t.title
                 row.artist = t.artist ?? ""
                 row.genre = t.genre ?? ""
-                if rows[t.id] != row { rows[t.id] = row }
+                if rows[t.id] != row { rows[t.id] = row; changed = true }
                 continue
             }
             rows[t.id] = TrackRow(id: t.id, source: t, title: t.title, artist: t.artist ?? "", genre: t.genre ?? "",
                                   duration: t.durationSeconds ?? 0, location: url, dateAdded: t.dateAdded ?? .distantPast)
+            changed = true
         }
-        self.rows = rows
-        allIds = (lib.allTrackIds ?? Array(lib.tracks.keys)).filter { rows[$0] != nil }
+        let allIds = (lib.allTrackIds ?? Array(lib.tracks.keys)).filter { rows[$0] != nil }
             .sorted { rows[$0]!.dateAdded > rows[$1]!.dateAdded }
-        playlists = Self.demoNamed(lib.playlists)
-        artwork = lib.artwork
-        status = nil
-        loadState = .loaded
-        updateScope()
+        return (rows, allIds, changed)
     }
 
     /// With `DECKHAND_DEMO=1`, shows placeholder playlist names (for screenshots). Display only: Music and
@@ -627,8 +671,46 @@ final class LibraryModel {
         return nil
     }
 
-    /// Tracks of the current sidebar selection, before filtering.
-    var baseRows: [TrackRow] {
+    // Read on every track-list redraw (each selection change, each row update), so memoized: the
+    // base by content and sidebar selection, the shown rows by filter and sort as well.
+    private struct BaseKey: Equatable { var content: Int; var selection: SidebarItem? }
+    private struct ShownKey: Equatable { var base: Int; var filter: TrackFilter; var sort: TrackSort?; var playing: TrackRow? }
+    @ObservationIgnored private var baseKey: BaseKey?
+    @ObservationIgnored private var shownKey: ShownKey?
+    @ObservationIgnored private var baseVersion = 0
+    @ObservationIgnored private var cachedListing = TrackListing()
+    @ObservationIgnored private var unanalyzedCache: (content: Int, count: Int)?
+    @ObservationIgnored private var onDriveCache: (key: [Int], count: Int)?
+
+    /// The track list for the sidebar selection, filter and sort. `playing` matters only for
+    /// "Mixes with playing".
+    func listing(playing: TrackRow?) -> TrackListing {
+        let bk = BaseKey(content: contentVersion, selection: selection)
+        if bk != baseKey {
+            baseKey = bk
+            baseVersion &+= 1
+            Log.measure("ui", "Listing \(title)") {
+                let base = baseRows
+                cachedListing.base = base
+                cachedListing.minutes = Int(base.reduce(0) { $0 + $1.duration } / 60)
+                cachedListing.genres = Array(Set(base.map(\.genre).filter { !$0.isEmpty })).sorted()
+            }
+        }
+        let sk = ShownKey(base: baseVersion, filter: filter, sort: sort, playing: filter.mixesWithPlaying ? playing : nil)
+        if sk != shownKey {
+            let previous = shownKey?.sort == sort ? cachedListing.rows : []
+            shownKey = sk
+            Log.measure("ui", "Filtering and sorting \(title)") {
+                let shown = TrackListing.filter(cachedListing.base, by: filter, playing: playing)
+                cachedListing.rows = TrackListing.sort(shown, by: sort, previous: previous)
+            }
+            cachedListing.version &+= 1
+        }
+        return cachedListing
+    }
+
+    /// Tracks of the current sidebar selection, before filtering. Builds them; use `listing`.
+    private var baseRows: [TrackRow] {
         switch selection {
         case .playlist:
             return selectedPlaylist.map { trackIds(of: $0).compactMap { rows[$0] } } ?? []
@@ -639,41 +721,21 @@ final class LibraryModel {
         }
     }
 
-    var unanalyzedCount: Int { rows.values.filter { $0.checked && !$0.analyzed }.count }
-
-    func visibleRows(playing: TrackRow?) -> [TrackRow] {
-        Log.measure("ui", "Listing \(title)") { computeVisibleRows(playing: playing) }
+    var unanalyzedCount: Int {
+        if let c = unanalyzedCache, c.content == contentVersion { return c.count }
+        let n = rows.values.reduce(0) { $0 + ($1.checked && !$1.analyzed ? 1 : 0) }
+        unanalyzedCache = (contentVersion, n)
+        return n
     }
 
-    private func computeVisibleRows(playing: TrackRow?) -> [TrackRow] {
-        let base = baseRows
-        guard !filter.isEmpty else { return base }
-        let mixKeys = filter.mixesWithPlaying ? playing?.key.map(Harmony.compatible) : nil
-        let mixBpm = filter.mixesWithPlaying ? playing?.bpm : nil
-        let q = filter.search.trimmingCharacters(in: .whitespaces)
-        return base.filter { r in
-            if !q.isEmpty {
-                let hit = r.title.localizedCaseInsensitiveContains(q) || r.artist.localizedCaseInsensitiveContains(q)
-                    || r.genre.localizedCaseInsensitiveContains(q) || r.key?.alphanumeric == q.uppercased()
-                if !hit { return false }
-            }
-            if !filter.keys.isEmpty, !(r.key.map { filter.keys.contains($0.alphanumeric) } ?? false) { return false }
-            if let lo = filter.bpmMin, (r.bpm ?? 0) < lo { return false }
-            if let hi = filter.bpmMax, (r.bpm ?? .infinity) > hi { return false }
-            if let e = filter.minEnergy, (r.energy ?? 0) < e { return false }
-            if let s = filter.minRating, r.rating < s { return false }
-            if !filter.genres.isEmpty, !filter.genres.contains(r.genre) { return false }
-            if filter.mixesWithPlaying, let playing {
-                if r.id == playing.id { return false }
-                if let keys = mixKeys, !(r.key.map { keys.contains($0.alphanumeric) } ?? false) { return false }
-                if let b = mixBpm, let rb = r.bpm, abs(rb / b - 1) > Harmony.pitchRange { return false }
-            }
-            return true
-        }
-    }
-
-    var genres: [String] {
-        Array(Set(baseRows.map(\.genre).filter { !$0.isEmpty })).sorted()
+    /// Tracks in `listing`'s base that are on the active drive.
+    func onDriveCount(_ listing: TrackListing) -> Int {
+        guard activeDrive?.manifest != nil else { return 0 }
+        let key = [baseVersion, syncGeneration, contentVersion]
+        if let c = onDriveCache, c.key == key { return c.count }
+        let n = listing.base.reduce(0) { $0 + (syncState($1) == .onDrive ? 1 : 0) }
+        onDriveCache = (key, n)
+        return n
     }
 
     /// Analyzed tracks that mix well out of `row`, closest in tempo and energy first.

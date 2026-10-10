@@ -75,6 +75,8 @@ struct TrackMenuItem {
 /// SwiftUI views hosted per visible cell.
 struct TrackTable: NSViewRepresentable {
     var rows: [TrackRow]
+    /// Changes whenever `rows` does, so unrelated redraws skip diffing them.
+    var version: Int
     @Binding var selection: Set<String>
     @Binding var sort: TrackSort?
     var cell: (TrackColumn, TrackRow) -> AnyView
@@ -140,15 +142,18 @@ struct TrackTable: NSViewRepresentable {
         let c = context.coordinator
         c.parent = self
         guard let table = c.table else { return }
-        let old = c.rows
-        c.rows = rows
-        if old.map(\.id) != rows.map(\.id) {
-            c.index = Dictionary(rows.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
-            table.reloadData()
-        } else {
-            let changed = IndexSet(rows.indices.filter { rows[$0] != old[$0] })
-            if !changed.isEmpty {
-                table.reloadData(forRowIndexes: changed, columnIndexes: IndexSet(integersIn: 0..<table.numberOfColumns))
+        if c.version != version {
+            c.version = version
+            let old = c.rows
+            c.rows = rows
+            if old.count != rows.count || !zip(old, rows).allSatisfy({ $0.id == $1.id }) {
+                c.index = Dictionary(rows.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
+                table.reloadData()
+            } else {
+                let changed = IndexSet(rows.indices.filter { rows[$0] != old[$0] })
+                if !changed.isEmpty {
+                    table.reloadData(forRowIndexes: changed, columnIndexes: IndexSet(integersIn: 0..<table.numberOfColumns))
+                }
             }
         }
         let wanted = sort.map { [NSSortDescriptor(key: $0.column.rawValue, ascending: $0.ascending)] } ?? []
@@ -170,6 +175,7 @@ struct TrackTable: NSViewRepresentable {
         var parent: TrackTable?
         weak var table: NSTableView?
         var rows: [TrackRow] = []
+        var version: Int?
         var index: [String: Int] = [:]
         /// Set while pushing SwiftUI state into the table, so the delegate doesn't echo it back.
         var applying = false

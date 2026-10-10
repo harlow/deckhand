@@ -103,5 +103,6 @@ let package = Package(
         .testTarget(name: "AnalysisTests", dependencies: ["Analysis"]),
         .testTarget(name: "SyncTests", dependencies: ["Sync"]),
         .testTarget(name: "EvalSupportTests", dependencies: ["EvalSupport"]),
+        .testTarget(name: "DeckhandAppTests", dependencies: ["DeckhandApp"], swiftSettings: [.swiftLanguageMode(.v5)]),
     ]
 )

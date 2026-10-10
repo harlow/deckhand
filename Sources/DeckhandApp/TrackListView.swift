@@ -7,20 +7,21 @@ struct TrackListView: View {
     @State private var selection = Set<String>()
     /// Tracks waiting for "Remove from playlist?" confirmation.
     @State private var removing: [String] = []
-    @State private var sort: TrackSort?
     @State private var showKeys = false
     /// Tracks waiting in the ⇧P "Add to playlist" picker.
     @State private var picking: [String] = []
 
     var body: some View {
-        let rows = Log.measure("ui", "Sorting \(library.title)") { sorted(library.visibleRows(playing: player.current)) }
+        // Memoized in the model: cheap unless rows, selection, filter or sort changed.
+        let listing = library.listing(playing: player.current)
+        let rows = listing.rows
         VStack(spacing: 0) {
-            header(count: rows.count)
-            FilterBar(shown: rows.count, total: library.baseRows.count)
-            if library.unanalyzedCount > 0 && !library.job.running { analysisBanner }
+            header(listing)
+            FilterBar(shown: rows.count, total: listing.base.count, genres: listing.genres)
+            AnalysisBanner(library: library)
             Divider()
             if library.loadState == .loaded {
-                table(rows)
+                table(listing)
             } else {
                 LibraryLoading(library: library)
             }
@@ -39,77 +40,21 @@ struct TrackListView: View {
         if #available(macOS 26, *) {
             // With the window title hidden, items pack toward the logo; the spacer pushes these right.
             ToolbarSpacer(.flexible)
-            ToolbarItemGroup(placement: .primaryAction) { driveControls }
+            ToolbarItemGroup(placement: .primaryAction) { DriveControls(library: library) }
                 .sharedBackgroundVisibility(.hidden)
         } else {
-            ToolbarItemGroup(placement: .primaryAction) { driveControls }
+            ToolbarItemGroup(placement: .primaryAction) { DriveControls(library: library) }
         }
-    }
-
-    @ViewBuilder private var driveControls: some View {
-        if let drive = library.activeDrive {
-            Color.clear.frame(width: 4)
-            HStack(spacing: 6) {
-                Image(systemName: "mediastick")
-                Text(drive.volume.name).fontWeight(.semibold)
-                if library.job.running, let total = library.job.total, total > 0 {
-                    Text("\(library.job.phase) \(Int(Double(library.job.done) / Double(total) * 100))%")
-                        .monospacedDigit().foregroundStyle(.secondary)
-                } else if library.job.running {
-                    Text(library.job.phase).foregroundStyle(.secondary).lineLimit(1)
-                } else if library.pendingChanges > 0 {
-                    Text("\(library.pendingChanges.formatted()) to sync").foregroundStyle(Color.pending)
-                } else {
-                    Text("Up to date").foregroundStyle(.secondary)
-                }
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 28)
-            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.white.opacity(0.12)))
-            .help("Changes waiting for \(drive.volume.name)")
-            Button { library.sync(drive) } label: {
-                HStack(spacing: 6) {
-                    if library.job.running { ProgressView().controlSize(.mini).tint(.white) }
-                    Text(library.job.running ? "Syncing" : "Sync").fontWeight(.semibold)
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .frame(height: 28)
-                .background(Color.accentColor.opacity(library.job.running ? 0.5 : 1), in: RoundedRectangle(cornerRadius: 6))
-                .contentShape(RoundedRectangle(cornerRadius: 6))
-            }
-            .buttonStyle(.plain)
-            .disabled(library.job.running)
-            .help("Sync \(drive.volume.name)")
-        }
-    }
-
-    private func sorted(_ rows: [TrackRow]) -> [TrackRow] {
-        guard let sort else { return rows }
-        func less(_ a: TrackRow, _ b: TrackRow) -> Bool {
-            switch sort.column {
-            case .title: a.title.localizedStandardCompare(b.title) == .orderedAscending
-            case .bpm: a.bpmSort < b.bpmSort
-            case .key: a.keySort < b.keySort
-            case .energy: a.energySort < b.energySort
-            case .rating: a.rating < b.rating
-            case .genre: a.genre.localizedStandardCompare(b.genre) == .orderedAscending
-            case .time: a.duration < b.duration
-            case .status, .overview: false
-            }
-        }
-        return sort.ascending ? rows.sorted(by: less) : rows.sorted { less($1, $0) }
     }
 
     /// One row: title, summary, then search on the right.
-    private func header(count: Int) -> some View {
+    private func header(_ listing: TrackListing) -> some View {
         @Bindable var library = library
         return HStack(spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(library.title).font(.title3.bold()).lineLimit(1)
                 if library.loadState == .loaded {
-                    Text(summary).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                    Text(summary(listing)).font(.callout).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
             Spacer(minLength: 12)
@@ -124,33 +69,17 @@ struct TrackListView: View {
         .padding(.bottom, 6)
     }
 
-    private var analysisBanner: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "waveform").foregroundStyle(Color.pending)
-            Text("\(library.unanalyzedCount.formatted()) tracks need analysis for key, tempo, energy and waveforms (about 9 min per 1,000).")
-                .foregroundStyle(.secondary)
-            Spacer()
-            Button("Analyze Library") { library.analyzeLibrary() }
-        }
-        .font(.callout)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(Color.pending.opacity(0.08))
-    }
-
     private var removeTitle: String {
         let n = removing.count
         let what = n == 1 ? (library.rows[removing[0]]?.title).map { "“\($0)”" } ?? "1 track" : "\(n) tracks"
         return "Remove \(what) from \(library.selectedPlaylist?.name ?? "this playlist")?"
     }
 
-    private var summary: String {
-        let base = library.baseRows
-        let minutes = Int(base.reduce(0) { $0 + $1.duration } / 60)
-        var s = "\(base.count.formatted()) tracks · \(minutes / 60) h \(minutes % 60) min"
+    private func summary(_ listing: TrackListing) -> String {
+        let minutes = listing.minutes
+        var s = "\(listing.base.count.formatted()) tracks · \(minutes / 60) h \(minutes % 60) min"
         if let drive = library.activeDrive, drive.manifest != nil {
-            let on = base.filter { library.syncState($0) == .onDrive }.count
-            s += " · \(on.formatted()) on \(drive.volume.name)"
+            s += " · \(library.onDriveCount(listing).formatted()) on \(drive.volume.name)"
             // For a playlist, what's waiting (the drive box on the right covers the whole drive).
             if let p = library.selectedPlaylist, case .pending(let n) = library.playlistSync(p) {
                 s += " · \(n.formatted()) waiting to sync"
@@ -159,11 +88,14 @@ struct TrackListView: View {
         return s
     }
 
-    private func table(_ rows: [TrackRow]) -> some View {
-        TrackTable(
+    private func table(_ listing: TrackListing) -> some View {
+        @Bindable var library = library
+        let rows = listing.rows
+        return TrackTable(
             rows: rows,
+            version: listing.version,
             selection: $selection,
-            sort: $sort,
+            sort: $library.sort,
             cell: { column, r in cell(column, r) },
             menu: { ids in menu(ids, rows: rows) },
             onOpen: { player.play($0, artwork: library.artwork) },
@@ -272,6 +204,71 @@ struct TrackListView: View {
     }
 }
 
+/// Drive status and Sync. Its own view so job progress (up to 10 Hz) redraws only this, not the list.
+private struct DriveControls: View {
+    var library: LibraryModel
+
+    var body: some View {
+        if let drive = library.activeDrive {
+            let job = library.job
+            Color.clear.frame(width: 4)
+            HStack(spacing: 6) {
+                Image(systemName: "mediastick")
+                Text(drive.volume.name).fontWeight(.semibold)
+                if job.running, let total = job.total, total > 0 {
+                    Text("\(job.phase) \(Int(Double(job.done) / Double(total) * 100))%")
+                        .monospacedDigit().foregroundStyle(.secondary)
+                } else if job.running {
+                    Text(job.phase).foregroundStyle(.secondary).lineLimit(1)
+                } else if library.pendingChanges > 0 {
+                    Text("\(library.pendingChanges.formatted()) to sync").foregroundStyle(Color.pending)
+                } else {
+                    Text("Up to date").foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.white.opacity(0.12)))
+            .help("Changes waiting for \(drive.volume.name)")
+            Button { library.sync(drive) } label: {
+                HStack(spacing: 6) {
+                    if job.running { ProgressView().controlSize(.mini).tint(.white) }
+                    Text(job.running ? "Syncing" : "Sync").fontWeight(.semibold)
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .frame(height: 28)
+                .background(Color.accentColor.opacity(job.running ? 0.5 : 1), in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(RoundedRectangle(cornerRadius: 6))
+            }
+            .buttonStyle(.plain)
+            .disabled(job.running)
+            .help("Sync \(drive.volume.name)")
+        }
+    }
+}
+
+private struct AnalysisBanner: View {
+    var library: LibraryModel
+
+    var body: some View {
+        if library.unanalyzedCount > 0 && !library.job.running {
+            HStack(spacing: 10) {
+                Image(systemName: "waveform").foregroundStyle(Color.pending)
+                Text("\(library.unanalyzedCount.formatted()) tracks need analysis for key, tempo, energy and waveforms (about 9 min per 1,000).")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Analyze Library") { library.analyzeLibrary() }
+            }
+            .font(.callout)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color.pending.opacity(0.08))
+        }
+    }
+}
+
 /// The in-list waveform: click anywhere to preview from that point.
 private struct OverviewCell: View {
     var row: TrackRow
@@ -304,6 +301,7 @@ struct FilterBar: View {
     @Environment(Player.self) private var player
     var shown: Int
     var total: Int
+    var genres: [String]
     @State private var showKeys = false
     @State private var showBpm = false
 
@@ -337,7 +335,7 @@ struct FilterBar: View {
             Menu {
                 Button("Any genre") { library.filter.genres = [] }
                 Divider()
-                ForEach(library.genres, id: \.self) { g in
+                ForEach(genres, id: \.self) { g in
                     Toggle(g, isOn: Binding(
                         get: { library.filter.genres.contains(g) },
                         set: { on in if on { library.filter.genres.insert(g) } else { library.filter.genres.remove(g) } }

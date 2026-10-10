@@ -48,6 +48,8 @@ enum Log {
         switch level {
         case .error: system.error("[\(category, privacy: .public)] \(message, privacy: .public)")
         case .warning: system.warning("[\(category, privacy: .public)] \(message, privacy: .public)")
+        // .info isn't persisted; timings must be, to attribute hangs after the fact.
+        case .perf: system.notice("[\(category, privacy: .public)] \(message, privacy: .public)")
         default: system.info("[\(category, privacy: .public)] \(message, privacy: .public)")
         }
         Task { @MainActor in AppLog.shared.add(level, category, message, at: date) }
