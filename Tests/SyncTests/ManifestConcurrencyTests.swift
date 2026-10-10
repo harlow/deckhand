@@ -118,13 +118,13 @@ import Testing
         #expect(SyncLock.current(on: volume) == nil)
         try Manifest.edit(on: volume) { $0.selectedPlaylistIds = ["P1"] }
 
-        // Left behind by a process that's gone, by another Mac, or long ago: stale.
+        // Left behind by a process that's gone or by another Mac: stale.
         let url = SyncLock.url(root: root)
+        #expect(SyncLock.hostName.count == 32)
         for info in [SyncLock.Info(pid: 999_999, host: SyncLock.hostName, startedAt: Date(), token: "x"),
                      SyncLock.Info(pid: getpid(), host: "elsewhere", startedAt: Date(), token: "x"),
-                     SyncLock.Info(pid: getpid(), host: SyncLock.hostName, startedAt: Date().addingTimeInterval(-7 * 3600), token: "x"),
                      // A live pid that started after the lock was taken is a reused pid.
-                     SyncLock.Info(pid: getpid(), host: SyncLock.hostName, startedAt: Date(timeIntervalSince1970: 1_000_000), token: "x")] {
+                     SyncLock.Info(pid: getpid(), host: SyncLock.hostName, startedAt: Date().addingTimeInterval(-7 * 3600), token: "x")] {
             try JSONEncoder.iso.encode(info).write(to: url)
             #expect(SyncLock.current(on: volume) == nil)
             let fresh = try SyncLock.acquire(on: volume)

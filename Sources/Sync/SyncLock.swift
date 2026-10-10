@@ -1,17 +1,18 @@
 import Foundation
 
 /// `/.deckhand/sync.lock`, held by a sync while it writes to the drive so two syncs never overlap and the app
-/// doesn't edit the selection mid-sync. Stale once its process is gone, it's from another Mac (a drive is only
-/// ever mounted on one), or it's more than 6 hours old.
+/// doesn't edit the selection mid-sync. Stale once its process is gone (a pid reused by a later process doesn't
+/// count) or it's from another Mac (a drive is only ever mounted on one). A holder that's provably still running
+/// is never timed out: a first sync with analysis can take hours.
 public struct SyncLock: Sendable {
     public struct Info: Codable, Sendable, Equatable {
         public var pid: Int32
+        /// The Mac's hardware UUID (host names change with the network).
         public var host: String
         public var startedAt: Date
         var token: String
     }
 
-    public static let staleAfter: TimeInterval = 6 * 3600
     let url: URL
     public let info: Info
 
@@ -67,9 +68,8 @@ public struct SyncLock: Sendable {
         return isLive(info) ? info : nil
     }
 
-    static func isLive(_ info: Info, now: Date = Date()) -> Bool {
-        guard info.host == hostName, now.timeIntervalSince(info.startedAt) < staleAfter else { return false }
-        guard let started = processStart(info.pid) else { return false }
+    static func isLive(_ info: Info) -> Bool {
+        guard info.host == hostName, let started = processStart(info.pid) else { return false }
         // A process that started after the lock was taken reuses a dead holder's pid.
         return started <= info.startedAt.addingTimeInterval(1)
     }
@@ -92,8 +92,9 @@ public struct SyncLock: Sendable {
     }
 
     static let hostName: String = {
-        var buf = [CChar](repeating: 0, count: 256)
-        guard gethostname(&buf, buf.count) == 0 else { return "" }
-        return String(decoding: buf.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+        var id = [UInt8](repeating: 0, count: 16)
+        var wait = timespec(tv_sec: 1, tv_nsec: 0)
+        guard gethostuuid(&id, &wait) == 0 else { return "" }
+        return id.map { String(format: "%02x", $0) }.joined()
     }()
 }
