@@ -223,9 +223,6 @@ private struct DriveControls: View {
                 .pickerStyle(.inline)
                 .labelsHidden()
                 Divider()
-                Toggle("Sync All Tracks", isOn: Binding(get: { library.entireLibraryOnDrive },
-                                                          set: { library.setEntireLibraryOnDrive($0) }))
-                Divider()
                 Button("Eject \(drive.volume.name)") { library.eject(drive) }
                     .disabled(job.running || library.ejecting.contains(drive.id))
             } label: {

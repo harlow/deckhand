@@ -179,8 +179,8 @@ private struct PlaylistRow: View {
     }
 }
 
-/// The active drive, pinned under the playlists: its sync status and space, with a menu to switch drives,
-/// sync all tracks, or eject. The playlist groups above follow whichever drive is active.
+/// The active drive, pinned under the playlists: its sync status and space, with a menu to switch drives or
+/// eject. The playlist groups above follow whichever drive is active.
 private struct DriveFooter: View {
     @Environment(LibraryModel.self) private var library
 
@@ -202,9 +202,6 @@ private struct DriveFooter: View {
                         .pickerStyle(.inline)
                         .labelsHidden()
                         Divider()
-                        Toggle("Sync All Tracks", isOn: Binding(get: { library.entireLibraryOnDrive },
-                                                                  set: { library.setEntireLibraryOnDrive($0) }))
-                            .disabled(drive.manifest == nil)
                         Button("Eject \(drive.volume.name)") { library.eject(drive) }
                             .disabled(library.ejecting.contains(drive.id))
                     } label: {
