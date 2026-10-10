@@ -224,8 +224,9 @@ public struct ChangeSet: Sendable {
     /// Space a sync needs: the audio plus a margin for analysis files, artwork and the database.
     public var spaceNeeded: Int64 { bytesToCopy + SyncStatus.spaceMargin }
 
+    /// Analysis and adopted files can change a row in ways only known once done, so they count.
     public var needsDatabaseWrite: Bool {
-        tracks.contains { $0.recordChanged || $0.changes.contains(.analyze) } || !removedTracks.isEmpty
+        tracks.contains { $0.recordChanged || !$0.changes.isDisjoint(with: [.analyze, .adopt]) } || !removedTracks.isEmpty
             || playlists.contains { if case .pending = $0.status { true } else { false } } || !removedPlaylists.isEmpty
             || drive.contains(.databaseMissing) || drive.contains(.databaseChanged)
     }
