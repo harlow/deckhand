@@ -356,7 +356,7 @@ struct AnalyzeCommand: ParsableCommand {
             defer { fingerprinting.advance(t.title) }
             return AnalysisRunner.Item(url: t.location!, contentHash: try cache.contentHash(of: t.location!), title: t.title)
         }
-        try? cache.saveFingerprints()
+        try? cache.save()
         fingerprinting.finish("\(items.count) tracks")
         let start = Date()
         let bar = LockedBox<ProgressBar?>(nil)

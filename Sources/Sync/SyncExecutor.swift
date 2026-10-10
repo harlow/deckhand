@@ -104,28 +104,37 @@ public struct SyncExecutor {
             .init(url: $0.sourceFile, contentHash: $0.contentHash, title: $0.source.title)
         }) : [:]
         timer.mark("analyze")
-        try cache.saveFingerprints()
+        try cache.save()
 
         var manifest = plan.manifest
         var anlzWritten = 0
-        var energies: [String: Int] = [:]
+        var inputsRecorded = 0
+        var summaries: [String: AnalysisCache.Summary] = [:]
+        let settingsKey = "\(anlzOptions);\(cueMode);\(hotCueStyle);\(buildLeadBars);\(writePhrases);\(Self.buildId)"
         for (i, t) in plan.tracks.enumerated() {
             progress(.writingAnalysisFiles(index: i + 1, total: plan.tracks.count, title: t.source.title))
+            guard let summary = cache.summary(forHash: t.contentHash) else { continue }
+            summaries[t.contentHash] = summary
+            let datPresent = FileManager.default.fileExists(
+                atPath: volume.url(forUsbPath: AnlzPath.directory(forAudioPath: t.usbPath) + "/ANLZ0000.DAT").path)
+            let forced = t.action != .unchanged || t.needsAnalysis || rewriteAnalysisFiles || !datPresent
+            let inputs = "\(summary.revision);\(settingsKey)"
+            let previous = manifest.tracks[t.source.id]
+            // Same cache entry, settings and build as last time: the fingerprint can't have changed.
+            if !forced, previous?.anlzFingerprint != nil, previous?.anlzInputs == inputs { continue }
             guard let a = analyses[t.contentHash] ?? cache.analysis(forHash: t.contentHash) else { continue }
             analyses[t.contentHash] = a
             let sections = cache.sections(forHash: t.contentHash)
             let detected = cache.detectedCues(forHash: t.contentHash)
-            energies[t.contentHash] = detected?.energy
             let cues = CueBuilder.cues(detected: detected,
                                        analysis: a, mode: cueMode, hotStyle: hotCueStyle,
                                        sections: sections, buildLeadBars: buildLeadBars)
             let phrases = writePhrases ? sections.flatMap { StructureAnalyzer.phrases(sections: $0, analysis: a) } : nil
             let phraseKey = phrases.map { $0.phrases.map { "\($0.beat):\($0.kind)" }.joined(separator: ",") } ?? "-"
             let fingerprint = "v\(a.version);pqt2=\(anlzOptions.includeExtendedBeatGrid);cues=\(CueBuilder.fingerprint(cues));pssi=\(phraseKey)"
-            let datPresent = FileManager.default.fileExists(
-                atPath: volume.url(forUsbPath: AnlzPath.directory(forAudioPath: t.usbPath) + "/ANLZ0000.DAT").path)
-            let stale = manifest.tracks[t.source.id]?.anlzFingerprint != fingerprint || !datPresent
-            if t.action == .unchanged && !t.needsAnalysis && !rewriteAnalysisFiles && !stale { continue }
+            manifest.tracks[t.source.id]?.anlzInputs = inputs
+            inputsRecorded += 1
+            if !forced && previous?.anlzFingerprint == fingerprint { continue }
             try ensureMounted(volume)
             try writeAnlz(for: t, analysis: a, cues: cues, phrases: phrases, on: volume)
             manifest.tracks[t.source.id]?.anlzFingerprint = fingerprint
@@ -141,6 +150,11 @@ public struct SyncExecutor {
             }
         }
         if !plan.hasChanges && anlzWritten == 0 && metadataChanged == 0 && !force {
+            // Keep what was learned so the next sync skips those checks; the database is unaffected.
+            if inputsRecorded > 0 {
+                try ensureMounted(volume)
+                try manifest.save(to: volume)
+            }
             progress(.done)
             return false
         }
@@ -152,9 +166,10 @@ public struct SyncExecutor {
         progress(.writingDatabase)
         let contents = OneLibraryDatabase.Contents(
             tracks: plan.tracks.map {
-                var e = exportTrack($0, analysis: analyses[$0.contentHash])
+                let summary = summaries[$0.contentHash]
+                var e = exportTrack($0, analysis: summary)
                 e.artworkPath = artPaths[$0.source.id]
-                e.color = trackColorRule.color(energy: energies[$0.contentHash] ?? cache.detectedCues(forHash: $0.contentHash)?.energy)
+                e.color = trackColorRule.color(energy: summary?.energy)
                 return e
             },
             playlists: plan.playlists.map {
@@ -233,8 +248,22 @@ public struct SyncExecutor {
         var next = manifest.nextImageId ?? 1
         var paths: [String: String] = [:]
         for t in plan.tracks {
-            guard let data = artwork.artwork(forTrackId: t.source.id) else { continue }
-            let hash = ArtworkWriter.hash(data)
+            // Reading and hashing art costs ~200 KB per track, so reuse the hash while neither the audio
+            // file nor the track changed. Tracks without art are cheap to ask again.
+            let key = Self.artworkKey(t)
+            let record = manifest.tracks[t.source.id]
+            var data: Data?
+            let hash: String
+            if record?.artworkKey == key, let h = record?.artworkHash, used[h] != nil || previous[h] != nil {
+                hash = h
+            } else {
+                guard let d = artwork.artwork(forTrackId: t.source.id) else {
+                    manifest.tracks[t.source.id]?.artworkHash = nil
+                    continue
+                }
+                data = d
+                hash = ArtworkWriter.hash(d)
+            }
             let id = used[hash] ?? previous[hash] ?? {
                 defer { next += 1 }
                 return next
@@ -244,7 +273,8 @@ public struct SyncExecutor {
                 let small = plan.volume.url(forUsbPath: path)
                 let medium = plan.volume.url(forUsbPath: ArtworkWriter.mediumPath(forSmall: path))
                 if !FileManager.default.fileExists(atPath: small.path) || !FileManager.default.fileExists(atPath: medium.path) {
-                    guard let s = ArtworkWriter.jpeg(data, size: ArtworkWriter.smallSize),
+                    guard let data = data ?? artwork.artwork(forTrackId: t.source.id),
+                          let s = ArtworkWriter.jpeg(data, size: ArtworkWriter.smallSize),
                           let m = ArtworkWriter.jpeg(data, size: ArtworkWriter.mediumSize) else { continue }
                     try ensureMounted(plan.volume)
                     try FileOps.writeAtomically(s, to: small)
@@ -252,12 +282,19 @@ public struct SyncExecutor {
                 }
                 used[hash] = id
             }
+            manifest.tracks[t.source.id]?.artworkKey = key
+            manifest.tracks[t.source.id]?.artworkHash = hash
             paths[t.source.id] = path
         }
         manifest.artwork = used
         manifest.nextImageId = next
         let orphaned = previous.filter { used[$0.key] == nil }.map { ArtworkWriter.path(imageId: $0.value) }
         return (paths, orphaned)
+    }
+
+    static func artworkKey(_ t: SyncPlan.TrackEntry) -> String {
+        let mtime = FileOps.modificationDate(t.sourceFile)?.timeIntervalSince1970 ?? 0
+        return "\(t.contentHash);\(t.fileSize);\(mtime);\(t.source.modifiedDate?.timeIntervalSince1970 ?? 0)"
     }
 
     private func ensureMounted(_ volume: Volume) throws {
@@ -285,7 +322,7 @@ public struct SyncExecutor {
             .joined(separator: "\u{1F}")
     }
 
-    private func exportTrack(_ t: SyncPlan.TrackEntry, analysis: TrackAnalysis?) -> ExportTrack {
+    private func exportTrack(_ t: SyncPlan.TrackEntry, analysis: AnalysisCache.Summary?) -> ExportTrack {
         let s = t.source
         let duration = analysis?.durationSeconds ?? s.durationSeconds ?? 0
         let bitrate = duration > 0 ? Int((Double(t.fileSize) * 8 / duration / 1000).rounded()) : 0
@@ -313,6 +350,14 @@ public struct SyncExecutor {
             analysisPath: analysis == nil ? nil : AnlzPath.directory(forAudioPath: t.usbPath) + "/ANLZ0000.DAT"
         )
     }
+}
+
+extension SyncExecutor {
+    /// Changes with every build, so changes to cue or phrase code get ANLZ fingerprints rechecked once.
+    static let buildId: String = {
+        guard let url = Bundle.main.executableURL else { return "" }
+        return "\(FileOps.size(url))-\(FileOps.modificationDate(url)?.timeIntervalSince1970 ?? 0)"
+    }()
 }
 
 /// Prints phase durations to stderr when DECKHAND_TIMING is set.

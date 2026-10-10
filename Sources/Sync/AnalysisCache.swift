@@ -13,6 +13,12 @@ public final class AnalysisCache: @unchecked Sendable {
     private var recent: [String: Stored] = [:]
     private var recentOrder: [String] = []
     private static let recentLimit = 32
+    /// Entry summaries, so "is it analyzed?" and list fields don't decode waveforms and beats. Each is
+    /// checked against its entry's size and mtime and rebuilt from the entry when they differ, so a
+    /// missing, stale or partly lost index only costs a decode.
+    private var index: [String: IndexEntry]
+    private var indexDirty = false
+    private static let indexFile = "analysis-index.plist"
 
     public static func defaultRoot() -> URL {
         if let dir = ProcessInfo.processInfo.environment["DECKHAND_CACHE_DIR"] { return URL(fileURLWithPath: dir) }
@@ -25,6 +31,8 @@ public final class AnalysisCache: @unchecked Sendable {
         try FileManager.default.createDirectory(at: root.appendingPathComponent("analysis"), withIntermediateDirectories: true)
         let fp = root.appendingPathComponent("fingerprints.json")
         fingerprints = (try? JSONDecoder().decode([String: String].self, from: Data(contentsOf: fp))) ?? [:]
+        index = (try? PropertyListDecoder().decode([String: IndexEntry].self,
+                                                   from: Data(contentsOf: root.appendingPathComponent(Self.indexFile)))) ?? [:]
     }
 
     /// Hash of a file's audio payload (ignores tags), reusing a cached hash when path, size and mtime are unchanged.
@@ -36,9 +44,19 @@ public final class AnalysisCache: @unchecked Sendable {
         return h
     }
 
-    public func saveFingerprints() throws {
+    /// Writes the content-hash fingerprints and, if it changed, the summary index.
+    public func save() throws {
         let data = try lock.withLock { try JSONEncoder().encode(fingerprints) }
         try data.write(to: root.appendingPathComponent("fingerprints.json"), options: .atomic)
+        let index: [String: IndexEntry]? = lock.withLock {
+            defer { indexDirty = false }
+            return indexDirty ? self.index : nil
+        }
+        if let index {
+            let encoder = PropertyListEncoder()
+            encoder.outputFormat = .binary
+            try encoder.encode(index).write(to: root.appendingPathComponent(Self.indexFile), options: .atomic)
+        }
     }
 
     private func path(_ hash: String) -> URL {
@@ -48,6 +66,39 @@ public final class AnalysisCache: @unchecked Sendable {
     /// Cached analysis made by the current algorithm versions.
     public func analysis(forHash hash: String) -> TrackAnalysis? {
         load(hash)?.analysis
+    }
+
+    /// What a track list or the database needs, without decoding the full entry.
+    public struct Summary: Sendable, Equatable {
+        public static let overviewBins = 160
+        public var durationSeconds: Double
+        public var sampleRate: Int
+        public var bpm: Double
+        public var key: MusicalKey?
+        public var energy: Int?
+        public var cuesMs: [Int]
+        /// Band waveforms reduced to at most `overviewBins` frames (max per bin); peak and rms are empty.
+        public var overview: TrackAnalysis.Waveforms
+        /// Changes whenever the entry is rewritten.
+        public var revision: String
+    }
+
+    /// Nil exactly when `analysis(forHash:)` is.
+    public func summary(forHash hash: String) -> Summary? {
+        guard let stamp = Self.stamp(path(hash)) else { return nil }
+        if let e = lock.withLock({ index[hash] }), e.stamp == stamp { return e.summary }
+        guard let data = try? Data(contentsOf: path(hash)),
+              let stored = try? JSONDecoder().decode(Stored.self, from: data) else { return nil }
+        let e = IndexEntry(stored, stamp: stamp)
+        lock.withLock {
+            index[hash] = e
+            indexDirty = true
+        }
+        return e.summary
+    }
+
+    public func isAnalyzed(_ hash: String) -> Bool {
+        summary(forHash: hash) != nil
     }
 
     /// Song structure detected alongside the analysis.
@@ -76,15 +127,16 @@ public final class AnalysisCache: @unchecked Sendable {
         stored.cues = cues?.cues.map { [$0.timeMs, $0.energy] }
         stored.trackEnergy = cues?.energy
         try JSONEncoder().encode(stored).write(to: path(hash), options: .atomic)
-        lock.withLock { recent[hash] = nil }
+        let stamp = Self.stamp(path(hash))
+        lock.withLock {
+            recent[hash] = nil
+            index[hash] = stamp.map { IndexEntry(stored, stamp: $0) }
+            indexDirty = true
+        }
     }
 
     private func load(_ hash: String) -> Stored? {
-        guard let stored = decoded(hash),
-              stored.version == TrackAnalysis.currentVersion,
-              stored.cueVersion == CueAnalyzer.version,
-              stored.structureVersion == StructureAnalyzer.version,
-              stored.policy.map({ $0 == Self.ownAnalysisPolicy }) ?? true else { return nil }
+        guard let stored = decoded(hash), stored.isCurrent else { return nil }
         return stored
     }
 
@@ -99,9 +151,73 @@ public final class AnalysisCache: @unchecked Sendable {
         return stored
     }
 
+    /// Size and modification time of a file, or nil if it's missing.
+    private static func stamp(_ url: URL) -> String? {
+        var st = stat()
+        guard stat(url.path, &st) == 0 else { return nil }
+        return "\(st.st_size)-\(st.st_mtimespec.tv_sec).\(st.st_mtimespec.tv_nsec)"
+    }
+
     /// Older entries recorded a fingerprint of which external inputs (since removed) were allowed;
     /// only this one, pure Deckhand analysis, is still valid. New entries omit it.
     private static let ownAnalysisPolicy = "key-tags=0;bpm-hint=0;mik=0"
+
+    /// Whether an entry was made by the current algorithm versions.
+    private static func isCurrent(version: Int, policy: String?, cueVersion: Int?, structureVersion: Int?) -> Bool {
+        version == TrackAnalysis.currentVersion && cueVersion == CueAnalyzer.version
+            && structureVersion == StructureAnalyzer.version && policy.map({ $0 == ownAnalysisPolicy }) ?? true
+    }
+
+    /// An entry's versions and summary fields, as of the entry file's `stamp`.
+    private struct IndexEntry: Codable {
+        var stamp: String
+        var version: Int
+        var policy: String?
+        var cueVersion: Int?
+        var structureVersion: Int?
+        var durationSeconds: Double
+        var sampleRate: Int
+        var bpm: Double
+        var key: MusicalKey?
+        var energy: Int?
+        var cues: [Int]
+        var low, mid, high: Data
+
+        init(_ s: Stored, stamp: String) {
+            self.stamp = stamp
+            version = s.version
+            policy = s.policy
+            cueVersion = s.cueVersion
+            structureVersion = s.structureVersion
+            durationSeconds = s.durationSeconds
+            sampleRate = s.sampleRate
+            bpm = s.bpm
+            key = s.key
+            energy = s.cues == nil ? nil : s.trackEnergy
+            cues = s.cues?.map { $0[0] } ?? []
+            low = Self.reduce(s.low)
+            mid = Self.reduce(s.mid)
+            high = Self.reduce(s.high)
+        }
+
+        var summary: Summary? {
+            guard isCurrent(version: version, policy: policy, cueVersion: cueVersion, structureVersion: structureVersion) else { return nil }
+            return Summary(durationSeconds: durationSeconds, sampleRate: sampleRate, bpm: bpm, key: key, energy: energy, cuesMs: cues,
+                           overview: .init(peak: [], rms: [], low: Stored.unpack(low), mid: Stored.unpack(mid), high: Stored.unpack(high)),
+                           revision: stamp)
+        }
+
+        /// Max per bin of the packed bytes (packing is monotonic, so it's the packed max of the floats).
+        static func reduce(_ d: Data) -> Data {
+            let a = [UInt8](d)
+            guard !a.isEmpty else { return Data() }
+            let n = min(Summary.overviewBins, a.count)
+            return Data((0..<n).map { i in
+                let lo = i * a.count / n, hi = max(lo + 1, (i + 1) * a.count / n)
+                return a[lo..<hi].max() ?? 0
+            })
+        }
+    }
 
     /// Compact on-disk form: waveforms stored as sqrt-companded bytes.
     private struct Stored: Codable {
@@ -138,6 +254,10 @@ public final class AnalysisCache: @unchecked Sendable {
             low = Self.pack(a.waveforms.low)
             mid = Self.pack(a.waveforms.mid)
             high = Self.pack(a.waveforms.high)
+        }
+
+        var isCurrent: Bool {
+            AnalysisCache.isCurrent(version: version, policy: policy, cueVersion: cueVersion, structureVersion: structureVersion)
         }
 
         var analysis: TrackAnalysis {

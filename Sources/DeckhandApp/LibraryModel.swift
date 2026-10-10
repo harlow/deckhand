@@ -265,17 +265,16 @@ final class LibraryModel {
             }
             merge(batch)
         }
-        try? cache.saveFingerprints()
+        try? cache.save()
         status = nil
     }
 
     nonisolated private static func loadOne(_ id: String, _ url: URL, _ cache: AnalysisCache) -> Loaded {
         guard let hash = try? cache.contentHash(of: url) else { return Loaded(id: id) }
-        guard let a = cache.analysis(forHash: hash) else { return Loaded(id: id, hash: hash) }
-        let detected = cache.detectedCues(forHash: hash)
-        let overview = Overview(a.waveforms, bins: 160, cuesMs: detected?.cues.map(\.timeMs) ?? [],
-                                durationMs: a.durationSeconds * 1000)
-        return Loaded(id: id, hash: hash, analysis: (a.bpm, a.key, detected?.energy, overview))
+        guard let s = cache.summary(forHash: hash) else { return Loaded(id: id, hash: hash) }
+        let overview = Overview(s.overview, bins: AnalysisCache.Summary.overviewBins, cuesMs: s.cuesMs,
+                                durationMs: s.durationSeconds * 1000)
+        return Loaded(id: id, hash: hash, analysis: (s.bpm, s.key, s.energy, overview))
     }
 
     private func merge(_ batch: [Loaded]) {
