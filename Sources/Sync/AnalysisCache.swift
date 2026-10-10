@@ -66,9 +66,33 @@ public final class AnalysisCache: @unchecked Sendable {
         return h
     }
 
+    /// The hash `contentHash(of:size:modified:)` would return if it's already known; never reads the file.
+    public func cachedContentHash(of url: URL, size: Int64, modified: Double) -> String? {
+        lock.withLock { fingerprints["\(AudioHash.scheme)\(url.path)|\(size)|\(modified)"] }
+    }
+
+    /// Picks up what another process (the CLI run by the app) saved since this cache was opened: hashes it computed
+    /// and analysis failures it recorded. Analysis entries themselves are always read from disk.
+    public func reloadFromDisk() {
+        let fp = (try? JSONDecoder().decode([String: String].self,
+                                            from: Data(contentsOf: root.appendingPathComponent("fingerprints.json")))) ?? [:]
+        let failures = (try? JSONDecoder().decode([String: Failure].self,
+                                                  from: Data(contentsOf: root.appendingPathComponent(Self.failuresFile))))
+        lock.withLock {
+            fingerprints.merge(fp) { mine, _ in mine }
+            if let failures, !failuresDirty { self.failures = failures }
+        }
+    }
+
     /// Writes the content-hash fingerprints and, if they changed, the summary index and failure list.
     public func save() throws {
-        let data = try lock.withLock { try JSONEncoder().encode(fingerprints) }
+        // Keep hashes another process saved meanwhile (the app and the CLI share this cache).
+        let onDisk = (try? JSONDecoder().decode([String: String].self,
+                                                from: Data(contentsOf: root.appendingPathComponent("fingerprints.json")))) ?? [:]
+        let data = try lock.withLock {
+            fingerprints.merge(onDisk) { mine, _ in mine }
+            return try JSONEncoder().encode(fingerprints)
+        }
         try data.write(to: root.appendingPathComponent("fingerprints.json"), options: .atomic)
         let failures: [String: Failure]? = lock.withLock {
             defer { failuresDirty = false }

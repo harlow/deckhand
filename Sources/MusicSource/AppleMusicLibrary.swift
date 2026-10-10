@@ -65,17 +65,21 @@ public enum AppleMusicLibrary {
         return library
     }
 
-    /// Every song in the library (not only those in user playlists).
-    /// `load`, with ratings read live from Music when it answers. iTunesLibrary's snapshot only catches up when
-    /// Music saves its library, which can trail a rating set seconds ago (Deckhand's own Quick Rate included).
-    public static func loadWithCurrentRatings(allSongs: Bool = false) throws -> SourceLibrary {
+    /// `load`, with every field the drive's database takes from Music read live and laid over the snapshot (see
+    /// `MusicLive`). The status says whether that worked; when Music isn't running the snapshot is current anyway.
+    /// `prompt`: allow the Automation consent prompt. Sends Apple Events from the calling thread: in the CLI, call it
+    /// on the main thread.
+    public static func loadLive(allSongs: Bool = false, prompt: Bool = true) throws -> (SourceLibrary, MusicLive.Status) {
         var lib = try load(allSongs: allSongs)
-        if let ratings = try? AppleMusicWriter.currentRatings() {
-            for (id, stars) in ratings where lib.tracks[id] != nil { lib.tracks[id]?.rating = stars }
+        do {
+            MusicLive.overlay(try MusicLive.read(prompt: prompt), onto: &lib)
+            return (lib, .live)
+        } catch let failure as MusicEvents.Failure {
+            return (lib, failure.isNotRunning ? .notRunning : .unavailable(failure))
         }
-        return lib
     }
 
+    /// Every song in the library (not only those in user playlists).
     public static func allSongs() throws -> [SourceTrack] {
         let lib: ITLibrary
         do {

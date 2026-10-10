@@ -11,7 +11,7 @@ struct DebugCommands: ParsableCommand {
         commandName: "debug",
         abstract: "Developer tools.",
         shouldDisplay: false,
-        subcommands: [WriteAnlz.self, AnalyzeTiming.self, HashCommand.self]
+        subcommands: [WriteAnlz.self, AnalyzeTiming.self, HashCommand.self, MusicLiveCommand.self]
     )
 }
 
@@ -76,6 +76,42 @@ struct HashCommand: ParsableCommand {
         let cache = try AnalysisCache(root: FileManager.default.temporaryDirectory.appendingPathComponent("deckhand-hash-\(UUID().uuidString)"))
         for f in files {
             print("\(try cache.contentHash(of: URL(fileURLWithPath: f)).prefix(19))  \((f as NSString).lastPathComponent)")
+        }
+    }
+}
+
+/// Reads Music live (read-only) and lists where iTunesLibrary's snapshot differs from it, field by field.
+struct MusicLiveCommand: ParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "music-live")
+
+    @Option(help: "Tracks to list per field.") var limit = 5
+    @Option(help: "Also read one track's rating by persistent ID, as the app reads a rating back after setting it.")
+    var track: String?
+
+    func run() throws {
+        if let track { print("rating of \(track): \(try MusicEvents.rating(trackId: track))") }
+        let snapshot = try AppleMusicLibrary.load(allSongs: true)
+        print("access: \(MusicEvents.access(ask: false))")
+        let start = Date()
+        let live = try MusicLive.read()
+        print("read \(live.count) file tracks live in \(Int(Date().timeIntervalSince(start) * 1000)) ms")
+        var overlaid = snapshot
+        let changed = MusicLive.overlay(live, onto: &overlaid)
+        print("\(changed.count) of \(snapshot.tracks.count) snapshot tracks differ from Music")
+        let fields: [(String, (SourceTrack) -> String)] = [
+            ("title", { $0.title }), ("artist", { $0.artist ?? "nil" }), ("album", { $0.album ?? "nil" }),
+            ("albumArtist", { $0.albumArtist ?? "nil" }), ("genre", { $0.genre ?? "nil" }),
+            ("trackNumber", { "\($0.trackNumber ?? 0)" }), ("discNumber", { "\($0.discNumber ?? 0)" }), ("year", { "\($0.year ?? 0)" }),
+            ("rating", { "\($0.rating ?? 0)" }), ("comment", { $0.comment ?? "nil" }),
+        ]
+        for (name, value) in fields {
+            let diffs = changed.sorted().compactMap { id -> String? in
+                let a = value(snapshot.tracks[id]!), b = value(overlaid.tracks[id]!)
+                return a == b ? nil : "  \(id) \(snapshot.tracks[id]!.title.prefix(40)): \(a.debugDescription) -> \(b.debugDescription)"
+            }
+            guard !diffs.isEmpty else { continue }
+            print("\(name): \(diffs.count)")
+            diffs.prefix(limit).forEach { print($0) }
         }
     }
 }

@@ -34,6 +34,8 @@ struct SyncCommand: ParsableCommand {
     @Flag(help: "Try again on tracks the analyzer failed on before.") var retryFailed = false
     @Flag(help: .hidden) var extendedBeatgrid = false
     @Flag(help: .hidden) var rewriteAnalysis = false
+    @Flag(help: "Stop without writing if Music is running but its current data can't be read (the library snapshot can trail recent edits). Never shows the Automation prompt.")
+    var requireLive = false
 
     func run() throws {
         let timer = PhaseTimer()
@@ -44,7 +46,7 @@ struct SyncCommand: ParsableCommand {
         timer.mark("open drive")
 
         let wholeLibrary = entireLibrary ?? (manifest.entireLibrary == true)
-        var lib = try AppleMusicLibrary.loadWithCurrentRatings(allSongs: wholeLibrary)
+        var lib = try loadLibrary(allSongs: wholeLibrary, requireLive: requireLive)
         if lib.playlists.isEmpty && lib.tracks.isEmpty && !manifest.tracks.isEmpty {
             throw ValidationError("Apple Music returned an empty library, so nothing on \(v.name) was changed. Check that Music "
                                   + "has its library and Deckhand may read it (System Settings → Privacy & Security → Media & Apple Music).")
@@ -136,7 +138,7 @@ struct SyncCommand: ParsableCommand {
         if let current = try Manifest.load(from: v), current.generationNumber != manifest.generationNumber {
             manifest = current
             if selection?.entireLibrary ?? (current.entireLibrary == true), lib.allTrackIds == nil {
-                lib = try AppleMusicLibrary.loadWithCurrentRatings(allSongs: true)
+                lib = try loadLibrary(allSongs: true, requireLive: requireLive)
                 planner = SyncPlanner(library: lib, cache: cache)
             }
             changes = planner.plan(volume: v, manifest: current, profile: profile, selection: selection, adoptable: adoptable,
@@ -222,7 +224,7 @@ struct StatusCommand: ParsableCommand {
     func run() throws {
         let v = try Volume(url: URL(fileURLWithPath: volume))
         guard let m = try Manifest.load(from: v) else { throw SyncError.notInitialized(v.name) }
-        let lib = try AppleMusicLibrary.loadWithCurrentRatings(allSongs: m.entireLibrary == true)
+        let lib = try loadLibrary(allSongs: m.entireLibrary == true, requireLive: false)
         var profile = OutputProfile(settings: OutputSettings(saved: m.settings))
         profile.artwork = lib.artwork != nil
         let changes = SyncPlanner(library: lib, cache: try AnalysisCache()).plan(volume: v, manifest: m, profile: profile)
@@ -248,6 +250,26 @@ struct StatusCommand: ParsableCommand {
         if changes.scope.unreadable { print("Apple Music returned an empty library; nothing can be judged.") }
         if !changes.isComplete { print("Some facts are unknown; status is incomplete.") }
     }
+}
+
+/// The Apple Music library with every field the database uses read live from Music (see `MusicLive`). If Music is
+/// running but can't be read, warns and uses the snapshot, or with `requireLive` prints a machine-readable
+/// `@live {...}` line for the app and stops (exit status 3) before anything is written.
+func loadLibrary(allSongs: Bool, requireLive: Bool) throws -> SourceLibrary {
+    let (lib, status) = try AppleMusicLibrary.loadLive(allSongs: allSongs, prompt: !requireLive)
+    guard case .unavailable(let failure) = status else { return lib }
+    if requireLive {
+        struct Line: Encodable { var live: Bool; var status: Int32; var reason: String }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try encoder.encode(Line(live: false, status: failure.status, reason: failure.description))
+        print("@live " + String(decoding: data, as: UTF8.self))
+        warn("Couldn't read current data from Music (\(failure)), so nothing was written: the library snapshot can trail "
+             + "recent edits. Run without --require-live to sync from the snapshot anyway.")
+        throw ExitCode(3)
+    }
+    warn("Warning: couldn't read current data from Music (\(failure)); using the library snapshot, which can trail recent edits.")
+    return lib
 }
 
 extension ChangeSet.Track {

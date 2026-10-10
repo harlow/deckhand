@@ -23,8 +23,7 @@ public struct Manifest: Codable, Sendable, Equatable {
         /// Cache entry, settings and recipe `anlzFingerprint` was computed from; while unchanged the
         /// fingerprint is too, so checking it needs no decoding.
         public var anlzInputs: String? = nil
-        /// The track's source fields (title, rating, …) when last written. Superseded by `recordFingerprint`; kept
-        /// for the app's track list until it reads SyncStatus.
+        /// The track's source fields when last written, from before `recordFingerprint`. No longer written or read.
         public var metadataFingerprint: String?
         /// Artwork hash, valid while `artworkKey` (audio file and track modification) is unchanged.
         public var artworkKey: String? = nil

@@ -1,4 +1,6 @@
+import DeckhandAppCore
 import DeckhandCore
+import MusicSource
 import SwiftUI
 
 struct TrackListView: View {
@@ -18,6 +20,8 @@ struct TrackListView: View {
         VStack(spacing: 0) {
             header(listing)
             FilterBar(shown: rows.count, total: listing.base.count, genres: listing.genres)
+            SyncNoticeBanner(library: library)
+            LiveDataBanner(library: library)
             AnalysisBanner(library: library)
             Divider()
             if library.loadState == .loaded {
@@ -81,7 +85,7 @@ struct TrackListView: View {
         if let drive = library.activeDrive, drive.manifest != nil {
             s += " · \(library.onDriveCount(listing).formatted()) on \(drive.volume.name)"
             // For a playlist, what's waiting (the drive box on the right covers the whole drive).
-            if let p = library.selectedPlaylist, case .pending(let n) = library.playlistSync(p) {
+            if let p = library.selectedPlaylist, case .pending(let n)? = library.playlistSync(p) {
                 s += " · \(n.formatted()) waiting to sync"
             }
         }
@@ -238,10 +242,14 @@ private struct DriveControls: View {
                             .monospacedDigit().foregroundStyle(.secondary)
                     } else if job.running {
                         Text(job.phase).foregroundStyle(.secondary).lineLimit(1)
+                    } else if library.checkingStatus {
+                        Text("Checking…").foregroundStyle(.secondary)
                     } else if library.pendingChanges > 0 {
                         let size = library.pendingBytes > 0 ? " · \(LibraryModel.bytes(library.pendingBytes))" : ""
                         Text("\(library.pendingChanges.formatted()) to sync\(size)\(library.pendingWontFit ? " · won't fit" : "")")
                             .foregroundStyle(library.pendingWontFit ? Color.red : Color.pending)
+                    } else if let n = library.driveStatus?.summary.unknown, n > 0 {
+                        Text("\(n.formatted()) not checked").foregroundStyle(.secondary)
                     }
                     Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                 }
@@ -288,6 +296,85 @@ private struct AnalysisBanner: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("Analyze Library") { library.analyzeLibrary() }
+            }
+            .font(.callout)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color.pending.opacity(0.08))
+        }
+    }
+}
+
+/// After a sync: what's still pending once the library and drive were read again, or (when the sync stopped because
+/// Music couldn't be read live) the offer to sync from the snapshot anyway.
+private struct SyncNoticeBanner: View {
+    var library: LibraryModel
+    @State private var showDetails = false
+
+    var body: some View {
+        if let notice = library.syncNotice, !library.job.running {
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle").foregroundStyle(Color.pending)
+                switch notice {
+                case .leftover(let id, let drive, let count, let details):
+                    Text("\(drive) still has \(count.formatted()) change\(count == 1 ? "" : "s") to sync after syncing.")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Details") { showDetails = true }
+                        .popover(isPresented: $showDetails, arrowEdge: .bottom) { NoticeDetails(lines: details) }
+                    Button("Sync Again") { if let d = library.drives.first(where: { $0.id == id }) { library.sync(d) } }
+                case .staleLibrary(let id, let drive, let reason):
+                    Text("Didn't sync \(drive): couldn't read Music's current data (\(reason)), and the library snapshot can trail recent edits.")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Sync Anyway (May Be Stale)") {
+                        if let d = library.drives.first(where: { $0.id == id }) { library.sync(d, requireLive: false) }
+                    }
+                }
+                Button { library.syncNotice = nil } label: { Image(systemName: "xmark") }
+                    .buttonStyle(.borderless)
+                    .help("Dismiss")
+            }
+            .font(.callout)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color.pending.opacity(0.08))
+        }
+    }
+}
+
+private struct NoticeDetails: View {
+    var lines: [String]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(Array(lines.prefix(200).enumerated()), id: \.offset) { _, line in
+                    Text(line).font(.callout).textSelection(.enabled)
+                }
+            }
+            .padding(12)
+        }
+        .frame(width: 460, height: min(320, CGFloat(lines.count) * 22 + 24))
+    }
+}
+
+/// Shown when Music is running but can't be read live: rows and sync status come from iTunesLibrary's snapshot,
+/// which can trail recent edits.
+private struct LiveDataBanner: View {
+    var library: LibraryModel
+
+    var body: some View {
+        if case .unavailable(let failure) = library.live {
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.arrow.triangle.2.circlepath").foregroundStyle(Color.pending)
+                Text("Can't read Apple Music's current data: \(failure.description). Edits made in Music may take a while to show here and in sync status.")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if failure.status == MusicEvents.Failure.notPermitted {
+                    Button("Open Settings") { library.openAutomationSettings() }
+                }
+                Button("Try Again") { library.scheduleReload("trying Music again", after: 0) }
             }
             .font(.callout)
             .padding(.horizontal, 16)

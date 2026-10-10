@@ -19,23 +19,32 @@ public struct SyncPlanner {
                      adoptable: [String: String] = [:], retryFailedAnalysis: Bool = false) -> ChangeSet {
         let scope = SyncStatus.scope(library: library, selection: selection ?? Selection(manifest))
         let facts = facts(for: scope.trackIds, manifest: manifest, retryFailedAnalysis: retryFailedAnalysis)
-        var probe = DriveProbe.scan(volume, manifest: manifest)
-        var changes = SyncStatus.evaluate(library: library, manifest: manifest, facts: facts, drive: probe, profile: profile,
+        let probe = DriveProbe.scan(volume, manifest: manifest)
+        return Self.evaluate(library: library, volume: volume, manifest: manifest, facts: facts, probe: probe, profile: profile,
+                             selection: selection, adoptable: adoptable)
+    }
+
+    /// `SyncStatus.evaluate` with facts and a probe already gathered (the app gathers its own, without hashing). If the
+    /// drive looks like a sync was cut short after it replaced the database, reads that database's content IDs and
+    /// evaluates again, so those IDs are kept for the tracks that got them and not reused for others.
+    public static func evaluate(library: SourceLibrary, volume: Volume, manifest: Manifest, facts: [String: TrackFacts],
+                                probe: DriveProbe, profile: OutputProfile, selection: Selection? = nil,
+                                adoptable: [String: String] = [:]) -> ChangeSet {
+        var probe = probe
+        let changes = SyncStatus.evaluate(library: library, manifest: manifest, facts: facts, drive: probe, profile: profile,
                                           selection: selection, adoptable: adoptable)
         // Audio already at a new track's path, or a database other than the one recorded: likely a sync cut short
         // after it replaced the database. Its content IDs are kept for those tracks and not reused for others.
         let takeovers = changes.tracks.contains {
             $0.changes.contains(.adopt) && $0.adoptFrom == nil && manifest.tracks[$0.id] == nil
         }
-        if takeovers || changes.drive.contains(.databaseChanged), probe.databaseId != nil,
-           let ids = try? DeviceLibrary.contentIds(database: volume.url(forUsbPath: DriveProbe.databasePath)) {
-            let own = DriveProbe.key(DriveProbe.audioRoot + "/")
-            probe.databaseContentIds = Dictionary(ids.map { (DriveProbe.key($0.key), $0.value) }.filter { $0.0.hasPrefix(own) },
-                                                  uniquingKeysWith: { a, _ in a })
-            changes = SyncStatus.evaluate(library: library, manifest: manifest, facts: facts, drive: probe, profile: profile,
-                                          selection: selection, adoptable: adoptable)
-        }
-        return changes
+        guard takeovers || changes.drive.contains(.databaseChanged), probe.databaseId != nil,
+              let ids = try? DeviceLibrary.contentIds(database: volume.url(forUsbPath: DriveProbe.databasePath)) else { return changes }
+        let own = DriveProbe.key(DriveProbe.audioRoot + "/")
+        probe.databaseContentIds = Dictionary(ids.map { (DriveProbe.key($0.key), $0.value) }.filter { $0.0.hasPrefix(own) },
+                                              uniquingKeysWith: { a, _ in a })
+        return SyncStatus.evaluate(library: library, manifest: manifest, facts: facts, drive: probe, profile: profile,
+                                   selection: selection, adoptable: adoptable)
     }
 
     /// The self-check after a sync: the drive's manifest and files and the tracks' facts read afresh and evaluated
@@ -61,15 +70,19 @@ public struct SyncPlanner {
         return out
     }
 
+    /// One track's facts. Without `hashing`, audio the cache hasn't hashed at its current size and modification
+    /// time is `.unknown` instead of being read (the app hashes in the background and evaluates again).
     public static func facts(for t: SourceTrack, previousHash: String?, cache: AnalysisCache,
-                             retryFailedAnalysis: Bool = false) -> TrackFacts {
+                             retryFailedAnalysis: Bool = false, hashing: Bool = true) -> TrackFacts {
         var f = TrackFacts(audio: .unknown)
         var hash: String?
         if let reason = unavailableReason(t) {
             f.audio = .unavailable(reason)
         } else if let url = t.location, let a = FileOps.attributes(url) {
             do {
-                let h = try cache.contentHash(of: url, size: a.size, modified: a.modified)
+                let h = hashing ? try cache.contentHash(of: url, size: a.size, modified: a.modified)
+                    : cache.cachedContentHash(of: url, size: a.size, modified: a.modified)
+                guard let h else { return f }
                 f.audio = .ok(hash: h, size: a.size, modified: a.modified)
                 hash = h
             } catch {
