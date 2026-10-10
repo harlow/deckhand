@@ -185,7 +185,7 @@ final class LibraryModel {
         let lib: SourceLibrary
         do {
             let start = Date()
-            lib = try await Task.detached { try AppleMusicLibrary.load(allSongs: true) }.value
+            lib = try await Task.detached { try AppleMusicLibrary.loadWithCurrentRatings(allSongs: true) }.value
             Log.info("library", "Read Apple Music: \(lib.tracks.count) tracks, \(lib.playlists.count) playlists in \(Int(Date().timeIntervalSince(start) * 1000)) ms")
         } catch {
             loadState = .failed("\(error)")
