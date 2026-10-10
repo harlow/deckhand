@@ -89,7 +89,7 @@ From the command line, you analyze and then sync:
 ```sh
 deckhand analyze                                  # whole library; cached, so only new tracks next time
 deckhand init /Volumes/DJUSB                      # once per drive: mark it as Deckhand's (never formats)
-deckhand sync /Volumes/DJUSB --entire-library     # or: --playlist "House" --playlist "Friday"
+deckhand sync /Volumes/DJUSB --playlist "House" --playlist "Friday"   # add --entire-library for every song too
 deckhand sync /Volumes/DJUSB                      # later syncs reuse the drive's saved selection and settings
 deckhand eject /Volumes/DJUSB
 ```

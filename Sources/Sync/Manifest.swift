@@ -53,8 +53,6 @@ public struct Manifest: Codable, Sendable {
     public var artwork: [String: Int]?
     public var nextImageId: Int?
 
-    /// Playlists chosen before switching to entire-library mode, restored when switching back.
-    public var chosenPlaylistIds: [String]?
     /// Incremented on every save; picks the newer of the two manifest files. Optional for older manifests.
     public var generation: Int?
 

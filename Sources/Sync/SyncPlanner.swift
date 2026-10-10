@@ -67,14 +67,13 @@ public struct SyncPlanner {
         self.cache = cache
     }
 
-    /// `entireLibrary`: sync every playlist plus songs that aren't in any playlist (requires a library
-    /// loaded with all songs).
+    /// `entireLibrary`: also put every song on the drive, not just those in the selected playlists (requires a
+    /// library loaded with all songs). Playlists are still only the selected ones.
     /// `adoptable`: audio hash → USB path of existing, unowned files on the drive (see AdoptScanner).
     public func plan(volume: Volume, selectedPlaylistIds: [String], entireLibrary: Bool = false, previous: Manifest,
                      adoptable: [String: String] = [:], verifyFiles: Bool = true) throws -> SyncPlan {
         var adoptable = adoptable
         var manifest = previous
-        let selectedPlaylistIds = entireLibrary ? library.playlists.map(\.id) : selectedPlaylistIds
         manifest.selectedPlaylistIds = selectedPlaylistIds
         manifest.entireLibrary = entireLibrary
 

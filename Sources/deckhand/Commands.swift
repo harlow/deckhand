@@ -90,8 +90,8 @@ struct SyncCommand: ParsableCommand {
     @Argument(help: "Drive, e.g. /Volumes/DJUSB.") var volume: String
     @Option(name: .long, help: "Playlist name or ID (repeatable). Replaces the drive's saved selection.")
     var playlist: [String] = []
-    @Flag(help: "Sync every song and every playlist; future syncs follow the library automatically.")
-    var entireLibrary = false
+    @Flag(inversion: .prefixedNo, help: "Put every song on the drive, not just those in the chosen playlists (playlists are still the ones you choose). Remembered per drive.")
+    var entireLibrary: Bool?
     @Flag(help: "Take over audio already on the drive (e.g. from a Rekordbox export) instead of copying it again.")
     var adopt = false
     @Flag(help: "Show what would change without writing anything.") var dryRun = false
@@ -120,17 +120,15 @@ struct SyncCommand: ParsableCommand {
         if !dryRun { try v.checkWritable() }
         timer.mark("open drive")
 
-        let wholeLibrary = entireLibrary || (playlist.isEmpty && manifest.entireLibrary == true)
+        let wholeLibrary = entireLibrary ?? (manifest.entireLibrary == true)
         let lib = try AppleMusicLibrary.load(allSongs: wholeLibrary)
         var selected = manifest.selectedPlaylistIds
-        if wholeLibrary {
-            selected = []
-        } else if !playlist.isEmpty {
+        if !playlist.isEmpty {
             selected = try playlist.map { name in
                 guard let p = lib.playlist(named: name) else { throw SyncError.playlistNotFound(name) }
                 return p.id
             }
-        } else if selected.isEmpty {
+        } else if selected.isEmpty && !wholeLibrary {
             selected = try promptForPlaylists(lib)
         }
 

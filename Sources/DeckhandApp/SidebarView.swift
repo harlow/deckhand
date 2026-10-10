@@ -21,7 +21,7 @@ struct SidebarView: View {
                 Section {
                     ForEach(groups.on) { e in row(e, onDrive: true) }
                 } header: {
-                    playlistsHeader(library.entireLibraryOnDrive ? "On \(drive) · Entire Library" : "On \(drive)")
+                    playlistsHeader(library.entireLibraryOnDrive ? "On \(drive) · All Tracks" : "On \(drive)")
                 }
                 if !groups.off.isEmpty {
                     Section("Not on \(drive)") {
@@ -80,7 +80,7 @@ struct SidebarView: View {
     }
 }
 
-/// All Tracks, which can also go on the drive: the whole library, every song and playlist.
+/// All Tracks, which can also go on the drive: every song, whichever playlists are chosen.
 private struct AllTracksRow: View {
     @Environment(LibraryModel.self) private var library
     var selected: Bool
@@ -96,14 +96,14 @@ private struct AllTracksRow: View {
             Text("All Tracks").lineLimit(1)
             Spacer(minLength: 4)
             if hasDrive, !on, hovering {
-                DriveActionButton(help: "Sync your entire library (every song and playlist) to \(drive)") {
+                DriveActionButton(help: "Put every song on \(drive), not just those in its playlists") {
                     library.setEntireLibraryOnDrive(true)
                 }
             } else {
                 if on {
                     Circle().fill(pending == 0 ? Color.synced : Color.pending)
                         .frame(width: 6, height: 6)
-                        .help(pending == 0 ? "Entire library up to date on \(drive)" : "\(pending.formatted()) change\(pending == 1 ? "" : "s") to sync")
+                        .help(pending == 0 ? "All tracks up to date on \(drive)" : "\(pending.formatted()) change\(pending == 1 ? "" : "s") to sync")
                 }
                 Text(library.allIds.count.formatted())
                     .font(.caption.monospacedDigit())
@@ -115,7 +115,7 @@ private struct AllTracksRow: View {
         .onHover { hovering = $0 }
         .contextMenu {
             if hasDrive {
-                Button(on ? "Stop Syncing Entire Library to \(drive)" : "Sync Entire Library to \(drive)") {
+                Button(on ? "Only Sync Songs in Playlists to \(drive)" : "Sync All Tracks to \(drive)") {
                     library.setEntireLibraryOnDrive(!on)
                 }
             }
@@ -163,7 +163,7 @@ private struct PlaylistRow: View {
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .contextMenu {
-            if onDrive == true, !library.entireLibraryOnDrive {
+            if onDrive == true {
                 Button("Remove from \(drive)") { library.setOnDrive(false, p) }
             } else if onDrive == false {
                 Button("Add to \(drive)") { library.setOnDrive(true, p) }
@@ -180,7 +180,7 @@ private struct PlaylistRow: View {
 }
 
 /// The active drive, pinned under the playlists: its sync status and space, with a menu to switch drives,
-/// sync the entire library, or eject. The playlist groups above follow whichever drive is active.
+/// sync all tracks, or eject. The playlist groups above follow whichever drive is active.
 private struct DriveFooter: View {
     @Environment(LibraryModel.self) private var library
 
@@ -202,7 +202,7 @@ private struct DriveFooter: View {
                         .pickerStyle(.inline)
                         .labelsHidden()
                         Divider()
-                        Toggle("Sync Entire Library", isOn: Binding(get: { library.entireLibraryOnDrive },
+                        Toggle("Sync All Tracks", isOn: Binding(get: { library.entireLibraryOnDrive },
                                                                   set: { library.setEntireLibraryOnDrive($0) }))
                             .disabled(drive.manifest == nil)
                         Button("Eject \(drive.volume.name)") { library.eject(drive) }

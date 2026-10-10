@@ -391,7 +391,7 @@ final class LibraryModel {
         return pendingBytes > drive.volume.available
     }
 
-    /// Whether the active drive holds every song and playlist.
+    /// Whether the active drive holds every song (not only those in its playlists).
     var entireLibraryOnDrive: Bool { activeDrive?.manifest?.entireLibrary == true }
 
     /// Whether a playlist is on the active drive; a folder is when all the playlists in it are.
@@ -401,7 +401,6 @@ final class LibraryModel {
     }
 
     private func isOnDrive(_ p: SourcePlaylist, _ m: Manifest) -> Bool {
-        if m.entireLibrary == true { return true }
         let leaves = leafPlaylistIds(of: p)
         return !leaves.isEmpty && Set(leaves).isSubset(of: m.selectedPlaylistIds)
     }
@@ -413,7 +412,7 @@ final class LibraryModel {
         var on: [PlaylistEntry] = [], off: [PlaylistEntry] = []
         for e in playlistEntries {
             let leaves = leafPlaylistIds(of: e.playlist)
-            let onCount = m.entireLibrary == true ? leaves.count : leaves.filter(m.selectedPlaylistIds.contains).count
+            let onCount = leaves.filter(m.selectedPlaylistIds.contains).count
             if onCount > 0 { on.append(e) }
             if onCount < leaves.count || (e.playlist.isFolder && leaves.isEmpty) { off.append(e) }
         }
@@ -435,14 +434,9 @@ final class LibraryModel {
         }
     }
 
-    /// Syncs the whole library (every song and playlist) to the active drive, or goes back to chosen playlists.
+    /// Puts every song on the active drive, or only those in its playlists. Playlists stay as chosen either way.
     func setEntireLibraryOnDrive(_ on: Bool) {
-        updateSelection { m in
-            m.entireLibrary = on
-            // Leaving entire-library mode keeps the playlists the user had chosen before, not all of them.
-            if !on { m.selectedPlaylistIds = m.chosenPlaylistIds ?? [] }
-            if on { m.chosenPlaylistIds = m.selectedPlaylistIds }
-        }
+        updateSelection { m in m.entireLibrary = on }
     }
 
     static func bytes(_ n: Int64) -> String { ByteCountFormatter.string(fromByteCount: n, countStyle: .file) }
