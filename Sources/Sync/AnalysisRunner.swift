@@ -3,7 +3,7 @@ import DeckhandCore
 import Foundation
 
 /// Analyzes tracks concurrently and caches results by audio content hash.
-public struct AnalysisRunner {
+public struct AnalysisRunner: Sendable {
     public struct Item: Sendable {
         public var url: URL
         public var contentHash: String
@@ -32,7 +32,8 @@ public struct AnalysisRunner {
     }
 
     /// Analyzes items not already cached, skipping audio the current analyzer already failed on unless
-    /// `retryFailed`. Failures are recorded in the cache. Returns results for all analyzed items.
+    /// `retryFailed`. Failures of the analyzer itself are recorded in the cache (not a file that became unreadable,
+    /// nor a cache that couldn't be written). Returns results for all analyzed items.
     public func run(_ items: [Item], retryFailed: Bool = false) -> [String: TrackAnalysis] {
         var seen = Set<String>()
         let pending = items.filter {
@@ -44,26 +45,38 @@ public struct AnalysisRunner {
         nonisolated(unsafe) var results: [String: TrackAnalysis] = [:]
         nonisolated(unsafe) var started = 0
         nonisolated(unsafe) var completed = 0
-        let queue = OperationQueue()
-        queue.maxConcurrentOperationCount = max(2, ProcessInfo.processInfo.activeProcessorCount - 2)
-        for item in pending {
-            queue.addOperation {
-                let index = lock.withLock { started += 1; return started }
+        let workers = min(pending.count, max(2, ProcessInfo.processInfo.activeProcessorCount - 2))
+        // concurrentPerform runs on the calling thread too, so work always progresses. An OperationQueue waited on
+        // from Swift concurrency's (fixed-size) thread pool can deadlock once that pool is busy.
+        DispatchQueue.concurrentPerform(iterations: workers) { _ in
+            while true {
+                let index: Int? = lock.withLock {
+                    guard started < pending.count else { return nil }
+                    started += 1
+                    return started
+                }
+                guard let index else { return }
+                let item = pending[index - 1]
                 progress(.started(index: index, total: pending.count, title: item.title))
                 do {
                     let r = try analyze(item.url)
-                    try cache.store(r.analysis, cues: r.cues, sections: r.sections, forHash: item.contentHash)
-                    let a = r.analysis
-                    lock.withLock { results[item.contentHash] = a }
+                    do {
+                        try cache.store(r.analysis, cues: r.cues, sections: r.sections, forHash: item.contentHash)
+                        let a = r.analysis
+                        lock.withLock { results[item.contentHash] = a }
+                    } catch {
+                        progress(.failed(title: item.title, error: "couldn't save the analysis: \(error)"))
+                    }
                 } catch {
-                    cache.recordFailure("\(error)", forHash: item.contentHash)
+                    if FileManager.default.isReadableFile(atPath: item.url.path) {
+                        cache.recordFailure("\(error)", forHash: item.contentHash)
+                    }
                     progress(.failed(title: item.title, error: "\(error)"))
                 }
                 let done = lock.withLock { completed += 1; return completed }
                 progress(.finished(done: done, total: pending.count, title: item.title))
             }
         }
-        queue.waitUntilAllOperationsAreFinished()
         try? cache.save()
         return results
     }
