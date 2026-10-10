@@ -80,6 +80,7 @@ public struct SyncPlanner {
 
         let playlists = library.selection(Set(selectedPlaylistIds))
         var skipped: [SyncPlan.Skipped] = []
+        var skippedKeys = Set<[String]>()
         var entries: [String: SyncPlan.TrackEntry] = [:]
         var order: [String] = []
         var superseded: [Manifest.Track] = []
@@ -97,7 +98,7 @@ public struct SyncPlanner {
             for id in p.trackIds where entries[id] == nil {
                 guard let t = library.tracks[id] else { continue }
                 if let reason = Self.eligibilityProblem(t) {
-                    if !skipped.contains(where: { $0.playlist == p.name && $0.track == display(t) }) {
+                    if skippedKeys.insert([p.name, display(t)]).inserted {
                         skipped.append(.init(playlist: p.name, track: display(t), reason: reason))
                     }
                     continue
@@ -132,7 +133,7 @@ public struct SyncPlanner {
                     }
                 }
                 anlzOwner[AnlzPath.directory(forAudioPath: usbPath)] = usbPath
-                let analyzed = cache.analysis(forHash: hash) != nil
+                let analyzed = cache.isAnalyzed(hash)
                 // Outdated or missing analysis files don't make the audio "changed": the executor rewrites
                 // ANLZ files whenever their inputs differ or they're missing, without touching audio.
                 var adoptFrom: String?
@@ -148,13 +149,18 @@ public struct SyncPlanner {
 
         let tracks = order.compactMap { entries[$0] }
         let keptIds = Set(order)
+        let keptPaths = Set(tracks.map(\.usbPath))
         let removed = (previous.tracks.filter { !keptIds.contains($0.key) }.map(\.value) + superseded)
-            .filter { r in !tracks.contains { $0.usbPath == r.usbPath } }
+            .filter { !keptPaths.contains($0.usbPath) }
         manifest.tracks = Dictionary(uniqueKeysWithValues: tracks.map {
-            ($0.source.id, Manifest.Track(contentId: $0.contentId, usbPath: $0.usbPath, contentHash: $0.contentHash,
-                                          analysisVersion: TrackAnalysis.currentVersion,
-                                          anlzFingerprint: $0.action == .unchanged ? previous.tracks[$0.source.id]?.anlzFingerprint : nil,
-                                          metadataFingerprint: previous.tracks[$0.source.id]?.metadataFingerprint))
+            let prev = previous.tracks[$0.source.id]
+            let unchanged = $0.action == .unchanged
+            return ($0.source.id, Manifest.Track(contentId: $0.contentId, usbPath: $0.usbPath, contentHash: $0.contentHash,
+                                                 analysisVersion: TrackAnalysis.currentVersion,
+                                                 anlzFingerprint: unchanged ? prev?.anlzFingerprint : nil,
+                                                 anlzInputs: unchanged ? prev?.anlzInputs : nil,
+                                                 metadataFingerprint: prev?.metadataFingerprint,
+                                                 artworkKey: prev?.artworkKey, artworkHash: prev?.artworkHash))
         })
 
         // Playlists: stable IDs, sibling order follows source order.

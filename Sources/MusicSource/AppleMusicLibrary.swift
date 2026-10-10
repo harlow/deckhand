@@ -107,7 +107,8 @@ public enum AppleMusicLibrary {
             dateAdded: item.addedDate,
             playCount: item.playCount,
             skipCount: item.skipCount,
-            lastPlayed: item.lastPlayedDate
+            lastPlayed: item.lastPlayedDate,
+            modifiedDate: item.modifiedDate
         )
     }
 

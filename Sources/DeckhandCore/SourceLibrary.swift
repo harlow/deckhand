@@ -25,12 +25,14 @@ public struct SourceTrack: Codable, Sendable, Hashable, Identifiable {
     public var playCount: Int?
     public var skipCount: Int?
     public var lastPlayed: Date?
+    /// When the track (tags, artwork, …) was last changed in the music app.
+    public var modifiedDate: Date?
 
     public init(id: String, title: String, artist: String? = nil, album: String? = nil, albumArtist: String? = nil,
                 genre: String? = nil, trackNumber: Int? = nil, discNumber: Int? = nil, year: Int? = nil,
                 rating: Int? = nil, comment: String? = nil, durationSeconds: Double? = nil, location: URL? = nil,
                 unavailableReason: String? = nil, dateAdded: Date? = nil,
-                playCount: Int? = nil, skipCount: Int? = nil, lastPlayed: Date? = nil) {
+                playCount: Int? = nil, skipCount: Int? = nil, lastPlayed: Date? = nil, modifiedDate: Date? = nil) {
         self.id = id
         self.title = title
         self.artist = artist
@@ -49,6 +51,7 @@ public struct SourceTrack: Codable, Sendable, Hashable, Identifiable {
         self.playCount = playCount
         self.skipCount = skipCount
         self.lastPlayed = lastPlayed
+        self.modifiedDate = modifiedDate
     }
 }
 

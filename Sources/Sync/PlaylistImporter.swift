@@ -78,7 +78,7 @@ public struct PlaylistImporter {
             if hashIndex == nil {
                 hashIndex = [:]
                 for s in local { if let sh = try? cache.contentHash(of: s.location!) { hashIndex![sh] = s.id } }
-                try? cache.saveFingerprints()
+                try? cache.save()
             }
             if let sid = hashIndex![h] {
                 match[id] = sid; methods[.audioHash, default: 0] += 1

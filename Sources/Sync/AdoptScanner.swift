@@ -28,7 +28,7 @@ public enum AdoptScanner {
             progress(i + 1, files.count, (path as NSString).lastPathComponent)
             if let h = try? cache.contentHash(of: volume.url(forUsbPath: path)), index[h] == nil { index[h] = path }
         }
-        try? cache.saveFingerprints()
+        try? cache.save()
         return index
     }
 }

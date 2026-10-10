@@ -33,7 +33,7 @@ public struct AnalysisRunner {
 
     /// Analyzes items not already cached. Returns results for all analyzed items.
     public func run(_ items: [Item]) -> [String: TrackAnalysis] {
-        let pending = items.filter { cache.analysis(forHash: $0.contentHash) == nil }
+        let pending = items.filter { !cache.isAnalyzed($0.contentHash) }
         guard !pending.isEmpty else { return [:] }
         let lock = NSLock()
         nonisolated(unsafe) var results: [String: TrackAnalysis] = [:]
@@ -58,7 +58,7 @@ public struct AnalysisRunner {
             }
         }
         queue.waitUntilAllOperationsAreFinished()
-        try? cache.saveFingerprints()
+        try? cache.save()
         return results
     }
 

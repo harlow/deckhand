@@ -14,8 +14,14 @@ public struct Manifest: Codable, Sendable {
         public var analysisVersion: Int
         /// Inputs the ANLZ files were last written from (cues, writer options); a change forces a rewrite.
         public var anlzFingerprint: String?
+        /// Cache entry, settings and build `anlzFingerprint` was computed from; while unchanged the
+        /// fingerprint is too, so checking it needs no decoding.
+        public var anlzInputs: String? = nil
         /// The track's database fields (title, rating, …) when last written; a change rewrites the database.
         public var metadataFingerprint: String?
+        /// Artwork hash, valid while `artworkKey` (audio file and track modification) is unchanged.
+        public var artworkKey: String? = nil
+        public var artworkHash: String? = nil
     }
 
     public struct Playlist: Codable, Sendable, Equatable {
