@@ -52,6 +52,7 @@ App icon: the "Platter" mark, drawn by `Scripts/make-icon.swift` at build time. 
 | Keys | Action |
 |---|---|
 | j / k or ↓ / ↑ | Move (J / K extend the selection) |
+| ⌘⇧] / ⌘⇧[ | Next / previous playlist in the sidebar (works anywhere in the window) |
 | ⌘↑ / ⌘↓ | Top / bottom |
 | Return / ⇧Return | Play / play from Mix In |
 | l (or p) | Preview from just before the first drop |

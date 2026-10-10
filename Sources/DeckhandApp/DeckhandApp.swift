@@ -33,6 +33,13 @@ struct DeckhandApp: App {
         .commands {
             ConsoleCommands()
             TrackCommands()
+            CommandGroup(after: .sidebar) {
+                Divider()
+                Button("Next Playlist") { library.selectAdjacentSidebarItem(1) }
+                    .keyboardShortcut("]", modifiers: [.command, .shift])
+                Button("Previous Playlist") { library.selectAdjacentSidebarItem(-1) }
+                    .keyboardShortcut("[", modifiers: [.command, .shift])
+            }
             CommandMenu("Playback") {
                 Button(player.isPlaying ? "Pause" : "Play") { player.toggle() }
                     .keyboardShortcut("p", modifiers: [.command, .shift])

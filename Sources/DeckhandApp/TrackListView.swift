@@ -568,6 +568,7 @@ private struct KeyboardHelp: View {
     private let groups: [(String, [(String, String)])] = [
         ("Moving around", [
             ("j  k   ↓  ↑", "Next / previous track"),
+            ("⌘⇧]  ⌘⇧[", "Next / previous playlist"),
             ("J  K", "Extend the selection"),
             ("⌘↑  ⌘↓", "Top / bottom of the list"),
             ("/", "Search (Escape or Return goes back to the list)"),

@@ -371,6 +371,23 @@ final class LibraryModel {
         Task { await loadAnalysis() }
     }
 
+    // MARK: Sidebar navigation
+
+    /// Sidebar items in the order shown: library items, then playlists (grouped by the active drive when there is one).
+    var sidebarOrder: [SidebarItem] {
+        let entries = drivePlaylistGroups.map { $0.on + $0.off } ?? playlistEntries
+        var seen = Set<String>()
+        return [.all, .needsAnalysis] + entries.filter { seen.insert($0.id).inserted }.map { .playlist($0.id) }
+    }
+
+    /// Moves the sidebar selection to the next (1) or previous (-1) item, wrapping around.
+    func selectAdjacentSidebarItem(_ delta: Int) {
+        let order = sidebarOrder
+        guard !order.isEmpty else { return }
+        let i = selection.flatMap { order.firstIndex(of: $0) } ?? (delta > 0 ? -1 : 0)
+        selection = order[(i + delta + order.count) % order.count]
+    }
+
     // MARK: Drive selection
 
     /// Bytes still to copy to the active drive: tracks it should hold but doesn't yet (Music's file sizes).
