@@ -8,6 +8,14 @@ public enum SyncError: Error, CustomStringConvertible {
     case playlistNotFound(String)
     case volumeDisappeared(String)
     case copyFailed(String, Error)
+    /// The drive's manifest isn't the one a change was based on (another save landed in between).
+    case manifestConflict(String)
+    /// The manifest was written by a newer Deckhand.
+    case newerManifest(Int)
+    /// Another sync holds the drive's lock.
+    case driveBusy(String, SyncLock.Info)
+    /// A plan with unknown facts (e.g. audio not hashed yet) can't be carried out.
+    case incompletePlan(Int)
 
     public var description: String {
         switch self {
@@ -26,6 +34,14 @@ public enum SyncError: Error, CustomStringConvertible {
             return "The drive \"\(n)\" was disconnected during sync. The previous library on it is still intact; reconnect and sync again."
         case .copyFailed(let p, let e):
             return "Could not copy \(p): \(e.localizedDescription)"
+        case .manifestConflict(let n):
+            return "\"\(n)\" was changed by another sync while this one ran. Nothing was lost; sync again."
+        case .newerManifest(let f):
+            return "This drive was set up by a newer version of Deckhand (manifest format \(f)). Update Deckhand to sync it."
+        case .driveBusy(let n, let held):
+            return "\"\(n)\" is being synced by another Deckhand process (pid \(held.pid), since \(held.startedAt.formatted())). Try again when it finishes."
+        case .incompletePlan(let n):
+            return "Some of the library couldn't be read (\(n) track(s) unknown, or Apple Music returned nothing); nothing was changed."
         }
     }
 }

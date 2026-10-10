@@ -18,6 +18,10 @@ public enum HotCueStyle: String, Sendable, CaseIterable {
 
 /// Turns detected cue positions into device cues.
 enum CueBuilder {
+    /// Bump when the cues or phrases built from the same analysis change, so drives' analysis files are checked
+    /// once (and rewritten where their cues or phrases differ).
+    static let version = 1
+
     /// Players have eight hot cue pads (A–H).
     static let hotCueSlots = 8
 
@@ -68,7 +72,7 @@ public enum TrackColorRule: String, Sendable, CaseIterable {
     case energy
     case none
 
-    func color(energy: Int?) -> TrackColor? {
+    public func color(energy: Int?) -> TrackColor? {
         guard self == .energy, let energy else { return nil }
         switch energy {
         case ...3: return .blue

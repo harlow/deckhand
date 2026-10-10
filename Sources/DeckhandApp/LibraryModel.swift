@@ -466,14 +466,10 @@ final class LibraryModel {
         }
         let volume = drive.volume
         Task {
-            // Re-read first: the CLI may have saved a newer manifest since the drive was last read.
+            // Applied to the drive's newest manifest (the CLI may have saved one since the drive was last read);
+            // refused while a sync holds the drive.
             let result: Result<Manifest, Error> = await Task.detached {
-                Result {
-                    guard var m = try Manifest.load(from: volume) else { throw SyncError.notInitialized(volume.name) }
-                    change(&m)
-                    try m.save(to: volume)
-                    return try Manifest.load(from: volume) ?? m
-                }
+                Result { try Manifest.edit(on: volume, change) }
             }.value
             switch result {
             case .success(let m):
@@ -576,8 +572,7 @@ final class LibraryModel {
     private func computeSyncState(_ row: TrackRow, _ m: Manifest) -> SyncState {
         if let t = m.tracks[row.id] {
             if let h = row.hash, h != t.contentHash { return .pending }
-            if let f = t.metadataFingerprint, !Manifest.matches(f, SyncExecutor.metadataFingerprint(row.source)) { return .pending }
-            if row.analyzed && t.analysisVersion != TrackAnalysis.currentVersion { return .pending }
+            if let f = t.metadataFingerprint, !Manifest.matches(f, SyncStatus.metadataFingerprint(row.source)) { return .pending }
             return scope.contains(row.id) ? .onDrive : .pending
         }
         return scope.contains(row.id) ? .pending : .notOnDrive

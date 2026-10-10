@@ -6,106 +6,71 @@ import Testing
 @testable import Sync
 
 @Suite struct SyncPlannerTests {
-    let root: URL
-    let source: URL
-    let drive: URL
-    let cache: AnalysisCache
-
-    init() throws {
-        root = FileManager.default.temporaryDirectory.appendingPathComponent("deckhand-tests-\(UUID().uuidString)")
-        source = root.appendingPathComponent("music")
-        drive = root.appendingPathComponent("DRIVE")
-        for d in [source, drive] { try FileManager.default.createDirectory(at: d, withIntermediateDirectories: true) }
-        for name in ["A", "B", "C", "D"] {
-            try Data("audio \(name)".utf8).write(to: source.appendingPathComponent("\(name).mp3"))
-        }
-        cache = try AnalysisCache(root: root.appendingPathComponent("cache"))
-    }
-
-    func library(_ house: [String], extra: [SourcePlaylist] = []) -> SourceLibrary {
-        let tracks = Dictionary(uniqueKeysWithValues: ["A", "B", "C", "D"].map {
-            ($0, SourceTrack(id: $0, title: "Song \($0)", artist: "Artist", location: source.appendingPathComponent("\($0).mp3")))
-        })
-        return SourceLibrary(playlists: [SourcePlaylist(id: "house", name: "House", trackIds: house)] + extra, tracks: tracks)
-    }
-
-    /// Simulates a completed sync: files present on the "drive" with analysis files.
-    func materialize(_ plan: SyncPlan) throws {
-        for t in plan.tracks {
-            let audio = plan.volume.url(forUsbPath: t.usbPath)
-            try FileManager.default.createDirectory(at: audio.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try FileManager.default.copyItem(at: t.sourceFile, to: audio)
-            let anlz = plan.volume.url(forUsbPath: AnlzPath.directory(forAudioPath: t.usbPath) + "/ANLZ0000.DAT")
-            try FileManager.default.createDirectory(at: anlz.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Data().write(to: anlz)
-        }
+    func harness(_ house: [String]) throws -> SyncHarness {
+        let h = try SyncHarness()
+        for id in ["A", "B", "C", "D"] { try h.addTrack(id) }
+        h.setPlaylist("house", "House", house)
+        try h.select(["house"])
+        return h
     }
 
     @Test func incrementalReorderAddRemove() throws {
-        let volume = Volume(testRoot: drive)
-        let first = try SyncPlanner(library: library(["A", "B", "C"]), cache: cache)
-            .plan(volume: volume, selectedPlaylistIds: ["house"], previous: Manifest())
-        #expect(first.tracks.map(\.action) == [.add, .add, .add])
-        try materialize(first)
+        let h = try harness(["A", "B", "C"])
+        let first = try h.sync()
+        #expect(first.before.tracks.map(\.changes) == [[.new], [.new], [.new]])
+        let ids = try h.manifest().tracks
 
-        let second = try SyncPlanner(library: library(["C", "A", "D"]), cache: cache)
-            .plan(volume: volume, selectedPlaylistIds: ["house"], previous: first.manifest)
-        let actions = Dictionary(uniqueKeysWithValues: second.tracks.map { ($0.source.id, $0.action) })
-        #expect(actions == ["C": .unchanged, "A": .unchanged, "D": .add])
-        #expect(second.removedTracks.map(\.usbPath) == [first.manifest.tracks["B"]!.usbPath])
-        #expect(second.bytesToCopy == FileOps.size(source.appendingPathComponent("D.mp3")))
-
+        h.setPlaylist("house", "House", ["C", "A", "D"])
+        let second = try h.evaluate()
+        #expect(second.track("C")?.status == .clean && second.track("A")?.status == .clean)
+        #expect(second.track("D")?.changes == [.new])
+        #expect(second.removedTracks.map(\.record.usbPath) == [ids["B"]!.usbPath])
+        #expect(second.bytesToCopy == FileOps.size(h.file("D")))
         // IDs are stable and order follows the source.
-        let ids = second.manifest.tracks
-        #expect(ids["A"]!.contentId == first.manifest.tracks["A"]!.contentId)
-        #expect(second.playlists.first?.contentIds == [ids["C"]!.contentId, ids["A"]!.contentId, ids["D"]!.contentId])
-        #expect(second.playlists.first?.action == .change)
-        #expect(second.playlists.first?.playlistId == first.playlists.first?.playlistId)
+        let next = second.nextManifest.tracks
+        #expect(next["A"]!.contentId == ids["A"]!.contentId)
+        #expect(second.playlists.first?.record.contentIds == [next["C"]!.contentId, next["A"]!.contentId, next["D"]!.contentId])
+        #expect(second.playlists.first?.status == .pending([.contents]))
+        #expect(second.playlists.first?.record.playlistId == first.before.playlists.first?.record.playlistId)
+        try h.sync()
     }
 
     @Test func sharedTrackIsNotRemovedWhileReferenced() throws {
-        let volume = Volume(testRoot: drive)
-        let disco = SourcePlaylist(id: "disco", name: "Disco", trackIds: ["B"])
-        let first = try SyncPlanner(library: library(["A", "B"], extra: [disco]), cache: cache)
-            .plan(volume: volume, selectedPlaylistIds: ["house", "disco"], previous: Manifest())
-        #expect(first.tracks.count == 2)
-        try materialize(first)
-
-        let second = try SyncPlanner(library: library(["A"], extra: [disco]), cache: cache)
-            .plan(volume: volume, selectedPlaylistIds: ["house", "disco"], previous: first.manifest)
+        let h = try harness(["A", "B"])
+        h.setPlaylist("disco", "Disco", ["B"])
+        try h.select(["house", "disco"])
+        try h.sync()
+        h.setPlaylist("house", "House", ["A"])
+        let second = try h.evaluate()
         #expect(second.removedTracks.isEmpty)
-        #expect(!second.hasChanges || second.playlists.contains { $0.action == .change })
+        #expect(second.tracks.allSatisfy { $0.status == .clean })
+        try h.sync()
     }
 
     @Test func missingAndChangedFiles() throws {
-        let volume = Volume(testRoot: drive)
-        let first = try SyncPlanner(library: library(["A", "B"]), cache: cache)
-            .plan(volume: volume, selectedPlaylistIds: ["house"], previous: Manifest())
-        try materialize(first)
-
+        let h = try harness(["A", "B"])
+        try h.sync()
+        let first = try h.manifest()
         // Deleted from the drive behind Deckhand's back → recopied.
-        try FileManager.default.removeItem(at: volume.url(forUsbPath: first.manifest.tracks["A"]!.usbPath))
+        try FileManager.default.removeItem(at: h.volume.url(forUsbPath: first.tracks["A"]!.usbPath))
         // Source audio changed → replaced at a new path, old file removed.
-        try Data("new audio B".utf8).write(to: source.appendingPathComponent("B.mp3"))
-
-        let second = try SyncPlanner(library: library(["A", "B"]), cache: cache)
-            .plan(volume: volume, selectedPlaylistIds: ["house"], previous: first.manifest)
-        let byId = Dictionary(uniqueKeysWithValues: second.tracks.map { ($0.source.id, $0) })
-        #expect(byId["A"]?.action == .replace)
-        #expect(byId["B"]?.action == .replace)
-        #expect(byId["B"]?.usbPath != first.manifest.tracks["B"]!.usbPath)
-        #expect(second.removedTracks.map(\.usbPath) == [first.manifest.tracks["B"]!.usbPath])
+        try h.writeAudio(h.file("B"), audio: "new audio B")
+        let second = try h.evaluate()
+        #expect(second.track("A")?.changes == [.missingOnDrive])
+        #expect(second.track("B")?.changes.contains(.audioChanged) == true)
+        #expect(second.track("B")?.usbPath != first.tracks["B"]!.usbPath)
+        #expect(second.removedTracks.map(\.record.usbPath) == [first.tracks["B"]!.usbPath])
+        try h.sync()
     }
 
     @Test func ineligibleTracksAreReported() throws {
-        var lib = library(["A", "B"])
-        lib.tracks["B"]!.location = nil
-        lib.tracks["B"]!.unavailableReason = "Protected (DRM) track; no exportable local file"
-        let plan = try SyncPlanner(library: lib, cache: cache)
-            .plan(volume: Volume(testRoot: drive), selectedPlaylistIds: ["house"], previous: Manifest())
-        #expect(plan.tracks.map(\.source.id) == ["A"])
-        #expect(plan.skipped.count == 1)
-        #expect(plan.skipped.first?.reason.contains("DRM") == true)
+        let h = try harness(["A", "B"])
+        h.library.tracks["B"]!.location = nil
+        h.library.tracks["B"]!.unavailableReason = "Protected (DRM) track; no exportable local file"
+        let plan = try h.evaluate()
+        #expect(plan.tracks.filter(\.isPlaced).map(\.id) == ["A"])
+        #expect(plan.track("B")?.status == .ineligible("Protected (DRM) track; no exportable local file"))
+        #expect(plan.summary.ineligible == 1 && plan.summary.pending == 1)
     }
 
     @Test func sanitizesFileNames() {
@@ -114,48 +79,38 @@ import Testing
     }
 
     @Test func entireLibraryAddsEverySongButOnlySelectedPlaylists() throws {
-        var lib = library(["A", "B"])
-        lib.allTrackIds = ["A", "B", "C", "D"]
-        let volume = Volume(testRoot: drive)
-        let songsOnly = try SyncPlanner(library: lib, cache: cache)
-            .plan(volume: volume, selectedPlaylistIds: [], entireLibrary: true, previous: Manifest())
-        #expect(songsOnly.tracks.map(\.source.id) == ["A", "B", "C", "D"])
-        #expect(songsOnly.manifest.entireLibrary == true)
+        let h = try harness(["A", "B"])
+        h.library.allTrackIds = ["A", "B", "C", "D"]
+        let songsOnly = try h.evaluate(selection: Selection(playlistIds: [], entireLibrary: true))
+        #expect(songsOnly.tracks.map(\.id) == ["A", "B", "C", "D"])
+        #expect(songsOnly.nextManifest.entireLibrary == true)
         #expect(songsOnly.playlists.isEmpty)
 
-        let whole = try SyncPlanner(library: lib, cache: cache)
-            .plan(volume: volume, selectedPlaylistIds: ["house"], entireLibrary: true, previous: Manifest())
-        #expect(whole.tracks.map(\.source.id) == ["A", "B", "C", "D"])
+        let whole = try h.evaluate(selection: Selection(playlistIds: ["house"], entireLibrary: true))
+        #expect(whole.tracks.map(\.id) == ["A", "B", "C", "D"])
         #expect(whole.playlists.map(\.source.name) == ["House"])
 
-        let selected = try SyncPlanner(library: lib, cache: cache)
-            .plan(volume: volume, selectedPlaylistIds: ["house"], previous: Manifest())
-        #expect(selected.tracks.map(\.source.id) == ["A", "B"])
+        let selected = try h.evaluate()
+        #expect(selected.tracks.map(\.id) == ["A", "B"])
     }
 
-    @Test func adoptsExistingDriveAudio() throws {
-        let volume = Volume(testRoot: drive)
-        let existing = drive.appendingPathComponent("Contents/Old Artist")
-        try FileManager.default.createDirectory(at: existing, withIntermediateDirectories: true)
-        try FileManager.default.copyItem(at: source.appendingPathComponent("A.mp3"), to: existing.appendingPathComponent("a-old.mp3"))
-        let adoptable = AdoptScanner.scan(volume, owned: [], cache: cache)
-        #expect(adoptable.count == 1)
-
-        let plan = try SyncPlanner(library: library(["A", "B"]), cache: cache)
-            .plan(volume: volume, selectedPlaylistIds: ["house"], previous: Manifest(), adoptable: adoptable)
-        let byId = Dictionary(uniqueKeysWithValues: plan.tracks.map { ($0.source.id, $0) })
-        #expect(byId["A"]?.action == .adopt)
-        #expect(byId["A"]?.adoptFrom == "/Contents/Old Artist/a-old.mp3")
-        #expect(byId["B"]?.action == .add)
-        #expect(plan.bytesToCopy == FileOps.size(source.appendingPathComponent("B.mp3")))
+    @Test func entireLibraryWithoutAllSongsLoadedRemovesNothing() throws {
+        let h = try harness(["A"])
+        h.library.allTrackIds = ["A", "B"]
+        try h.select(["house"], entireLibrary: true)
+        try h.sync()
+        h.library.allTrackIds = nil
+        let c = try h.evaluate()
+        #expect(c.removedTracks.isEmpty && !c.isComplete)
+        #expect(c.nextManifest.tracks["B"] != nil)
     }
 
     @Test func avoidsAnalysisPathCollisions() throws {
         // Find titles for tracks A and B whose Deckhand paths (which embed each track's real audio
         // fingerprint) hash to the same ANLZ directory. Varied names are needed: near-identical strings
         // spread perfectly under this hash.
-        let hashA = try cache.contentHash(of: source.appendingPathComponent("A.mp3"))
-        let hashB = try cache.contentHash(of: source.appendingPathComponent("B.mp3"))
+        let h = try harness(["A", "B"])
+        let hashA = try h.hash("A"), hashB = try h.hash("B")
         func title(_ i: Int) -> String {
             "Track " + String(Insecure.MD5.hash(data: Data(String(i).utf8)).map { String(format: "%02x", $0) }.joined().prefix(10))
         }
@@ -170,28 +125,22 @@ import Testing
             if let t1 = aDirs[dir(title(j), hashB)] { pair = (t1, title(j)) }
         }
         let (t1, t2) = try #require(pair)
-        var lib = library(["A", "B"])
-        lib.tracks["A"]!.title = t1
-        lib.tracks["A"]!.artist = "A"
-        lib.tracks["B"]!.title = t2
-        lib.tracks["B"]!.artist = "A"
-        let plan = try SyncPlanner(library: lib, cache: cache)
-            .plan(volume: Volume(testRoot: drive), selectedPlaylistIds: ["house"], previous: Manifest())
-        let dirs = plan.tracks.map { OneLibrary.AnlzPath.directory(forAudioPath: $0.usbPath) }
+        h.library.tracks["A"]!.title = t1
+        h.library.tracks["A"]!.artist = "A"
+        h.library.tracks["B"]!.title = t2
+        h.library.tracks["B"]!.artist = "A"
+        let plan = try h.evaluate()
+        let dirs = plan.tracks.map { OneLibrary.AnlzPath.directory(forAudioPath: $0.usbPath!) }
         #expect(Set(dirs).count == plan.tracks.count)
     }
 
     @Test func analysisVersionChangeDoesNotRecopyAudio() throws {
-        let volume = Volume(testRoot: drive)
-        let first = try SyncPlanner(library: library(["A", "B"]), cache: cache)
-            .plan(volume: volume, selectedPlaylistIds: ["house"], previous: Manifest())
-        try materialize(first)
-        var previous = first.manifest
-        for id in previous.tracks.keys { previous.tracks[id]!.analysisVersion = TrackAnalysis.currentVersion - 1 }
-
-        let second = try SyncPlanner(library: library(["A", "B"]), cache: cache)
-            .plan(volume: volume, selectedPlaylistIds: ["house"], previous: previous)
-        #expect(second.tracks.allSatisfy { $0.action == .unchanged })
-        #expect(second.bytesToCopy == 0)
+        let h = try harness(["A", "B"])
+        try h.sync()
+        var m = try h.manifest()
+        for id in m.tracks.keys { m.tracks[id]!.analysisVersion = TrackAnalysis.currentVersion - 1 }
+        try Manifest.update(on: h.volume, basedOn: try h.manifest()) { $0 = m }
+        let second = try h.evaluate()
+        #expect(second.isClean && second.bytesToCopy == 0)
     }
 }

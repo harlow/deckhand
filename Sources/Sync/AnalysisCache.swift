@@ -19,6 +19,21 @@ public final class AnalysisCache: @unchecked Sendable {
     private var index: [String: IndexEntry]
     private var indexDirty = false
     private static let indexFile = "analysis-index.plist"
+    /// Tracks the analyzer couldn't handle, so syncs don't retry (and count) them every time. Valid only for the
+    /// algorithm versions that failed: a new analyzer tries again.
+    private var failures: [String: Failure]
+    private var failuresDirty = false
+    private static let failuresFile = "analysis-failures.json"
+
+    struct Failure: Codable {
+        var reason: String
+        var versions: String
+    }
+
+    /// The algorithm versions an entry or failure belongs to.
+    static var analyzerVersions: String {
+        "\(TrackAnalysis.currentVersion).\(CueAnalyzer.version).\(StructureAnalyzer.version)"
+    }
 
     public static func defaultRoot() -> URL {
         if let dir = ProcessInfo.processInfo.environment["DECKHAND_CACHE_DIR"] { return URL(fileURLWithPath: dir) }
@@ -33,21 +48,35 @@ public final class AnalysisCache: @unchecked Sendable {
         fingerprints = (try? JSONDecoder().decode([String: String].self, from: Data(contentsOf: fp))) ?? [:]
         index = (try? PropertyListDecoder().decode([String: IndexEntry].self,
                                                    from: Data(contentsOf: root.appendingPathComponent(Self.indexFile)))) ?? [:]
+        failures = (try? JSONDecoder().decode([String: Failure].self,
+                                              from: Data(contentsOf: root.appendingPathComponent(Self.failuresFile)))) ?? [:]
     }
 
     /// Hash of a file's audio payload (ignores tags), reusing a cached hash when path, size and mtime are unchanged.
     public func contentHash(of url: URL) throws -> String {
-        let key = "\(AudioHash.scheme)\(url.path)|\(FileOps.size(url))|\(FileOps.modificationDate(url)?.timeIntervalSince1970 ?? 0)"
+        try contentHash(of: url, size: FileOps.size(url), modified: FileOps.modificationDate(url)?.timeIntervalSince1970 ?? 0)
+    }
+
+    /// `contentHash(of:)` for a file whose size and modification time (`FileOps.attributes`) are already known.
+    public func contentHash(of url: URL, size: Int64, modified: Double) throws -> String {
+        let key = "\(AudioHash.scheme)\(url.path)|\(size)|\(modified)"
         if let h = lock.withLock({ fingerprints[key] }) { return h }
         let h = try AudioHash.hash(url)
         lock.withLock { fingerprints[key] = h }
         return h
     }
 
-    /// Writes the content-hash fingerprints and, if it changed, the summary index.
+    /// Writes the content-hash fingerprints and, if they changed, the summary index and failure list.
     public func save() throws {
         let data = try lock.withLock { try JSONEncoder().encode(fingerprints) }
         try data.write(to: root.appendingPathComponent("fingerprints.json"), options: .atomic)
+        let failures: [String: Failure]? = lock.withLock {
+            defer { failuresDirty = false }
+            return failuresDirty ? self.failures : nil
+        }
+        if let failures {
+            try JSONEncoder().encode(failures).write(to: root.appendingPathComponent(Self.failuresFile), options: .atomic)
+        }
         let index: [String: IndexEntry]? = lock.withLock {
             defer { indexDirty = false }
             return indexDirty ? self.index : nil
@@ -101,6 +130,18 @@ public final class AnalysisCache: @unchecked Sendable {
         summary(forHash: hash) != nil
     }
 
+    /// Why the current analyzer failed on this audio, if it did.
+    public func analysisFailure(forHash hash: String) -> String? {
+        lock.withLock { failures[hash].flatMap { $0.versions == Self.analyzerVersions ? $0.reason : nil } }
+    }
+
+    func recordFailure(_ reason: String, forHash hash: String) {
+        lock.withLock {
+            failures[hash] = Failure(reason: reason, versions: Self.analyzerVersions)
+            failuresDirty = true
+        }
+    }
+
     /// Song structure detected alongside the analysis.
     public func sections(forHash hash: String) -> [StructureAnalyzer.Section]? {
         load(hash)?.sections?.compactMap { s in
@@ -132,6 +173,7 @@ public final class AnalysisCache: @unchecked Sendable {
             recent[hash] = nil
             index[hash] = stamp.map { IndexEntry(stored, stamp: $0) }
             indexDirty = true
+            if failures.removeValue(forKey: hash) != nil { failuresDirty = true }
         }
     }
 

@@ -84,206 +84,6 @@ struct InitCommand: ParsableCommand {
     }
 }
 
-struct SyncCommand: ParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "sync", abstract: "Sync selected playlists to a drive.")
-
-    @Argument(help: "Drive, e.g. /Volumes/DJUSB.") var volume: String
-    @Option(name: .long, help: "Playlist name or ID (repeatable). Replaces the drive's saved selection.")
-    var playlist: [String] = []
-    @Flag(inversion: .prefixedNo, help: "Put every song on the drive, not just those in the chosen playlists (playlists are still the ones you choose). Remembered per drive.")
-    var entireLibrary: Bool?
-    @Flag(help: "Take over audio already on the drive (e.g. from a Rekordbox export) instead of copying it again.")
-    var adopt = false
-    @Flag(help: "Show what would change without writing anything.") var dryRun = false
-    @Flag(name: .shortAndLong, help: "Don't ask for confirmation.") var yes = false
-    @Flag(help: "List every track change.") var verbose = false
-    // Output settings below are remembered per drive: pass one to change it, omit it to keep the
-    // drive's saved value (or the default).
-    @Option(help: "Key display on the player: classic (Am) or alphanumeric (8A). Default classic.")
-    var keyFormat: OneLibraryDatabase.KeyFormat?
-    @Option(help: "Cues to write: memory, hot (A–H), both, or none. Default both.") var cues: CueMode?
-    @Option(help: "Hot cue pads: named (A Mix In … H Mix Out, from song structure) or phrase (first 8 phrase cues). Default named.")
-    var hotCues: HotCueStyle?
-    @Option(help: "Bars between the Build hot cue and the main drop (8, 16 or 32). Default 8.") var buildLead: Int?
-    @Option(help: "Track color tag: energy (blue → red) or none. Default energy.") var trackColor: TrackColorRule?
-    @Flag(inversion: .prefixedNo, help: "Write phrase analysis (colored Intro/Build/Breakdown/Drop/Outro bars). Default on.")
-    var phrases: Bool?
-    @Flag(inversion: .prefixedNo, help: "Analyze tracks that aren't analyzed yet. Without either flag, sync asks (or skips with -y).")
-    var analyze: Bool?
-    @Flag(help: .hidden) var extendedBeatgrid = false
-    @Flag(help: .hidden) var rewriteAnalysis = false
-
-    func run() throws {
-        let timer = PhaseTimer()
-        let v = try Volume(url: URL(fileURLWithPath: volume))
-        guard let manifest = try Manifest.load(from: v) else { throw SyncError.notInitialized(v.name) }
-        if !dryRun { try v.checkWritable() }
-        timer.mark("open drive")
-
-        let wholeLibrary = entireLibrary ?? (manifest.entireLibrary == true)
-        let lib = try AppleMusicLibrary.loadWithCurrentRatings(allSongs: wholeLibrary)
-        var selected = manifest.selectedPlaylistIds
-        if !playlist.isEmpty {
-            selected = try playlist.map { name in
-                guard let p = lib.playlist(named: name) else { throw SyncError.playlistNotFound(name) }
-                return p.id
-            }
-        } else if selected.isEmpty && !wholeLibrary {
-            selected = try promptForPlaylists(lib)
-        }
-
-        timer.mark("load library")
-        let cache = try AnalysisCache()
-        timer.mark("open cache")
-        var adoptable: [String: String] = [:]
-        if adopt {
-            let bar = LockedBox<ProgressBar?>(nil)
-            adoptable = AdoptScanner.scan(v, owned: Set(manifest.tracks.values.map(\.usbPath)), cache: cache) { i, n, name in
-                bar.update { if $0 == nil { $0 = ProgressBar("Scanning drive", total: n) } }
-                bar.value?.advance(name)
-            }
-            bar.value?.finish("\(adoptable.count) existing tracks found")
-        }
-        var plan = try SyncPlanner(library: lib, cache: cache)
-            .plan(volume: v, selectedPlaylistIds: selected, entireLibrary: wholeLibrary, previous: manifest, adoptable: adoptable)
-        timer.mark("plan")
-        printPlan(plan)
-
-        if dryRun {
-            print("\nNo changes written.")
-            return
-        }
-        let selectionChanged = plan.manifest.selectedPlaylistIds != manifest.selectedPlaylistIds
-            || plan.manifest.entireLibrary != manifest.entireLibrary
-        let settings = OutputSettings(saved: manifest.settings ?? [:], keyFormat: keyFormat, cues: cues,
-                                      hotCues: hotCues, buildLead: buildLead, trackColor: trackColor, phrases: phrases)
-        let settingsChanged = settings.dictionary != (manifest.settings ?? [:])
-        plan.manifest.settings = settings.dictionary
-        if settingsChanged { print("\nSettings: \(settings.summary)") }
-        let pending = plan.analysisCount
-        var analyzeNow = analyze ?? false
-        if pending > 0, analyze == nil {
-            let minutes = max(1, Int((Double(pending) * 4.0 / Double(max(1, ProcessInfo.processInfo.activeProcessorCount - 2)) / 60).rounded(.up)))
-            if !yes && !dryRun && isatty(STDIN_FILENO) != 0 {
-                print("\n\(pending) track(s) aren't analyzed yet (about \(minutes) min). Analyze them now? [Y/n] ", terminator: "")
-                let answer = readLine()?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
-                analyzeNow = answer.isEmpty || answer == "y" || answer == "yes"
-            } else {
-                print("\n\(pending) track(s) aren't analyzed yet; they'll sync without BPM, key or cues. Run `deckhand analyze`, then sync again.")
-            }
-        }
-        let adopting = plan.tracks.filter { $0.action == .adopt }.count
-        if adopting > 0 && !yes {
-            print("\n\(adopting) existing audio files on \(v.name) will be moved into /Contents/Deckhand and managed by")
-            print("Deckhand from now on (moved, not copied). Other files on the drive are left alone.")
-        }
-        if (plan.hasChanges || selectionChanged || settingsChanged) && !yes {
-            print("\nSync? [Y/n] ", terminator: "")
-            let answer = readLine()?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
-            guard answer.isEmpty || answer == "y" || answer == "yes" else {
-                print("Cancelled.")
-                return
-            }
-        }
-
-        let bars = SyncProgress()
-        var executor = SyncExecutor(cache: cache) { event in bars.handle(event) }
-        executor.anlzOptions.includeExtendedBeatGrid = extendedBeatgrid
-        executor.rewriteAnalysisFiles = rewriteAnalysis
-        executor.artwork = lib.artwork
-        executor.analyzeMissing = analyzeNow
-        executor.cueMode = settings.cues
-        executor.hotCueStyle = settings.hotCues
-        executor.buildLeadBars = settings.buildLead
-        executor.trackColorRule = settings.trackColor
-        executor.writePhrases = settings.phrases
-        let wrote = try executor.execute(plan, keyFormat: settings.keyFormat,
-                                         force: selectionChanged || rewriteAnalysis || settingsChanged)
-        bars.finish()
-        if !wrote {
-            print("\nAlready up to date.")
-            return
-        }
-        print("\nDone. \(plan.tracks.count) tracks in \(plan.playlists.filter { !$0.source.isFolder }.count) playlists on \(v.name).")
-        print("Run `deckhand eject \(v.url.path)` before unplugging.")
-    }
-
-    private func promptForPlaylists(_ lib: SourceLibrary) throws -> [String] {
-        let candidates = lib.playlists.filter { !$0.isFolder }
-        guard isatty(STDIN_FILENO) != 0 else {
-            throw ValidationError("No playlists selected for this drive. Pass --playlist \"<name>\".")
-        }
-        print("Select playlists to sync (comma-separated numbers):\n")
-        for (i, p) in candidates.enumerated() {
-            print("  \(String(i + 1).leftPad(3))  \(p.name)  (\(p.trackIds.count))")
-        }
-        print("\n> ", terminator: "")
-        let picks = (readLine() ?? "").split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
-        let ids = picks.compactMap { $0 >= 1 && $0 <= candidates.count ? candidates[$0 - 1].id : nil }
-        guard !ids.isEmpty else { throw ValidationError("No playlists selected.") }
-        return ids
-    }
-
-    private func printPlan(_ plan: SyncPlan) {
-        print("Deckhand — \(plan.volume.name)\n")
-        print("PLAYLISTS")
-        let symbol: [SyncPlan.PlaylistAction: String] = [.create: "+", .change: "~", .unchanged: "="]
-        for p in plan.playlists where !p.source.isFolder {
-            print("\(symbol[p.action]!) \(p.source.name)  (\(p.contentIds.count))")
-        }
-        for p in plan.removedPlaylists { print("- \(p.name)") }
-
-        let add = plan.tracks.filter { $0.action == .add }
-        let replace = plan.tracks.filter { $0.action == .replace }
-        let adopted = plan.tracks.filter { $0.action == .adopt }
-        print("\nTRACKS")
-        print("+ \(add.count) new")
-        if !adopted.isEmpty { print("> \(adopted.count) adopted from files already on the drive (moved, not copied)") }
-        print("- \(plan.removedTracks.count) orphaned")
-        print("~ \(replace.count) changed")
-        print("= \(plan.tracks.count - add.count - replace.count - adopted.count) unchanged")
-        if verbose {
-            for t in add { print("  + \(t.source.title)") }
-            for t in replace { print("  ~ \(t.source.title)") }
-            for t in plan.removedTracks { print("  - \(t.usbPath)") }
-        }
-        print("\nANALYSIS\n\(plan.analysisCount) tracks need analysis")
-        print("\nCOPY\n\(formatBytes(plan.bytesToCopy))")
-
-        if !plan.skipped.isEmpty {
-            print("\nCannot sync \(plan.skipped.count) track(s)\n")
-            for (playlist, items) in Dictionary(grouping: plan.skipped, by: \.playlist).sorted(by: { $0.key < $1.key }) {
-                print(playlist)
-                for s in items { print("  ! \(s.track)\n    \(s.reason)") }
-            }
-        }
-    }
-}
-
-struct StatusCommand: ParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "status", abstract: "Show a drive's sync state.")
-
-    @Argument var volume: String
-
-    func run() throws {
-        let v = try Volume(url: URL(fileURLWithPath: volume))
-        guard let m = try Manifest.load(from: v) else { throw SyncError.notInitialized(v.name) }
-        print("\(v.name)  \(v.format)  \(formatBytes(v.available)) free")
-        print("Last sync: \(m.lastSyncedAt.map { $0.formatted() } ?? "never")")
-        print("Tracks: \(m.tracks.count)   Playlists: \(m.playlists.count)")
-        let missing = m.tracks.values.filter { !FileManager.default.fileExists(atPath: v.url(forUsbPath: $0.usbPath).path) }
-        if !missing.isEmpty { print("Missing audio files: \(missing.count) (sync again to repair)") }
-        if let lib = try? AppleMusicLibrary.load() {
-            let names = m.selectedPlaylistIds.map { id in lib.playlists.first { $0.id == id }?.name ?? "(deleted: \(id))" }
-            print("Selected playlists: \(names.joined(separator: ", "))")
-            if let cache = try? AnalysisCache(),
-               let plan = try? SyncPlanner(library: lib, cache: cache).plan(volume: v, selectedPlaylistIds: m.selectedPlaylistIds, previous: m) {
-                print(plan.hasChanges ? "Pending changes: yes (run deckhand sync --dry-run for details)" : "Up to date with Apple Music.")
-            }
-        }
-    }
-}
-
 struct ValidateCommand: ParsableCommand {
     static let configuration = CommandConfiguration(commandName: "validate", abstract: "Check a drive's library for problems.")
 
@@ -338,6 +138,8 @@ struct AnalyzeCommand: ParsableCommand {
 
     @Option(name: .long, help: "Only these playlists (repeatable). Default: the whole Apple Music library.")
     var playlist: [String] = []
+    @Flag(help: "Try again on tracks the analyzer failed on before (otherwise skipped until Deckhand's analyzer changes).")
+    var retryFailed = false
     @Flag(help: .hidden) var all = false
 
     func run() throws {
@@ -352,7 +154,7 @@ struct AnalyzeCommand: ParsableCommand {
                 tracks += p.trackIds.filter { seen.insert($0).inserted }.compactMap { lib.tracks[$0] }
             }
         }
-        let eligible = tracks.filter { SyncPlanner.eligibilityProblem($0) == nil }
+        let eligible = tracks.filter { SyncPlanner.unavailableReason($0) == nil }
         let cache = try AnalysisCache()
         let fingerprinting = ProgressBar("Fingerprinting", total: eligible.count)
         let items = try eligible.map { t -> AnalysisRunner.Item in
@@ -371,12 +173,18 @@ struct AnalyzeCommand: ParsableCommand {
             case .failed(let title, let error): failures.update { $0.append("\(title): \(error)") }
             }
         }
-        let results = runner.run(items)
+        let cached = Set(items.filter { cache.isAnalyzed($0.contentHash) }.map(\.contentHash)).count
+        let previouslyFailed = retryFailed ? 0 : Set(items.filter {
+            !cache.isAnalyzed($0.contentHash) && cache.analysisFailure(forHash: $0.contentHash) != nil
+        }.map(\.contentHash)).count
+        let results = runner.run(items, retryFailed: retryFailed)
         bar.value?.finish()
         for f in failures.value { warn("  ! \(f)") }
-        let cached = items.count - results.count
         let elapsed = Int(Date().timeIntervalSince(start))
         print("\nAnalyzed \(results.count) tracks in \(elapsed)s; \(cached) already up to date.")
+        if previouslyFailed > 0 {
+            print("\(previouslyFailed) tracks the analyzer failed on before were skipped (--retry-failed tries them again).")
+        }
         let skipped = tracks.count - eligible.count
         if skipped > 0 { print("\(skipped) tracks skipped (no local file, DRM, or unsupported format).") }
     }
@@ -613,38 +421,14 @@ struct CleanupCommand: ParsableCommand {
             print("\nDelete these from \(v.name)? This can't be undone. [y/N] ", terminator: "")
             guard ["y", "yes"].contains(readLine()?.lowercased() ?? "") else { print("Cancelled."); return }
         }
+        // A running sync's new files aren't in the manifest yet and would look like leftovers.
+        let lock = try SyncLock.acquire(on: v)
+        defer { lock.release() }
+        guard try Manifest.load(from: v)?.generationNumber == manifest.generationNumber else {
+            throw ValidationError("\(v.name) was synced while cleanup was scanning it. Run cleanup again.")
+        }
         let failed = cleanup.apply(v)
         print(failed.isEmpty ? "Removed." : "Removed, except \(failed.count) item(s) that couldn't be deleted.")
-    }
-}
-
-/// Per-drive output settings: explicit flags win, then the drive's saved values, then defaults.
-struct OutputSettings {
-    var keyFormat: OneLibraryDatabase.KeyFormat
-    var cues: CueMode
-    var hotCues: HotCueStyle
-    var buildLead: Int
-    var trackColor: TrackColorRule
-    var phrases: Bool
-
-    init(saved: [String: String], keyFormat: OneLibraryDatabase.KeyFormat?, cues: CueMode?,
-         hotCues: HotCueStyle?, buildLead: Int?, trackColor: TrackColorRule?, phrases: Bool?) {
-        self.keyFormat = keyFormat ?? saved["keyFormat"].flatMap(OneLibraryDatabase.KeyFormat.init(rawValue:)) ?? .classic
-        self.cues = cues ?? saved["cues"].flatMap(CueMode.init(rawValue:)) ?? .both
-        self.hotCues = hotCues ?? saved["hotCues"].flatMap(HotCueStyle.init(rawValue:)) ?? .named
-        self.buildLead = buildLead ?? saved["buildLead"].flatMap(Int.init) ?? 8
-        self.trackColor = trackColor ?? saved["trackColor"].flatMap(TrackColorRule.init(rawValue:)) ?? .energy
-        self.phrases = phrases ?? saved["phrases"].map { $0 == "true" } ?? true
-    }
-
-    var dictionary: [String: String] {
-        ["keyFormat": keyFormat.rawValue, "cues": cues.rawValue, "hotCues": hotCues.rawValue,
-         "buildLead": String(buildLead), "trackColor": trackColor.rawValue, "phrases": String(phrases)]
-    }
-
-    var summary: String {
-        "cues \(cues.rawValue), hot cues \(hotCues.rawValue) (build lead \(buildLead) bars), "
-            + "keys \(keyFormat.rawValue), track color \(trackColor.rawValue), phrases \(phrases ? "on" : "off")"
     }
 }
 
