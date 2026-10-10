@@ -38,7 +38,7 @@ Per track (`ChangeSet.TrackChange`):
 | `missingOnDrive` | deleted from the drive behind Deckhand's back | copy again, same path |
 | `adopt` | audio already on the drive: moved from elsewhere, or already at its path | move, or verify (size + audio hash) and keep |
 | `analyze` | not analyzed, and the profile analyzes | analyze; then `analysisFiles` |
-| `analysisFiles` | inputs changed, a file is missing, or a new path | rebuild; write only if the fingerprint differs or files are missing |
+| `analysisFiles` | inputs changed, a file is missing, or a new path | rebuild; if the fingerprint differs or a file is missing, write the files whose bytes differ |
 | `record` | the database row differs | (database rewritten) |
 | `artworkCheck` | the track or file changed, or images are missing | re-read art; database rewritten only if the image changed |
 
@@ -93,8 +93,10 @@ the higher `generation` wins and a torn write leaves the other intact.
 
 Each track's `anlzInputs` digests its cache entry's revision, the ANLZ-relevant settings and
 `OutputProfile.recipe`, built from version constants. While inputs match and the files exist, a sync doesn't
-decode anything. When they differ, the executor rebuilds the cues and phrases and compares the fingerprint; files
-are rewritten only where it differs. Bump by hand when output changes:
+decode anything. When they differ, the executor rebuilds the cues and phrases and compares the fingerprint; where
+that differs, it compares the bytes with the files on the drive and writes only those that differ (the
+fingerprint includes the analysis version, which doesn't always change the files). Bump by hand when output
+changes:
 
 | Constant | Bump when |
 |---|---|
