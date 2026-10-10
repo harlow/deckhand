@@ -6,7 +6,11 @@ import Foundation
 /// Section order and header values mirror files written by Rekordbox 7.
 /// See docs/formats.md for field notes.
 public struct AnlzWriter {
-    public struct Options: Sendable {
+    /// Bump when the bytes written for the same analysis, cues and phrases change (section layout, waveform or
+    /// phrase encoding), so every drive's analysis files are checked and rewritten once.
+    public static let formatVersion = 1
+
+    public struct Options: Sendable, Equatable {
         /// Write the extended beat grid (PQT2). Its per-beat payload is not fully
         /// understood; Rekordbox omits it for some files.
         public var includeExtendedBeatGrid = false

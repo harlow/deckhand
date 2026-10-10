@@ -59,6 +59,16 @@ public struct DeviceLibrary: Sendable {
         return DeviceLibrary(tracks: tracks, playlists: orderedTree(playlists))
     }
 
+    /// Content ID of each track path, without reading anything else.
+    public static func contentIds(database: URL) throws -> [String: Int] {
+        let db = try OneLibraryDatabase.open(database)
+        var out: [String: Int] = [:]
+        for r in try db.query("SELECT content_id, path FROM content") {
+            if let id = r["content_id"]?.int, let path = r["path"]?.string { out[path] = Int(id) }
+        }
+        return out
+    }
+
     private static func orderedTree(_ all: [Playlist]) -> [Playlist] {
         var out: [Playlist] = []
         func visit(_ parent: Int?) {

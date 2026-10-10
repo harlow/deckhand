@@ -6,6 +6,18 @@ public enum OneLibraryDatabase {
     /// Public key used by Rekordbox and compatible players for exportLibrary.db.
     static let key = "r8gddnr4k847830ar6cqzbkk0el6qytmb3trbbx805jm74vez64i5o8fnrqryqls"
     static let dbVersion = "1000"
+    /// Bump when the database written for the same tracks and playlists changes (schema, column values), so every
+    /// drive's database is rewritten once. Part of each track's `fingerprint`.
+    public static let formatVersion = 1
+
+    /// Identifies one written database file: SQLCipher starts every file with a random 16-byte salt, so a rebuilt
+    /// or replaced database (say, by a Rekordbox export) reads differently. Nil if there's no readable file.
+    public static func fileId(_ path: URL) -> String? {
+        guard let h = FileHandle(forReadingAtPath: path.path) else { return nil }
+        defer { try? h.close() }
+        guard let salt = try? h.read(upToCount: 16), salt.count == 16 else { return nil }
+        return salt.map { String(format: "%02x", $0) }.joined()
+    }
 
     public enum KeyFormat: String, Sendable, CaseIterable {
         /// "Am", "F#m", "C"
@@ -77,17 +89,19 @@ public enum OneLibraryDatabase {
         return db
     }
 
-    private struct Writer {
+    struct Writer {
         let db: SQLiteDatabase
         let contents: Contents
         let playerData: PlayerData
 
-        private static let dateFormatter: DateFormatter = {
-            let f = DateFormatter()
-            f.locale = Locale(identifier: "en_US_POSIX")
-            f.dateFormat = "yyyy-MM-dd"
-            return f
-        }()
+        /// "yyyy-MM-dd" in local time. DateFormatter costs microseconds per call; fingerprints format every track.
+        static func day(_ date: Date) -> String {
+            var t = time_t(date.timeIntervalSince1970.rounded(.down))
+            var tm = tm()
+            localtime_r(&t, &tm)
+            let y = Int(tm.tm_year) + 1900, m = Int(tm.tm_mon) + 1, d = Int(tm.tm_mday)
+            return "\(y)-\(m < 10 ? "0" : "")\(m)-\(d < 10 ? "0" : "")\(d)"
+        }
 
         func writeAll() throws {
             let lookups = try writeLookups()
@@ -99,7 +113,7 @@ public enum OneLibraryDatabase {
                 ("deviceName", .text("")),
                 ("dbVersion", .text(dbVersion)),
                 ("numberOfContents", .int(Int64(contents.tracks.count))),
-                ("createdDate", .text(Self.dateFormatter.string(from: Date()))),
+                ("createdDate", .text(Self.day(Date()))),
                 ("backGroundColorType", .int(0)),
                 ("myTagMasterDBID", .int(0)),
             ])
@@ -164,7 +178,7 @@ public enum OneLibraryDatabase {
             // Rekordbox writes 0, not NULL, for absent references.
             func ref(_ id: Int?) -> SQLiteDatabase.Value { .int(Int64(id ?? 0)) }
             func text(_ s: String?) -> SQLiteDatabase.Value { s.map { .text($0) } ?? .null }
-            let added = Self.dateFormatter.string(from: t.dateAdded)
+            let added = Self.day(t.dateAdded)
             try db.insert("content", [
                 ("content_id", .int(Int64(t.contentId))),
                 ("title", .text(t.title)),
@@ -254,9 +268,7 @@ public enum OneLibraryDatabase {
             }
         }
 
-        private func keyName(_ k: MusicalKey) -> String {
-            contents.keyFormat == .classic ? k.classic : k.alphanumeric
-        }
+        private func keyName(_ k: MusicalKey) -> String { k.name(contents.keyFormat) }
 
         private func writePlayerData() throws {
             let kept = Set(contents.tracks.map { Int64($0.contentId) })
@@ -268,5 +280,27 @@ public enum OneLibraryDatabase {
                 try db.insert("history_content", row.map { ($0.key, $0.value) })
             }
         }
+    }
+}
+
+extension MusicalKey {
+    func name(_ format: OneLibraryDatabase.KeyFormat) -> String { format == .classic ? classic : alphanumeric }
+}
+
+extension ExportTrack {
+    /// Every value `writeContent` stores for this track, in the form it's stored: equal fingerprints mean an
+    /// identical content row. Keep in step with `writeContent`. (Album rows take their artist and image from
+    /// the album's first track; those aren't covered.)
+    public func fingerprint(keyFormat: OneLibraryDatabase.KeyFormat) -> String {
+        let added = OneLibraryDatabase.Writer.day(dateAdded)
+        let fields: [String] = [
+            "f\(OneLibraryDatabase.formatVersion)", String(contentId), title, artist ?? "", album ?? "", albumArtist ?? "",
+            genre ?? "", String(trackNumber ?? 0), String(discNumber ?? 0), String(year ?? 0),
+            String(Int64(durationSeconds.rounded())), String(Int64(((bpm ?? 0) * 100).rounded())),
+            key.map { $0.name(keyFormat) } ?? "", String(color?.rawValue ?? 0), String(rating), comment ?? "", usbPath,
+            String(fileSize), String(fileType.rawValue), String(bitrateKbps), String(bitDepth), String(sampleRate), added,
+            analysisPath ?? "", artworkPath ?? "",
+        ]
+        return fields.joined(separator: "\u{1F}")
     }
 }
