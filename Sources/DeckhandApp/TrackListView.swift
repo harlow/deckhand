@@ -248,6 +248,8 @@ private struct DriveControls: View {
                         let size = library.pendingBytes > 0 ? " · \(LibraryModel.bytes(library.pendingBytes))" : ""
                         Text("\(library.pendingChanges.formatted()) to sync\(size)\(library.pendingWontFit ? " · won't fit" : "")")
                             .foregroundStyle(library.pendingWontFit ? Color.red : Color.pending)
+                    } else if let n = library.driveStatus?.summary.unknown, n > 0 {
+                        Text("\(n.formatted()) not checked").foregroundStyle(.secondary)
                     }
                     Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                 }
@@ -314,13 +316,13 @@ private struct SyncNoticeBanner: View {
             HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.triangle").foregroundStyle(Color.pending)
                 switch notice {
-                case .leftover(let drive, let count, let details):
+                case .leftover(let id, let drive, let count, let details):
                     Text("\(drive) still has \(count.formatted()) change\(count == 1 ? "" : "s") to sync after syncing.")
                         .foregroundStyle(.secondary)
                     Spacer()
                     Button("Details") { showDetails = true }
                         .popover(isPresented: $showDetails, arrowEdge: .bottom) { NoticeDetails(lines: details) }
-                    Button("Sync Again") { if let d = library.activeDrive { library.sync(d) } }
+                    Button("Sync Again") { if let d = library.drives.first(where: { $0.id == id }) { library.sync(d) } }
                 case .staleLibrary(let id, let drive, let reason):
                     Text("Didn't sync \(drive): couldn't read Music's current data (\(reason)), and the library snapshot can trail recent edits.")
                         .foregroundStyle(.secondary)

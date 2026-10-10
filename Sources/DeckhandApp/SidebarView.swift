@@ -240,10 +240,12 @@ private struct DriveFooter: View {
         let (text, color): (String, Color) = {
             if library.ejecting.contains(drive.id) { return ("Ejecting", .secondary) }
             if drive.manifest == nil { return ("Not set up", .secondary) }
-            if library.job.running && library.job.title.hasSuffix(drive.volume.name) { return ("Syncing", .accentColor) }
+            if library.syncingDriveId == drive.id { return ("Syncing", .accentColor) }
             if library.checkingStatus { return ("Checking…", .secondary) }
             if library.pendingWontFit { return ("Won't fit", .red) }
             if library.pendingChanges > 0 { return ("\(library.pendingChanges.formatted()) to sync", Color.pending) }
+            // Not hashed yet (or unreadable): neither synced nor pending, so not "Up to date" either.
+            if let n = library.driveStatus?.summary.unknown, n > 0 { return ("\(n.formatted()) not checked", .secondary) }
             return ("Up to date", Color.synced)
         }()
         Text(text)

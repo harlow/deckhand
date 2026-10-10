@@ -88,10 +88,10 @@ enum Fixture {
         #expect(store.status == nil)
         let older = store.begin()
         let newer = store.begin()
-        let o1 = store.finish(Fixture.clean, request: newer)
-        #expect(o1 == .applied)
-        let o2 = store.finish(Fixture.pending, request: older)
-        #expect(o2 == .stale)
+        let newerLands = store.finish(Fixture.clean, request: newer)
+        #expect(newerLands == .applied)
+        let olderLands = store.finish(Fixture.pending, request: older)
+        #expect(olderLands == .stale)
         #expect(store.status == Fixture.clean)
     }
 
@@ -104,21 +104,21 @@ enum Fixture {
         #expect(store.status?.isClean == true)
         #expect(store.status?.optimistic == true)
         // Its result describes the drive before the sync: dropped.
-        let o3 = store.finish(Fixture.pending, request: inFlight)
-        #expect(o3 == .stale)
+        let inFlightLands = store.finish(Fixture.pending, request: inFlight)
+        #expect(inFlightLands == .stale)
         // So is one issued before the drive was read again.
-        let o4 = store.finish(Fixture.pending, request: store.begin())
-        #expect(o4 == .stale)
+        let beforeReread = store.finish(Fixture.pending, request: store.begin())
+        #expect(beforeReread == .stale)
         #expect(store.status?.optimistic == true)
         // The verification, issued after reading the library and drive again, replaces the optimistic status.
         let verification = store.beginVerification()
-        let o5 = store.finish(Fixture.clean, request: verification)
-        #expect(o5 == .verified)
+        let verified = store.finish(Fixture.clean, request: verification)
+        #expect(verified == .verified)
         #expect(store.status?.optimistic == false)
         #expect(!store.awaitingVerification)
         // Later evaluations apply as usual.
-        let o6 = store.finish(Fixture.pending, request: store.begin())
-        #expect(o6 == .applied)
+        let later = store.finish(Fixture.pending, request: store.begin())
+        #expect(later == .applied)
     }
 
     @Test func verificationReportsWhatsStillPending() {
@@ -126,8 +126,8 @@ enum Fixture {
         _ = store.finish(Fixture.pending, request: store.begin())
         store.syncFinished(driveId: Fixture.drive, report: SyncReport(generation: 2, clean: true, pending: 0))
         let verification = store.beginVerification()
-        let o7 = store.finish(Fixture.pending, request: verification)
-        #expect(o7 == .leftover(Fixture.pending))
+        let outcome = store.finish(Fixture.pending, request: verification)
+        #expect(outcome == .leftover(Fixture.pending))
         #expect(store.status?.tracks["T"] == .pending)
     }
 
@@ -151,15 +151,15 @@ enum Fixture {
         let before = store.begin()
         store.reset()
         #expect(store.status == nil)
-        let o8 = store.finish(Fixture.pending, request: before)
-        #expect(o8 == .stale)
-        let o9 = store.finish(Fixture.clean, request: store.begin())
-        #expect(o9 == .applied)
+        let oldDrive = store.finish(Fixture.pending, request: before)
+        #expect(oldDrive == .stale)
+        let newDrive = store.finish(Fixture.clean, request: store.begin())
+        #expect(newDrive == .applied)
         // A reset during a sync's verification lets later evaluations through.
         store.syncFinished(driveId: Fixture.drive, report: nil)
         store.reset()
-        let o10 = store.finish(Fixture.clean, request: store.begin())
-        #expect(o10 == .applied)
+        let afterReset = store.finish(Fixture.clean, request: store.begin())
+        #expect(afterReset == .applied)
     }
 }
 

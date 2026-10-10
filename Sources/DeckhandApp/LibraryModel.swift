@@ -109,7 +109,7 @@ enum LiveState: Equatable {
 /// A non-modal note above the track list about the last sync.
 enum SyncNotice: Equatable {
     /// Reading everything again after the sync still found work to do.
-    case leftover(drive: String, count: Int, details: [String])
+    case leftover(driveId: String, drive: String, count: Int, details: [String])
     /// The sync stopped before writing because Music couldn't be read live.
     case staleLibrary(driveId: String, drive: String, reason: String)
 }
@@ -207,16 +207,6 @@ final class LibraryModel {
             try? await Task.sleep(for: .seconds(10))
             if loadAttempt == attempt, loadState == .loading { loadState = .slow }
         }
-        // Not asked yet whether Deckhand may control Music: ask (the prompt can sit unanswered, so the first read
-        // goes ahead from the snapshot) and read again once answered.
-        if (try? await bridge.run({ $0.access(ask: false) }))?.value == .undecided {
-            awaitingAccess = true
-            Task {
-                _ = try? await bridge.run { $0.access(ask: true) }
-                awaitingAccess = false
-                scheduleReload("Music access answered", after: 0)
-            }
-        }
         do {
             try await reloadLibrary("launch")
         } catch {
@@ -240,7 +230,14 @@ final class LibraryModel {
             return
         }
         reloading = true
-        defer { reloading = false }
+        defer {
+            // Also after a failed read: nobody may be left waiting.
+            reloading = false
+            reloadAgain = false
+            let rest = reloadWaiters
+            reloadWaiters = []
+            rest.forEach { $0.resume() }
+        }
         repeat {
             reloadAgain = false
             let waiters = reloadWaiters
@@ -273,15 +270,19 @@ final class LibraryModel {
         }
     }
 
-    @ObservationIgnored private var awaitingAccess = false
+    @ObservationIgnored private var askingAccess = false
 
-    /// Music's live fields, unless it's known that they can't be read.
+    /// Music's live fields, unless they can't be read. Access is checked first without sending anything; if the
+    /// user hasn't been asked yet, the prompt is shown off the Music queue (it can sit unanswered behind other
+    /// windows, and rating writes and Sync mustn't wait on it) and the library is read again once it's answered.
     private func readLive() async -> (fields: [String: LiveTrack]?, sequence: Int?, state: LiveState) {
-        if awaitingAccess { return (nil, nil, .unknown) }
-        if case .unavailable(let f) = live, f.status == MusicEvents.Failure.notPermitted {
-            // Refused before: check again without sending anything (it's off until the user allows it).
-            let access = (try? await bridge.run { $0.access(ask: false) })?.value
-            if access == .denied { return (nil, nil, live) }
+        switch await Task.detached(operation: { MusicEvents.access(ask: false) }).value {
+        case .notRunning: return (nil, nil, .notRunning)
+        case .denied: return (nil, nil, .unavailable(MusicEvents.Failure(MusicEvents.Failure.notPermitted)))
+        case .undecided:
+            askForAccess()
+            return (nil, nil, .unknown)
+        case .granted, .other: break
         }
         do {
             let r = try await bridge.run { try $0.readLive() }
@@ -290,6 +291,19 @@ final class LibraryModel {
             let f = MusicBridge.failure(error)
             if !f.isNotRunning { Log.warning("library", "Couldn't read Music live: \(f)") }
             return (nil, nil, f.isNotRunning ? .notRunning : .unavailable(f))
+        }
+    }
+
+    private func askForAccess() {
+        guard !askingAccess else { return }
+        askingAccess = true
+        Task {
+            let answer = await withCheckedContinuation { (c: CheckedContinuation<MusicEvents.Access, Never>) in
+                DispatchQueue.global(qos: .userInitiated).async { c.resume(returning: MusicEvents.access(ask: true)) }
+            }
+            askingAccess = false
+            Log.info("library", "Music access: \(answer)")
+            scheduleReload("Music access answered", after: 0)
         }
     }
 
@@ -323,6 +337,7 @@ final class LibraryModel {
         }
         library = lib
         librarySignature = signature
+        if merged.changed { rehashTried.removeAll() }
         Log.info("library", "Applied Apple Music in \(Int(Date().timeIntervalSince(start) * 1000)) ms\(merged.changed ? "" : " (rows unchanged)")")
         evaluateStatus()
         if rows.values.contains(where: { !$0.checked }) { Task { await loadAnalysis() } }
@@ -336,11 +351,13 @@ final class LibraryModel {
             guard let url = t.location else { continue }
             if var row = rows[t.id] {
                 // Refresh what may have been edited in Music; keep the loaded analysis.
+                let fileChanged = row.location != url || row.source.fileSize != t.fileSize || row.source.modifiedDate != t.modifiedDate
                 row.source = t
                 row.title = t.title
                 row.artist = t.artist ?? ""
                 row.genre = t.genre ?? ""
-                if row.location != url {
+                // A moved or rewritten file (Music rewrites tags) has a new hash key: hash it again.
+                if fileChanged {
                     row.location = url
                     row.checked = false
                 }
@@ -451,8 +468,11 @@ final class LibraryModel {
     func analyzeLibrary() {
         guard !job.running else { flash("Wait for \(job.title.lowercased()) to finish"); return }
         job.run("Analyzing library", ["analyze"]) { [weak self] _ in
-            self?.cache?.reloadFromDisk()
-            self?.reloadUnanalyzed()
+            let cache = self?.cache
+            Task {
+                await Task.detached { cache?.reloadFromDisk() }.value
+                self?.reloadUnanalyzed()
+            }
         }
     }
 
@@ -506,6 +526,7 @@ final class LibraryModel {
             if verifyNext, statusStore.awaitingVerification {
                 statusStore.reset()
                 publishStatus()
+                endSyncFlow()
             }
             verifyNext = false
             return
@@ -524,6 +545,7 @@ final class LibraryModel {
             Log.info("status", "Evaluated \(drive.volume.name) in \(Int(Date().timeIntervalSince(start) * 1000)) ms: "
                      + "\(result.pendingCount) pending, \(result.summary.unknown) unknown\(outcome == .stale ? " (stale, dropped)" : "")")
             handle(outcome, drive: drive)
+            if outcome != .stale { hashUnknown(result) }
             if evaluateAgain {
                 evaluateAgain = false
                 evaluateStatus()
@@ -535,14 +557,31 @@ final class LibraryModel {
         switch outcome {
         case .leftover(let s):
             for line in s.details.prefix(20) { Log.warning("sync", "Still pending on \(drive.volume.name) after syncing: \(line)") }
-            if warnOnLeftover { syncNotice = .leftover(drive: drive.volume.name, count: s.pendingCount, details: s.details) }
-            warnOnLeftover = false
+            if warnOnLeftover && !editedDuringSync {
+                syncNotice = .leftover(driveId: drive.id, drive: drive.volume.name, count: s.pendingCount, details: s.details)
+            }
+            endSyncFlow()
         case .verified:
             Log.info("sync", "\(drive.volume.name) verified up to date after syncing")
-            warnOnLeftover = false
+            endSyncFlow()
         case .applied, .stale:
             break
         }
+    }
+
+    /// Tracks whose hash isn't known at their file's current size and date are hashed again in the background
+    /// (once each until the library changes), then evaluated again.
+    @ObservationIgnored private var rehashTried = Set<String>()
+
+    private func hashUnknown(_ result: DriveStatus) {
+        guard result.summary.unknown > 0 else { return }
+        let ids = result.tracks.compactMap { $0.value == .unknown && rows[$0.key]?.checked == true && !rehashTried.contains($0.key) ? $0.key : nil }
+        guard !ids.isEmpty else { return }
+        rehashTried.formUnion(ids)
+        var updated = rows
+        for id in ids { updated[id]?.checked = false }
+        rows = updated
+        Task { await loadAnalysis() }
     }
 
     /// Changes waiting for the active drive (tracks to copy, update or remove, playlists, drive changes).
@@ -566,52 +605,88 @@ final class LibraryModel {
     /// Syncs a drive in the background (analyzing anything not yet analyzed), then reads everything again.
     /// `requireLive`: stop if Music is running but can't be read live (the default); the app offers to sync anyway.
     func sync(_ drive: Drive, requireLive: Bool = true) {
-        guard !job.running else { flash("Wait for \(job.title.lowercased()) to finish"); return }
+        guard !job.running, !startingSync else { flash("Wait for \(job.title.lowercased()) to finish"); return }
         guard drive.canSync else {
             flash("Add a playlist to \(drive.volume.name) first (hover it in the sidebar and click Add)")
             return
         }
         syncNotice = nil
+        syncSerial += 1
+        syncFlowActive = true
         editedDuringSync = false
+        startingSync = true
         Task {
             // Ratings still being written go first, so the sync reads them.
             if bridge.hasQueuedRatings { status = "Saving ratings to Music…" }
             await bridge.drain()
             if status == "Saving ratings to Music…" { status = nil }
+            startingSync = false
+            guard !job.running else {
+                flash("Wait for \(job.title.lowercased()) to finish")
+                endSyncFlow()
+                return
+            }
             var args = ["sync", drive.volume.url.path, "-y", "--analyze"]
             if requireLive { args.append("--require-live") }
+            syncingDriveId = drive.id
             job.run("Syncing \(drive.volume.name)", args) { [weak self] ok in self?.syncFinished(drive, ok: ok) }
         }
     }
 
+    /// The drive the app's sync is writing, while it runs.
+    private(set) var syncingDriveId: String?
+    @ObservationIgnored private var startingSync = false
     /// Whether the verification after the current sync should warn about anything still pending.
     @ObservationIgnored private var warnOnLeftover = false
-    /// Something was edited (here or in Music) while the sync ran, so work left afterwards is expected.
+    /// From clicking Sync until its verification lands. Edits meanwhile (here or in Music) explain work left after
+    /// the sync, so they don't get a warning.
+    @ObservationIgnored private var syncFlowActive = false
     @ObservationIgnored private var editedDuringSync = false
+    /// Numbers syncs, so a re-read still running for an earlier sync can't issue a later one's verification.
+    @ObservationIgnored private var syncSerial = 0
 
-    private var syncing: Bool { job.running && job.title.hasPrefix("Syncing") }
+    private func noteEdit() {
+        if syncFlowActive { editedDuringSync = true }
+    }
+
+    private func endSyncFlow() {
+        syncFlowActive = false
+        warnOnLeftover = false
+    }
 
     private func syncFinished(_ drive: Drive, ok: Bool) {
+        syncingDriveId = nil
+        let serial = syncSerial
         // With `--require-live`, the CLI stops before writing when Music is running but can't be read.
         let stale = job.liveWarning
         if let stale { syncNotice = .staleLibrary(driveId: drive.id, drive: drive.volume.name, reason: stale.reason) }
-        if stale == nil, drive.id == activeDriveId {
+        let verifying = stale == nil && drive.id == activeDriveId
+        if verifying {
             statusStore.syncFinished(driveId: drive.id, report: job.report)
             publishStatus()
         }
-        cache?.reloadFromDisk()
         let edits = queuedEdits.removeValue(forKey: drive.id) ?? []
         // Leftovers are worth a warning only when nothing explains them: the sync succeeded (a failure's error is
-        // in the job card) and nothing was edited meanwhile.
-        warnOnLeftover = stale == nil && ok && edits.isEmpty && !editedDuringSync
+        // in the job card) and nothing was edited meanwhile (checked again when the verification lands).
+        warnOnLeftover = verifying && ok && edits.isEmpty
+        let cache = cache
         Task {
             if !edits.isEmpty { await write(edits, to: drive) }
-            guard stale == nil else { return }
+            await Task.detached { cache?.reloadFromDisk() }.value
+            guard stale == nil else {
+                endSyncFlow()
+                return
+            }
             async let reloaded: Void? = try? reloadLibrary("after syncing")
             async let refreshed: Void = refreshDrive(drive.id)
             _ = await (reloaded, refreshed)
             reloadUnanalyzed()
-            if drive.id == activeDriveId { evaluateStatus(verify: true) }
+            guard serial == syncSerial else { return }
+            if drive.id == activeDriveId {
+                evaluateStatus(verify: true)
+            } else {
+                endSyncFlow()
+            }
         }
     }
 
@@ -691,8 +766,8 @@ final class LibraryModel {
         guard let drive = activeDrive, var m = drive.manifest else { return }
         change(&m)
         setManifest(m, for: drive.id)
-        if syncing { editedDuringSync = true }
-        if job.running, job.title.hasSuffix(drive.volume.name) {
+        noteEdit()
+        if syncingDriveId == drive.id {
             queuedEdits[drive.id, default: []].append(change)
             flash("Saved to \(drive.volume.name) when the sync finishes")
             return
@@ -720,7 +795,8 @@ final class LibraryModel {
         }
     }
 
-    /// Replaces a drive's manifest with one this app just made or saved; reads begun before can't overwrite it.
+    /// Replaces a drive's manifest with one this app just made or saved; reads begun before can't overwrite it (they
+    /// can still bring newer files and free space: see `merged`).
     private func setManifest(_ m: Manifest, for id: String) {
         guard let i = drives.firstIndex(where: { $0.id == id }) else { return }
         _ = driveReads.accept(id, driveReads.begin())
@@ -746,9 +822,8 @@ final class LibraryModel {
         guard let volume = drives.first(where: { $0.id == id })?.volume else { return }
         let token = driveReads.begin()
         let drive = await Task.detached { (try? Volume(url: volume.url)).map(Drive.read) }.value
-        guard let drive, let i = drives.firstIndex(where: { $0.id == id }) else { return }
-        guard driveReads.accept(id, token) else { return }
-        drives[i] = withQueuedEdits(drive)
+        guard let drive, let i = drives.firstIndex(where: { $0.id == id }), let d = merged(drive, onto: drives[i], token: token) else { return }
+        drives[i] = d
         if id == activeDriveId { evaluateStatus() }
     }
 
@@ -757,10 +832,10 @@ final class LibraryModel {
         var next: [Drive] = []
         if driveReads.accept("", token) {
             // The newest list of mounted drives; a drive read more recently on its own keeps that read.
-            for d in found { next.append(driveReads.accept(d.id, token) ? withQueuedEdits(d) : current[d.id] ?? d) }
+            for d in found { next.append(merged(d, onto: current[d.id], token: token) ?? current[d.id] ?? d) }
         } else {
             // An older list: only update drives it read more recently than what's shown.
-            next = drives.map { d in found.first { $0.id == d.id }.flatMap { driveReads.accept(d.id, token) ? withQueuedEdits($0) : nil } ?? d }
+            next = drives.map { d in found.first { $0.id == d.id }.flatMap { merged($0, onto: d, token: token) } ?? d }
         }
         drives = next
         if activeDrive == nil {
@@ -768,6 +843,21 @@ final class LibraryModel {
             activeDriveId = (drives.first { $0.manifest != nil && $0.volume.name == saved } ?? drives.first { $0.manifest != nil })?.id
         }
         evaluateStatus()
+    }
+
+    /// A drive read begun with `token`, applied onto what's shown: its files and free space unless a newer read of
+    /// them was applied, its manifest unless a newer read or a local change was. Nil if it's older on both counts.
+    private func merged(_ read: Drive, onto current: Drive?, token: Int) -> Drive? {
+        let files = driveReads.accept(read.id + "#files", token)
+        let manifest = driveReads.accept(read.id, token)
+        guard var d = current else { return withQueuedEdits(read) }
+        guard files || manifest else { return nil }
+        if files {
+            d.volume = read.volume
+            d.probe = read.probe
+        }
+        if manifest { d.manifest = withQueuedEdits(read).manifest }
+        return d
     }
 
     /// A drive as read, with selection edits still waiting for a sync to finish shown applied.
@@ -799,7 +889,7 @@ final class LibraryModel {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                if self.syncing { self.editedDuringSync = true }
+                self.noteEdit()
                 self.scheduleReload("Music changed", after: 1)
             }
         }
@@ -824,7 +914,7 @@ final class LibraryModel {
     /// Ejects in the background (flushing a stick can take a few seconds) and reports the outcome.
     func eject(_ drive: Drive) {
         let name = drive.volume.name, id = drive.id
-        if job.running, job.title.hasSuffix(name) {
+        if syncingDriveId == id {
             flash("Wait for \(job.title.lowercased()) to finish before ejecting")
             return
         }
@@ -889,7 +979,7 @@ final class LibraryModel {
     /// Changes a playlist in the rows and in the library sync status is evaluated from (names there stay real in
     /// demo mode).
     private func editPlaylist(_ id: String, _ change: (inout SourcePlaylist) -> Void) {
-        if syncing { editedDuringSync = true }
+        noteEdit()
         if let i = playlists.firstIndex(where: { $0.id == id }) { change(&playlists[i]) }
         if let i = library?.playlists.firstIndex(where: { $0.id == id }) {
             let name = library!.playlists[i].name
@@ -950,7 +1040,7 @@ final class LibraryModel {
         let ids = ids.filter { rows[$0] != nil }
         guard !ids.isEmpty else { return }
         let generation = ratings.begin(stars, ids: ids)
-        if syncing { editedDuringSync = true }
+        noteEdit()
         showRating(stars, for: ids)
         bridge.setRating(stars, ids: ids, generation: generation)
     }
@@ -970,6 +1060,15 @@ final class LibraryModel {
     }
 
     private func ratingFinished(_ r: MusicBridge.RatingResult) {
+        // Apple Events never launch Music: open it in the background and write once more.
+        if r.error?.isNotRunning == true, ratings.entries[r.id]?.generation == r.generation,
+           relaunchRetries.insert("\(r.generation):\(r.id)").inserted {
+            Task {
+                await openMusic()
+                bridge.setRating(r.requested, ids: [r.id], generation: r.generation)
+            }
+            return
+        }
         if let stars = ratings.finish(r) { showRating(stars, for: [r.id]) }
         // Music's value is unknown: the next read must be applied even if the library looks unchanged.
         if r.confirmed == nil { librarySignature = nil }
@@ -981,11 +1080,43 @@ final class LibraryModel {
         scheduleReload("after setting ratings", after: r.confirmed == nil ? 0 : 3)
     }
 
+    @ObservationIgnored private var relaunchRetries = Set<String>()
+    @ObservationIgnored private var openingMusic: Task<Void, Never>?
+
+    /// Opens Music hidden in the background (once, however many writes are waiting) and waits until it's ready.
+    private func openMusic() async {
+        if openingMusic == nil {
+            openingMusic = Task {
+                flash("Opening Music to save the rating…")
+                if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Music") {
+                    let configuration = NSWorkspace.OpenConfiguration()
+                    configuration.activates = false
+                    configuration.hides = true
+                    _ = try? await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+                }
+                for _ in 0..<40 {
+                    if NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music").contains(where: \.isFinishedLaunching) { break }
+                    try? await Task.sleep(for: .milliseconds(250))
+                }
+                // Finished launching isn't quite ready for events.
+                try? await Task.sleep(for: .seconds(1))
+                openingMusic = nil
+            }
+        }
+        await openingMusic?.value
+    }
+
     /// Re-reads Apple Music (ratings, titles, playlists edited there) and the active drive when the app becomes active.
     func refreshFromMusic() {
         guard loadState == .loaded else { return }
         scheduleReload("app became active", after: 0.3)
-        if let id = activeDriveId, !job.running { Task { await refreshDrive(id) } }
+        guard !job.running else { return }
+        let cache = cache
+        Task {
+            // A sync or analyze run in Terminal may have saved hashes and analysis failures.
+            await Task.detached { cache?.reloadFromDisk() }.value
+            if let id = activeDriveId { await refreshDrive(id) } else { evaluateStatus() }
+        }
     }
 
     @ObservationIgnored private var loadAttempt = UUID()

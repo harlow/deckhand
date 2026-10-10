@@ -37,7 +37,7 @@ App icon: the "Platter" mark, drawn by `Scripts/make-icon.swift` at build time. 
 - **Star ratings:** shared with Apple Music in both directions. Click stars in the list (or use the Rating
   submenu, or ⌥0–⌥5) to set them in Music. The list and the sync dot change at once; Music's answer, read
   back after the write, replaces it, and an error (no Automation access, Music not answering, track not
-  found) is shown rather than ignored. Sync writes ratings to the drive, and a rating or title change alone is
+  found) is shown rather than ignored; if Music isn't running it's opened in the background. Sync writes ratings to the drive, and a rating or title change alone is
   enough to rewrite the drive's database.
 - **Drag and drop:** drag tracks (or the whole selection) onto a sidebar playlist to add them in Apple Music,
   skipping tracks it already has; or onto Up Next to queue them.
@@ -128,14 +128,19 @@ sync` decide), run off the main thread on the app's library, the drive's manifes
 saved settings. `DeckhandAppCore` holds the parts that don't need a UI, and its tests cover the races below.
 
 - **Facts without hashing.** The app never hashes to evaluate: audio its background analysis load hasn't hashed
-  yet is *unknown*, shown as neither synced nor pending, and the evaluation runs again as hashes arrive. Until the
-  first evaluation lands the drive shows "Checking…". Retained, failed and ineligible tracks show as the engine
-  sees them (hover the dot for why).
+  yet is *unknown*, shown as neither synced nor pending, and the evaluation runs again as hashes arrive. Tracks an
+  evaluation reports unknown (e.g. Music rewrote the file's tags) are hashed again in the background. Until the
+  first evaluation lands the drive shows "Checking…", and with nothing pending but some tracks unknown it shows
+  "N not checked" rather than "Up to date". Retained, failed and ineligible tracks show as the engine sees them
+  (hover the dot for why). The app picks up hashes and analysis failures the CLI saved after each job and when
+  it becomes active.
 - **Ordering.** Evaluations can finish out of order; the newest one issued wins (`StatusStore`). Drive reads
   carry sequence tokens (`ReadLedger`), so a slow read never overwrites a newer one or a selection edit the app
-  just saved.
+  just saved (the drive's files and its manifest are ordered separately: a read begun before an edit still brings
+  the newer file scan).
 - **After a sync.** The CLI's last line, `@result {...}`, says whether its own self-check was clean. If so the app
-  shows the drive clean at once; evaluations begun before the sync ended are dropped. Then it reads Music and the
+  shows the drive clean at once; evaluations begun before the sync ended are dropped (so a rating set in that
+  second shows its pending dot once the verification lands). Then it reads Music and the
   drive again and evaluates ("verification"); that replaces the optimistic status, and if anything is still
   pending (and nothing was edited during the sync) a note above the track list lists it. The same lines go to the
   Console.
