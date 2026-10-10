@@ -12,6 +12,8 @@ public struct Volume: Sendable {
     public let isRoot: Bool
     public let capacity: Int64
     public let available: Int64
+    /// A plain directory standing in for a drive (tests): not re-resolved as a volume while syncing.
+    let isTestRoot: Bool
 
     public init(url: URL) throws {
         let keys: Set<URLResourceKey> = [
@@ -33,10 +35,11 @@ public struct Volume: Sendable {
         isRoot = v.volumeIsRootFileSystem ?? false
         capacity = Int64(v.volumeTotalCapacity ?? 0)
         available = Int64(v.volumeAvailableCapacity ?? 0)
+        isTestRoot = false
     }
 
     /// A directory standing in for a drive, for tests.
-    init(testRoot: URL) {
+    init(testRoot: URL, available: Int64 = 1 << 40) {
         url = testRoot
         name = testRoot.lastPathComponent
         uuid = nil
@@ -46,7 +49,20 @@ public struct Volume: Sendable {
         isReadOnly = false
         isRoot = false
         capacity = 1 << 40
-        available = 1 << 40
+        self.available = available
+        isTestRoot = true
+    }
+
+    /// Free space now (the value read at mount can be stale).
+    func currentAvailable() throws -> Int64 {
+        isTestRoot ? available : try Volume(url: url).available
+    }
+
+    /// Throws if the drive was unplugged.
+    func ensureMounted() throws {
+        guard FileManager.default.fileExists(atPath: url.path), isTestRoot || (try? Volume(url: url)) != nil else {
+            throw SyncError.volumeDisappeared(name)
+        }
     }
 
     /// Mounted volumes that look like external drives.

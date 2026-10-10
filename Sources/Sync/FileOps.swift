@@ -6,16 +6,21 @@ enum FileOps {
 
     /// Copies file bytes only (no xattrs/resource forks, which create `._` files on FAT drives),
     /// writing to a temporary name and renaming into place: a file at its final path counts as copied.
-    static func copyData(from src: URL, to dst: URL) throws {
+    /// Returns the number of bytes copied.
+    @discardableResult
+    static func copyData(from src: URL, to dst: URL) throws -> Int64 {
         let tmp = dst.deletingLastPathComponent().appendingPathComponent(".deckhand-tmp-\(dst.lastPathComponent)")
         let input = try FileHandle(forReadingFrom: src)
         defer { try? input.close() }
+        var copied: Int64 = 0
         try withOutput(tmp) { fd in
             while let chunk = try input.read(upToCount: 4 << 20), !chunk.isEmpty {
                 try writeAll(chunk, to: fd, path: tmp.path)
+                copied += Int64(chunk.count)
             }
         }
         try rename(tmp, to: dst)
+        return copied
     }
 
     /// Writes data to a temporary sibling and renames it over `url`. For files whose partial state would be
@@ -60,11 +65,11 @@ enum FileOps {
 
     /// macOS tags every file this process creates with com.apple.provenance, which FAT stores in a `._` sidecar
     /// that players can list as junk. It can't be prevented, so it's deleted right after each write.
-    private static func removeAppleDouble(of url: URL) {
+    static func removeAppleDouble(of url: URL) {
         unlink(url.deletingLastPathComponent().appendingPathComponent("._" + url.lastPathComponent).path)
     }
 
-    private static func writeAll(_ data: Data, to fd: Int32, path: String) throws {
+    static func writeAll(_ data: Data, to fd: Int32, path: String) throws {
         try data.withUnsafeBytes { raw in
             var offset = 0
             while offset < raw.count {
@@ -85,8 +90,14 @@ enum FileOps {
         removeAppleDouble(of: to)
     }
 
-    private static func posixError(_ path: String) -> Error {
+    static func posixError(_ path: String) -> Error {
         NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: [NSFilePathErrorKey: path])
+    }
+
+    /// Size and modification time from one stat, as `size` and `modificationDate` report them; nil if missing.
+    static func attributes(_ url: URL) -> (size: Int64, modified: Double)? {
+        guard let a = try? FileManager.default.attributesOfItem(atPath: url.path) else { return nil }
+        return ((a[.size] as? NSNumber)?.int64Value ?? 0, (a[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0)
     }
 
     static func size(_ url: URL) -> Int64 {
