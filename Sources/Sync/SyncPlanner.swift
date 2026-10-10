@@ -154,7 +154,8 @@ public struct SyncPlanner {
             .filter { !keptPaths.contains($0.usbPath) }
         manifest.tracks = Dictionary(uniqueKeysWithValues: tracks.map {
             let prev = previous.tracks[$0.source.id]
-            let unchanged = $0.action == .unchanged
+            // Same audio at the same path (even if it must be copied again): its ANLZ files are still valid.
+            let unchanged = prev?.contentHash == $0.contentHash && prev?.usbPath == $0.usbPath
             return ($0.source.id, Manifest.Track(contentId: $0.contentId, usbPath: $0.usbPath, contentHash: $0.contentHash,
                                                  analysisVersion: TrackAnalysis.currentVersion,
                                                  anlzFingerprint: unchanged ? prev?.anlzFingerprint : nil,

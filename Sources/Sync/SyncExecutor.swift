@@ -44,7 +44,6 @@ public struct SyncExecutor {
     public var rewriteAnalysisFiles = false
 
     static let dbRelativePath = "/PIONEER/rekordbox/exportLibrary.db"
-    static let managedPaths = ["PIONEER", "Contents", "Contents/Deckhand", Manifest.directory]
 
     public init(cache: AnalysisCache, progress: @escaping @Sendable (Event) -> Void = { _ in }) {
         self.cache = cache
@@ -117,7 +116,8 @@ public struct SyncExecutor {
             summaries[t.contentHash] = summary
             let datPresent = FileManager.default.fileExists(
                 atPath: volume.url(forUsbPath: AnlzPath.directory(forAudioPath: t.usbPath) + "/ANLZ0000.DAT").path)
-            let forced = t.action != .unchanged || t.needsAnalysis || rewriteAnalysisFiles || !datPresent
+            // New or changed audio has no recorded fingerprint (the planner drops it), so it's always written.
+            let forced = t.needsAnalysis || rewriteAnalysisFiles || !datPresent
             let inputs = "\(summary.revision);\(settingsKey)"
             let previous = manifest.tracks[t.source.id]
             // Same cache entry, settings and build as last time: the fingerprint can't have changed.
@@ -180,38 +180,31 @@ public struct SyncExecutor {
         )
         let dbURL = volume.url(forUsbPath: Self.dbRelativePath)
         let rbDir = dbURL.deletingLastPathComponent()
-        try FileManager.default.createDirectory(at: rbDir, withIntermediateDirectories: true)
-        let staging = rbDir.appendingPathComponent(".deckhand-staging-exportLibrary.db")
-        try? FileManager.default.removeItem(at: staging)
+        // SQLite on a FAT stick flushes per page and takes tens of seconds even for small libraries, so the
+        // database is built and validated locally, then written to the drive in one pass.
+        let local = FileManager.default.temporaryDirectory.appendingPathComponent("deckhand-\(UUID().uuidString).db")
+        defer { try? FileManager.default.removeItem(at: local) }
         // Player history refers to content IDs, which only mean the same tracks if Deckhand wrote the
         // previous database (not, say, a Rekordbox export on a drive being taken over).
         let deckhandWroteDB = plan.manifest.lastSyncedAt != nil
-        try OneLibraryDatabase.write(contents, to: staging, previous: deckhandWroteDB ? dbURL : nil)
+        try OneLibraryDatabase.write(contents, to: local, previous: deckhandWroteDB ? dbURL : nil)
 
         // 5. Validate.
-        let issues = try OneLibraryValidator.validate(database: staging, volumeRoot: volume.url)
-        if !issues.isEmpty {
-            try? FileManager.default.removeItem(at: staging)
-            throw OneLibraryError.validation(issues)
-        }
+        let issues = try OneLibraryValidator.validate(database: local, volumeRoot: volume.url)
+        if !issues.isEmpty { throw OneLibraryError.validation(issues) }
 
-        timer.mark("database")
-        // 6. Commit: keep a backup of the previous DB, then swap.
-        progress(.committing)
         try ensureMounted(volume)
+        let staging = rbDir.appendingPathComponent(".deckhand-staging-exportLibrary.db")
+        try FileOps.write(try Data(contentsOf: local), to: staging)
+        timer.mark("database")
+
+        // 6. Commit: flush everything written so far, then rename the staged database over the old one.
+        progress(.committing)
         FileOps.syncFilesystem()
-        let backup = rbDir.appendingPathComponent("exportLibrary.db.deckhand-backup")
-        if FileManager.default.fileExists(atPath: dbURL.path) {
-            try? FileManager.default.removeItem(at: backup)
-            try FileManager.default.copyItem(at: dbURL, to: backup)
-        }
-        for suffix in ["-wal", "-shm"] {
-            try? FileManager.default.removeItem(at: URL(fileURLWithPath: dbURL.path + suffix))
-        }
-        if FileManager.default.fileExists(atPath: dbURL.path) {
-            _ = try FileManager.default.replaceItemAt(dbURL, withItemAt: staging)
-        } else {
-            try FileManager.default.moveItem(at: staging, to: dbURL)
+        for suffix in ["-wal", "-shm"] { unlink(dbURL.path + suffix) }
+        unlink(rbDir.appendingPathComponent("exportLibrary.db.deckhand-backup").path) // left by older versions
+        guard rename(staging.path, dbURL.path) == 0 else {
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: [NSFilePathErrorKey: dbURL.path])
         }
 
         manifest.lastSyncedAt = Date()
@@ -231,9 +224,8 @@ public struct SyncExecutor {
             try? FileManager.default.removeItem(at: volume.url(forUsbPath: path))
             try? FileManager.default.removeItem(at: volume.url(forUsbPath: ArtworkWriter.mediumPath(forSmall: path)))
         }
-        try? FileManager.default.removeItem(at: backup)
-        FileOps.removeAppleDoubleFiles(volumeRoot: volume.url, managedPaths: Self.managedPaths)
-        FileOps.syncFilesystem()
+        // Deckhand writes without xattrs, so `._` files can only appear next to files macOS itself touched.
+        FileOps.removeAppleDoubleFiles(in: rbDir)
         timer.mark("cleanup")
         progress(.done)
         return true
@@ -272,13 +264,15 @@ public struct SyncExecutor {
             if used[hash] == nil {
                 let small = plan.volume.url(forUsbPath: path)
                 let medium = plan.volume.url(forUsbPath: ArtworkWriter.mediumPath(forSmall: path))
-                if !FileManager.default.fileExists(atPath: small.path) || !FileManager.default.fileExists(atPath: medium.path) {
+                // Images are written in place, so only those a completed sync recorded are trusted.
+                if previous[hash] != id || !FileManager.default.fileExists(atPath: small.path)
+                    || !FileManager.default.fileExists(atPath: medium.path) {
                     guard let data = data ?? artwork.artwork(forTrackId: t.source.id),
                           let s = ArtworkWriter.jpeg(data, size: ArtworkWriter.smallSize),
                           let m = ArtworkWriter.jpeg(data, size: ArtworkWriter.mediumSize) else { continue }
                     try ensureMounted(plan.volume)
-                    try FileOps.writeAtomically(s, to: small)
-                    try FileOps.writeAtomically(m, to: medium)
+                    try FileOps.write(s, to: small)
+                    try FileOps.write(m, to: medium)
                 }
                 used[hash] = id
             }
@@ -310,9 +304,9 @@ public struct SyncExecutor {
         let files = AnlzWriter(audioPath: t.usbPath, analysis: analysis, totalSamples: totalSamples, cues: cues,
                                phrases: phrases, options: anlzOptions).build()
         let dir = volume.url(forUsbPath: AnlzPath.directory(forAudioPath: t.usbPath))
-        try FileOps.writeAtomically(files.dat, to: dir.appendingPathComponent("ANLZ0000.DAT"))
-        try FileOps.writeAtomically(files.ext, to: dir.appendingPathComponent("ANLZ0000.EXT"))
-        try FileOps.writeAtomically(files.twoEx, to: dir.appendingPathComponent("ANLZ0000.2EX"))
+        try FileOps.write(files.dat, to: dir.appendingPathComponent("ANLZ0000.DAT"))
+        try FileOps.write(files.ext, to: dir.appendingPathComponent("ANLZ0000.EXT"))
+        try FileOps.write(files.twoEx, to: dir.appendingPathComponent("ANLZ0000.2EX"))
     }
 
     /// The source fields that end up in the device database (see `exportTrack`).
