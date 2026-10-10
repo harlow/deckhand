@@ -242,8 +242,6 @@ private struct DriveControls: View {
                         let size = library.pendingBytes > 0 ? " · \(LibraryModel.bytes(library.pendingBytes))" : ""
                         Text("\(library.pendingChanges.formatted()) to sync\(size)\(library.pendingWontFit ? " · won't fit" : "")")
                             .foregroundStyle(library.pendingWontFit ? Color.red : Color.pending)
-                    } else {
-                        Text("Up to date").foregroundStyle(.secondary)
                     }
                     Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                 }
@@ -257,15 +255,19 @@ private struct DriveControls: View {
             .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.white.opacity(0.12)))
             .help("Changes waiting for \(drive.volume.name). Click to switch drives.")
+            // Blue only when there's something to sync; with nothing pending it stays a quiet button you can still press.
+            let prominent = job.running || library.pendingChanges > 0
             Button { library.sync(drive) } label: {
                 HStack(spacing: 6) {
                     if job.running { ProgressView().controlSize(.mini).tint(.white) }
                     Text(job.running ? "Syncing" : "Sync").fontWeight(.semibold)
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(prominent ? Color.white : Color.secondary)
                 .padding(.horizontal, 14)
                 .frame(height: 28)
-                .background(Color.accentColor.opacity(job.running ? 0.5 : 1), in: RoundedRectangle(cornerRadius: 6))
+                .background(prominent ? Color.accentColor.opacity(job.running ? 0.5 : 1) : Color.white.opacity(0.06),
+                            in: RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.white.opacity(prominent ? 0 : 0.12)))
                 .contentShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
