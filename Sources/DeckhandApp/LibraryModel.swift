@@ -363,7 +363,10 @@ final class LibraryModel {
     }
 
     private func reloadUnanalyzed() {
-        for (id, row) in rows where !row.analyzed { rows[id]?.checked = false }
+        // One assignment: each write to `rows` clears the sync caches and rebuilds the listing.
+        var updated = rows
+        for (id, row) in rows where !row.analyzed && row.checked { updated[id]?.checked = false }
+        rows = updated
         Task { await loadAnalysis() }
     }
 
@@ -506,6 +509,21 @@ final class LibraryModel {
         walk("", 0)
         return out
     }
+
+    /// `trackIds(of:).count`, memoized for the sidebar's badges.
+    func trackCount(of p: SourcePlaylist) -> Int {
+        if trackCountVersion != contentVersion {
+            trackCountVersion = contentVersion
+            trackCounts.removeAll(keepingCapacity: true)
+        }
+        if let n = trackCounts[p.id] { return n }
+        let n = trackIds(of: p).count
+        trackCounts[p.id] = n
+        return n
+    }
+
+    @ObservationIgnored private var trackCounts: [String: Int] = [:]
+    @ObservationIgnored private var trackCountVersion = -1
 
     func trackIds(of p: SourcePlaylist) -> [String] {
         guard p.isFolder else { return p.trackIds.filter { rows[$0] != nil } }

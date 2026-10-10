@@ -24,7 +24,7 @@ struct SidebarView: View {
                         Label(e.playlist.name, systemImage: e.playlist.isFolder ? "folder" : "music.note.list")
                             .lineLimit(1)
                         Spacer(minLength: 4)
-                        PlaylistBadge(count: library.trackIds(of: e.playlist).count, state: library.playlistSync(e.playlist))
+                        PlaylistBadge(count: library.trackCount(of: e.playlist), state: library.playlistSync(e.playlist))
                     }
                     .padding(.leading, CGFloat(e.depth) * 14)
                     .background {
