@@ -97,8 +97,10 @@ const phraseColor: Record<Kind, string> = {
     </svg>
     {animate && (
       <>
-        <div class="played absolute inset-y-0 left-0 bg-black/45 mix-blend-multiply" />
-        <div class="playhead absolute inset-y-0 w-px bg-white shadow-[0_0_12px_2px_rgb(255_255_255/0.6)]" />
+        <div class="played absolute inset-0 bg-black/45 mix-blend-multiply motion-reduce:hidden" />
+        <div class="playhead pointer-events-none absolute inset-0">
+          <div class="h-full w-px bg-white shadow-[0_0_12px_2px_rgb(255_255_255/0.6)]" />
+        </div>
       </>
     )}
   </div>

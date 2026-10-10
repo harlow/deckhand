@@ -16,8 +16,9 @@ public enum KeyAnalyzer {
     static let minorBias = 0.4
 
     /// Pass full-rate audio (≥ 22.05 kHz) so S-KEY can run; lower rates fall back to the linear model.
-    public static func analyze(_ audio: DecodedAudio) -> MusicalKey? {
-        candidates(audio).first?.key
+    /// `reduced` is `TrackAnalyzer.reducedRate(audio)` if the caller already has it.
+    public static func analyze(_ audio: DecodedAudio, reduced: DecodedAudio? = nil) -> MusicalKey? {
+        candidates(audio, reduced: reduced).first?.key
     }
 
     /// Chroma analysis rate. The input is decimated to just above twice the top chroma band (B6, 1976 Hz).
@@ -63,8 +64,8 @@ public enum KeyAnalyzer {
     }
 
     /// Probability of each of the 24 keys, most likely first. Empty for silence/failure.
-    public static func candidates(_ audio: DecodedAudio, useSKey: Bool = true) -> [(key: MusicalKey, probability: Double)] {
-        guard let x = chromaProfile(TrackAnalyzer.reducedRate(audio)) else { return [] }
+    public static func candidates(_ audio: DecodedAudio, reduced: DecodedAudio? = nil, useSKey: Bool = true) -> [(key: MusicalKey, probability: Double)] {
+        guard let x = chromaProfile(reduced ?? TrackAnalyzer.reducedRate(audio)) else { return [] }
         var s = logSoftmax(scores(x))
         if useSKey, audio.sampleRate >= SKey.sampleRate, let p = SKey.probabilities(audio) {
             for i in 0..<24 { s[i] += skeyWeight * log(max(p[i], 1e-6)) }

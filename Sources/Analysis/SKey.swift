@@ -35,16 +35,58 @@ enum SKey {
 
     /// Log-CQTs (`bins × frames`, row-major) of the clips ChromaNet sees; nil if too short or silent.
     static func clips(_ audio: DecodedAudio) -> [[Float]]? {
-        guard var x = resampled(audio), x.count >= sampleRate * 2 else { return nil }
-        var peak: Float = 0
-        vDSP_maxmgv(x, 1, &peak, vDSP_Length(x.count))
+        guard let x = Resampled(audio), x.count >= sampleRate * 2 else { return nil }
+        let peak = x.peak()
         guard peak > 0 else { return nil }
         var scale = 1 / peak
-        vDSP_vsmul(x, 1, &scale, &x, 1, vDSP_Length(x.count))
         return clipStarts(x.count).map { start -> [Float] in
-            var clip = Array(x[start..<min(x.count, start + clipSamples)])
+            var clip = x.samples(start..<min(x.count, start + clipSamples))
+            vDSP_vsmul(clip, 1, &scale, &clip, 1, vDSP_Length(clip.count))
             if clip.count < clipSamples { clip += [Float](repeating: 0, count: clipSamples - clip.count) }
             return SKeyCQT.logCQT(clip)
+        }
+    }
+
+    /// The track at 22.05 kHz. Integer-ratio inputs (44.1, 88.2 kHz) are decimated lazily, only over the
+    /// clip windows plus one pass for the peak, so the full-length resampled track is never held in memory.
+    private struct Resampled {
+        let source: DecodedAudio
+        let full: [Float]?
+        let decimator: Decimator?
+        let count: Int
+
+        init?(_ audio: DecodedAudio) {
+            source = audio
+            let factor = audio.sampleRate / SKey.sampleRate
+            if audio.sampleRate != SKey.sampleRate, audio.sampleRate % SKey.sampleRate == 0, audio.samples.count > factor {
+                let d = Decimator(factor: factor)
+                (full, decimator, count) = (nil, d, d.outputCount(audio.samples.count))
+            } else {
+                guard let x = resampled(audio) else { return nil }
+                (full, decimator, count) = (x, nil, x.count)
+            }
+        }
+
+        func samples(_ range: Range<Int>) -> [Float] {
+            if let full { return Array(full[range]) }
+            return source.samples.withUnsafeBufferPointer { decimator!.apply($0, outputs: range) }
+        }
+
+        /// Largest magnitude over the whole track.
+        func peak() -> Float {
+            var peak: Float = 0
+            if let full {
+                vDSP_maxmgv(full, 1, &peak, vDSP_Length(full.count))
+                return peak
+            }
+            let chunk = 1 << 16
+            for start in stride(from: 0, to: count, by: chunk) {
+                let x = samples(start..<min(count, start + chunk))
+                var m: Float = 0
+                vDSP_maxmgv(x, 1, &m, vDSP_Length(x.count))
+                peak = max(peak, m)
+            }
+            return peak
         }
     }
 
@@ -65,19 +107,40 @@ enum SKey {
     static func resampled(_ audio: DecodedAudio) -> [Float]? {
         if audio.sampleRate == sampleRate { return audio.samples }
         if audio.sampleRate % sampleRate == 0 { return audio.decimated(by: audio.sampleRate / sampleRate).samples }
-        guard let from = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: Double(audio.sampleRate), channels: 1, interleaved: false),
+        guard !audio.samples.isEmpty,
+              let from = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: Double(audio.sampleRate), channels: 1, interleaved: false),
               let to = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: Double(sampleRate), channels: 1, interleaved: false),
-              let converter = AVAudioConverter(from: from, to: to),
-              let input = AVAudioPCMBuffer(pcmFormat: from, frameCapacity: AVAudioFrameCount(audio.samples.count)) else { return nil }
-        input.frameLength = input.frameCapacity
-        audio.samples.withUnsafeBufferPointer { input.floatChannelData![0].update(from: $0.baseAddress!, count: $0.count) }
-        let capacity = AVAudioFrameCount(Double(audio.samples.count) * Double(sampleRate) / Double(audio.sampleRate)) + 1024
-        guard let output = AVAudioPCMBuffer(pcmFormat: to, frameCapacity: capacity) else { return nil }
-        let feed = OneShotInput(input)
-        var error: NSError?
-        converter.convert(to: output, error: &error) { _, status in feed.next(status) }
-        guard error == nil else { return nil }
-        return Array(UnsafeBufferPointer(start: output.floatChannelData![0], count: Int(output.frameLength)))
+              let converter = AVAudioConverter(from: from, to: to) else { return nil }
+        // The converter reads the samples and writes the result in place, through buffers that wrap
+        // the arrays' storage rather than copies of the track.
+        let capacity = Int(Double(audio.samples.count) * Double(sampleRate) / Double(audio.sampleRate)) + 1024
+        var result = [Float](repeating: 0, count: capacity)
+        let frames: Int? = audio.samples.withUnsafeBufferPointer { src in
+            result.withUnsafeMutableBufferPointer { dst in
+                withBuffer(UnsafeMutableRawPointer(mutating: src.baseAddress!), count: src.count, format: from) { input in
+                    withBuffer(UnsafeMutableRawPointer(dst.baseAddress!), count: dst.count, format: to) { output in
+                        guard let input, let output else { return nil }
+                        output.frameLength = 0
+                        let feed = OneShotInput(input)
+                        var error: NSError?
+                        converter.convert(to: output, error: &error) { _, status in feed.next(status) }
+                        return error == nil ? Int(output.frameLength) : nil
+                    }
+                }
+            }
+        }
+        guard let frames else { return nil }
+        result.removeLast(capacity - frames)
+        return result
+    }
+
+    /// Runs `body` with a mono float buffer over `count` samples at `data`, without copying them.
+    private static func withBuffer<T>(_ data: UnsafeMutableRawPointer, count: Int, format: AVAudioFormat,
+                                      _ body: (AVAudioPCMBuffer?) -> T) -> T {
+        let list = AudioBufferList.allocate(maximumBuffers: 1)
+        defer { free(list.unsafeMutablePointer) }
+        list[0] = AudioBuffer(mNumberChannels: 1, mDataByteSize: UInt32(count * MemoryLayout<Float>.size), mData: data)
+        return body(AVAudioPCMBuffer(pcmFormat: format, bufferListNoCopy: list.unsafePointer, deallocator: nil))
     }
 
     /// Hands the converter the whole input once, then signals end of stream.
