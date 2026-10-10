@@ -32,6 +32,7 @@ struct DeckhandApp: App {
         .defaultSize(width: 900, height: 420)
         .commands {
             ConsoleCommands()
+            TrackCommands()
             CommandMenu("Playback") {
                 Button(player.isPlaying ? "Pause" : "Play") { player.toggle() }
                     .keyboardShortcut("p", modifiers: [.command, .shift])
@@ -40,6 +41,32 @@ struct DeckhandApp: App {
                 Button("Previous Track") { player.previous() }
                     .keyboardShortcut(.leftArrow, modifiers: [.command])
             }
+        }
+    }
+}
+
+/// Rates the selected tracks in the track list (0 clears).
+struct RateSelection {
+    var rate: (Int) -> Void
+}
+
+extension FocusedValues {
+    @Entry var rateSelection: RateSelection?
+}
+
+struct TrackCommands: Commands {
+    @FocusedValue(\.rateSelection) private var rateSelection
+
+    var body: some Commands {
+        CommandMenu("Track") {
+            ForEach(1...5, id: \.self) { stars in
+                Button("Rate \(stars) Star\(stars == 1 ? "" : "s")") { rateSelection?.rate(stars) }
+                    .keyboardShortcut(KeyEquivalent(Character(String(stars))), modifiers: .option)
+                    .disabled(rateSelection == nil)
+            }
+            Button("Clear Rating") { rateSelection?.rate(0) }
+                .keyboardShortcut("0", modifiers: .option)
+                .disabled(rateSelection == nil)
         }
     }
 }

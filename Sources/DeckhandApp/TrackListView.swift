@@ -101,6 +101,10 @@ struct TrackListView: View {
             onOpen: { player.play($0, artwork: library.artwork) },
             onCommand: { command, ids in perform(command, ids, rows: rows) }
         )
+        // The Track menu's rating shortcuts work wherever focus is (the sidebar, the search field).
+        .focusedSceneValue(\.rateSelection, selection.isEmpty ? nil : RateSelection { [selection] stars in
+            library.setRating(stars, for: Array(selection))
+        })
         .sheet(isPresented: $showKeys) { KeyboardHelp() }
         .sheet(isPresented: Binding(get: { !picking.isEmpty }, set: { if !$0 { picking = [] } }),
                onDismiss: { NotificationCenter.default.post(name: .focusTracks, object: nil) }) {
