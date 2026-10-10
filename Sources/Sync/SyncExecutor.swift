@@ -133,9 +133,10 @@ public struct SyncExecutor {
             if t.anlzMissing || !unchanged || profile.rewriteAnalysisFiles {
                 try volume.ensureMounted()
                 // Rewriting files the manifest already vouches for: a write cut short mustn't leave them half-written.
-                try writeAnlz(path: t.usbPath!, analysis: a, cues: built.cues, phrases: built.phrases, options: profile.anlzOptions,
-                              on: volume, atomically: unchanged)
-                result.anlzWritten.append(t.id)
+                let wrote = try writeAnlz(path: t.usbPath!, analysis: a, cues: built.cues, phrases: built.phrases,
+                                          options: profile.anlzOptions, on: volume, atomically: unchanged,
+                                          force: profile.rewriteAnalysisFiles)
+                if wrote { result.anlzWritten.append(t.id) }
             }
             manifest.tracks[t.id]?.anlzInputs = Manifest.digest(SyncStatus.anlzInputs(AnalysisFacts(summary), key: profile.anlzKey))
             manifest.tracks[t.id]?.anlzFingerprint = Manifest.digest(built.fingerprint)
@@ -367,19 +368,27 @@ public struct SyncExecutor {
         return recorded.filter { used[$0.key] == nil }.map { ArtworkWriter.path(imageId: $0.value) }
     }
 
+    /// Writes the files whose bytes differ from what's on the drive (all of them when `force`). A fingerprint can
+    /// change without the bytes changing (it includes the analysis version), and reading is cheaper than writing on
+    /// flash. Returns whether anything was written.
     private func writeAnlz(path: String, analysis: TrackAnalysis, cues: [CuePoint], phrases: PhraseAnalysis?,
-                           options: AnlzWriter.Options, on volume: Volume, atomically: Bool) throws {
+                           options: AnlzWriter.Options, on volume: Volume, atomically: Bool, force: Bool) throws -> Bool {
         let totalSamples = UInt64((analysis.durationSeconds * Double(analysis.sampleRate)).rounded())
         let files = AnlzWriter(audioPath: path, analysis: analysis, totalSamples: totalSamples, cues: cues,
                                phrases: phrases, options: options).build()
         let dir = volume.url(forUsbPath: AnlzPath.directory(forAudioPath: path))
+        var wrote = false
         for (data, name) in [(files.dat, "ANLZ0000.DAT"), (files.ext, "ANLZ0000.EXT"), (files.twoEx, "ANLZ0000.2EX")] {
+            let url = dir.appendingPathComponent(name)
+            if !force, FileOps.size(url) == Int64(data.count), (try? Data(contentsOf: url)) == data { continue }
             if atomically {
-                try FileOps.writeAtomically(data, to: dir.appendingPathComponent(name))
+                try FileOps.writeAtomically(data, to: url)
             } else {
-                try FileOps.write(data, to: dir.appendingPathComponent(name))
+                try FileOps.write(data, to: url)
             }
+            wrote = true
         }
+        return wrote
     }
 
     /// The cues and phrases a track's analysis files hold, and their fingerprint (`Manifest.Track.anlzFingerprint`).

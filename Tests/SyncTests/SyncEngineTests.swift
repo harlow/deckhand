@@ -418,11 +418,12 @@ import Testing
         for (id, var t) in tracks {
             for k in ["recordFingerprint", "fileSize", "metadataFingerprint", "anlzInputs", "artworkKey"] { t.removeValue(forKey: k) }
             t["analysisVersion"] = 5
-            // The full fingerprint string, as older versions stored it.
+            // The full fingerprint string, as older versions stored it, from an older analysis version whose files
+            // came out the same (as on DJTEST).
             let hash = t["contentHash"] as! String
             let built = SyncExecutor.anlzContent(analysis: cache.analysis(forHash: hash)!, sections: cache.sections(forHash: hash),
                                                  detected: cache.detectedCues(forHash: hash), profile: h.profile)
-            t["anlzFingerprint"] = built.fingerprint
+            t["anlzFingerprint"] = "v5" + built.fingerprint.drop { $0 != ";" }
             tracks[id] = t
         }
         json["tracks"] = tracks
@@ -434,7 +435,7 @@ import Testing
         #expect(c.drive == [.legacyManifest, .databaseChanged])
         #expect(c.summary.records == 2 && c.summary.toCopy == 0)
         let run = try h.sync()
-        #expect(run.result.copied.isEmpty && run.result.anlzWritten.isEmpty)
+        #expect(run.result.copied.isEmpty && run.result.anlzWritten.isEmpty && Set(run.result.anlzChecked) == ["A", "B"])
         // Saved to the other file; the old one is left as it was.
         #expect(try Data(contentsOf: Manifest.urls(root: h.drive)[0]) == legacyData)
         #expect(try h.manifest().generation == 1)
