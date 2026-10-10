@@ -43,7 +43,7 @@ Per track (`ChangeSet.TrackChange`):
 | `artworkCheck` | the track or file changed, or images are missing | re-read art; database rewritten only if the image changed |
 
 Track statuses: `clean`, `pending(changes)`, `ineligible(reason)`, `retained(reason)`, `failed(reason)` (the
-analyzer failed; not retried until it changes, or `--retry-failed`) and `unknown`. Only `pending` counts.
+analyzer failed on readable audio; not retried until it changes, or `--retry-failed`) and `unknown`. Only `pending` counts.
 `unknown` is neither synced nor pending, and a ChangeSet with unknowns can't be executed.
 
 Playlists compare field by field (`create`, `name`, `parent`, `sequence`, `contents`), folders included. Drive
@@ -64,9 +64,15 @@ it keeps its manifest record, its database row (rebuilt from the Music metadata 
 drive copy's recorded size; analysis looked up by the audio hash the drive holds) and its playlist slots. Its
 row, analysis files and missing art can still be updated. When the source comes back, nothing is copied.
 
+Rows keep their analysis too. The manifest records the analysis values each row was written with
+(`rowAnalysis`); while a track's analysis files are on the drive but its analysis isn't current (source offline,
+analyzer version bumped, cache lost), the row keeps those values instead of losing BPM, key and beat grid. A sync
+that analyzes replaces them.
+
 Tracks leave the drive only when deselected (or deleted from Music), when their audio is superseded by changed
 audio, or when they're unavailable and their drive copy is gone too (`lost`: forgotten, nothing deleted).
-Unavailable tracks that were never synced are `ineligible` and not counted.
+Unavailable tracks that were never synced are `ineligible` and not counted. A library that comes back
+completely empty is taken for a failed read: nothing is judged or removed (`deckhand sync` refuses outright).
 
 ## Manifest concurrency
 
@@ -78,16 +84,28 @@ the higher `generation` wins and a torn write leaves the other intact.
   single-file manifest is therefore never overwritten by the first save. Newer formats are refused.
 - `Manifest.edit(on:)` is for the app's selection edits: it applies the change to the newest copy, retries on
   conflict, serializes edits within the process, and refuses while a sync holds the lock.
-- `deckhand sync` takes `/.deckhand/sync.lock` (exclusive create; pid, host, start time) only once it has work,
-  and plans again if the manifest moved since it was read. A lock is stale when its process is gone (by start
-  time, so a reused pid doesn't count), it's from another Mac, or it's over 6 hours old. `SyncLock.current`
-  tells the app whether a sync is running.
+- `deckhand sync` takes `/.deckhand/sync.lock` (exclusive create; pid, hardware UUID, start time) only once it
+  has work, and plans again if the manifest moved since it was read; `deckhand cleanup` takes it while deleting.
+  A lock is stale when its process is gone (by start time, so a reused pid doesn't count) or it's from another
+  Mac. A holder that's provably running is never timed out (a first sync with analysis can take hours).
+  `SyncLock.current` tells the app whether a sync is running.
 - Before replacing the database the executor checks the manifest is unchanged; at commit, edits the app made
   meanwhile (selection, entire library, settings) are merged in, and anything else fails cleanly. Settings are
   intent; what was written is in the per-track fingerprints, so merged edits can't hide stale output.
 - The database is renamed into place before the manifest is saved. If a sync stops in between, the next
-  evaluate sees `databaseChanged`, finds the new audio at its exact paths (`adopt`, verified, not copied), and
-  keeps the content IDs that database gave them.
+  evaluate sees `databaseChanged`, finds the new audio at its exact paths (`adopt`, verified by audio hash, not
+  copied), keeps the content IDs that database gave them, and reuses none of its other IDs, so player history
+  recorded meanwhile can't move to another track.
+
+## Crash safety
+
+Files are written in place on FAT (renames cost up to half a second each), so a file is only trusted once the
+manifest vouches for it, and the manifest is saved after a flush, once everything it vouches for is on the stick.
+Audio is copied under a temporary name and renamed into place; audio found at its path without a manifest record
+is verified by its audio hash before it's kept. Analysis files the manifest already vouches for are rewritten in
+place only after a manifest that withdraws that vouching has been saved and flushed (one write for all of them),
+so a sync cut short has the next one check them byte for byte. Artwork the manifest vouches for is replaced
+atomically. The database is built locally and renamed into place after a flush.
 
 ## Recipe versions
 
@@ -113,7 +131,6 @@ or `OneLibraryDatabase.formatVersion` rewrites them (or the database) once.
 The no-op path reads two small manifest files, walks `/Contents/Deckhand`, `/PIONEER/USBANLZ` and
 `/PIONEER/Artwork` with `readdir` (no stat per file), reads 16 bytes of the database, stats each source file
 once, and evaluates (about 0.2 s for 20k tracks in a release build). Nothing is written. FAT write optimizations
-are unchanged: in-place writes for files the manifest doesn't vouch for yet (atomic only when rewriting files it
-already vouches for), a locally built database renamed into place once, `._` cleanup.
+are unchanged: in-place writes (see Crash safety), a locally built database renamed into place once, `._` cleanup.
 
 Paths compare as FAT does: case-insensitively, after Unicode normalization (FAT lists names decomposed).
