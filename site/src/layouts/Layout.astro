@@ -1,0 +1,31 @@
+---
+import "../styles/global.css";
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+const {
+  title = "Deckhand: Apple Music to your DJ USB, no Rekordbox",
+  description = "Deckhand syncs your Apple Music playlists to a Pioneer DJ / AlphaTheta USB with key, BPM, beat grids, waveforms and hot cues. No Rekordbox. Free and open source for macOS.",
+} = Astro.props;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0b0b0e" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+  </head>
+  <body class="grain min-h-dvh overflow-x-hidden">
+    <slot />
+  </body>
+</html>

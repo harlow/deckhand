@@ -1,0 +1,117 @@
+---
+// A generated three-band waveform (low blue, mid amber, high white) with a phrase strip and hot
+// cues, in the style of the Mac app's player. Not real audio: the shape follows a typical
+// club-track arrangement so the page reads like the app.
+import { seeded } from "../lib/camelot";
+
+interface Props {
+  seed?: number;
+  bars?: number;
+  height?: number;
+  cues?: boolean;
+  phrases?: boolean;
+  animate?: boolean;
+  duration?: string;
+  class?: string;
+}
+const {
+  seed = 7,
+  bars = 180,
+  height = 120,
+  cues = true,
+  phrases = true,
+  animate = true,
+  duration = "16s",
+  class: className = "",
+} = Astro.props;
+
+type Kind = "intro" | "build" | "drop" | "breakdown" | "outro";
+const sections: { kind: Kind; label: string; end: number }[] = [
+  { kind: "intro", label: "Intro", end: 0.12 },
+  { kind: "build", label: "Build", end: 0.24 },
+  { kind: "drop", label: "Drop", end: 0.5 },
+  { kind: "breakdown", label: "Break", end: 0.62 },
+  { kind: "build", label: "Build", end: 0.7 },
+  { kind: "drop", label: "Drop", end: 0.9 },
+  { kind: "outro", label: "Outro", end: 1 },
+];
+const level: Record<Kind, [number, number, number]> = {
+  intro: [0.55, 0.25, 0.18],
+  build: [0.35, 0.6, 0.45],
+  drop: [0.95, 0.72, 0.4],
+  breakdown: [0.1, 0.45, 0.35],
+  outro: [0.5, 0.22, 0.15],
+};
+
+const rnd = seeded(seed);
+const data = Array.from({ length: bars }, (_, i) => {
+  const x = i / bars;
+  const s = sections.find((s) => x < s.end)!;
+  const start = sections[sections.indexOf(s) - 1]?.end ?? 0;
+  const t = (x - start) / (s.end - start);
+  const [l, m, h] = level[s.kind];
+  const ramp = s.kind === "build" ? 0.4 + 0.6 * t : s.kind === "outro" ? 1 - 0.6 * t : 1;
+  const kick = i % 4 === 0 ? 1 : 0.82;
+  const j = () => 0.78 + 0.22 * rnd();
+  return {
+    low: Math.min(1, l * ramp * kick * j()),
+    mid: Math.min(1, m * ramp * j()),
+    high: Math.min(1, h * ramp * j()),
+  };
+});
+
+const w = 1000;
+const bw = w / bars;
+const cueColors = ["#4ade80", "#fb923c", "#3d7dff", "#facc15", "#f87171", "#3d7dff", "#a78bfa", "#c084fc"];
+const cuePos = [0, 0.12, 0.24, 0.5, 0.62, 0.7, 0.9, 0.97];
+const phraseColor: Record<Kind, string> = {
+  intro: "var(--color-intro)",
+  build: "var(--color-build)",
+  drop: "var(--color-drop)",
+  breakdown: "var(--color-breakdown)",
+  outro: "var(--color-intro)",
+};
+---
+<div class={`relative select-none ${className}`} style={`--dur:${duration}`}>
+  {cues && (
+    <div class="relative h-5">
+      {cuePos.map((p, i) => (
+        <span
+          class="absolute top-0 grid size-4 -translate-x-1/2 place-items-center rounded-[3px] font-mono text-[9px] font-bold text-black"
+          style={`left:${Math.min(Math.max(p * 100, 1), 99)}%;background:${cueColors[i]}`}
+        >
+          {"ABCDEFGH"[i]}
+        </span>
+      ))}
+    </div>
+  )}
+  <div class="relative overflow-hidden rounded-sm" style={`height:${height}px`}>
+    <svg viewBox={`0 0 ${w} 100`} preserveAspectRatio="none" class="absolute inset-0 size-full">
+      {data.map((d, i) => (
+        <g>
+          <rect x={i * bw} y={100 - d.low * 100} width={bw * 0.72} height={d.low * 100} fill="var(--color-low)" />
+          <rect x={i * bw} y={100 - d.mid * 78} width={bw * 0.72} height={d.mid * 78} fill="var(--color-mid)" opacity="0.92" />
+          <rect x={i * bw} y={100 - d.high * 50} width={bw * 0.72} height={d.high * 50} fill="var(--color-high)" opacity="0.85" />
+        </g>
+      ))}
+    </svg>
+    {animate && (
+      <>
+        <div class="played absolute inset-y-0 left-0 bg-black/45 mix-blend-multiply" />
+        <div class="playhead absolute inset-y-0 w-px bg-white shadow-[0_0_12px_2px_rgb(255_255_255/0.6)]" />
+      </>
+    )}
+  </div>
+  {phrases && (
+    <div class="mt-1 flex h-4 gap-px overflow-hidden rounded-sm">
+      {sections.map((s, i) => (
+        <div
+          class="truncate px-1 font-mono text-[9px] leading-4 font-semibold text-black/75"
+          style={`flex:${s.end - (sections[i - 1]?.end ?? 0)};background:${phraseColor[s.kind]}`}
+        >
+          {s.label}
+        </div>
+      ))}
+    </div>
+  )}
+</div>

@@ -1,0 +1,51 @@
+---
+// The Camelot wheel in the app's key colors: majors (B) on the outer ring, minors (A) inside.
+// `active` highlights a key and the keys that mix with it (±1, and its relative major/minor).
+import { camelotColor } from "../lib/camelot";
+
+interface Props {
+  active?: string;
+  class?: string;
+}
+const { active = "8A", class: className = "" } = Astro.props;
+
+const an = parseInt(active, 10);
+const am = active.slice(-1);
+const wrap = (n: number) => ((n + 11) % 12) + 1;
+const compatible = new Set([active, `${wrap(an - 1)}${am}`, `${wrap(an + 1)}${am}`, `${an}${am === "A" ? "B" : "A"}`]);
+
+const c = 100;
+function arc(r0: number, r1: number, i: number) {
+  const a0 = ((i + 0.5) * 30 - 90) * (Math.PI / 180) + 0.012;
+  const a1 = ((i + 1.5) * 30 - 90) * (Math.PI / 180) - 0.012;
+  const p = (r: number, a: number) => `${(c + r * Math.cos(a)).toFixed(2)} ${(c + r * Math.sin(a)).toFixed(2)}`;
+  return `M${p(r1, a0)} A${r1} ${r1} 0 0 1 ${p(r1, a1)} L${p(r0, a1)} A${r0} ${r0} 0 0 0 ${p(r0, a0)}Z`;
+}
+function label(r: number, i: number) {
+  const a = ((i + 1) * 30 - 90) * (Math.PI / 180);
+  return { x: c + r * Math.cos(a), y: c + r * Math.sin(a) };
+}
+const segments = Array.from({ length: 12 }, (_, i) => i).flatMap((i) => {
+  const n = i + 1;
+  return [
+    { key: `${n}B`, d: arc(66, 96, i), l: label(81, i) },
+    { key: `${n}A`, d: arc(38, 64, i), l: label(51, i) },
+  ];
+});
+---
+<svg viewBox="0 0 200 200" class={className} role="img" aria-label={`Camelot wheel with ${active} and its compatible keys highlighted`}>
+  {segments.map((s) => {
+    const on = compatible.has(s.key);
+    return (
+      <g opacity={on ? 1 : 0.22}>
+        <path d={s.d} fill={camelotColor(s.key)} stroke={s.key === active ? "#fff" : "none"} stroke-width="1.5" />
+        <text x={s.l.x} y={s.l.y} text-anchor="middle" dominant-baseline="central" font-size="8.5" font-weight="700" fill="rgb(0 0 0 / 0.8)" font-family="var(--font-mono)">
+          {s.key}
+        </text>
+      </g>
+    );
+  })}
+  <circle cx="100" cy="100" r="30" fill="var(--color-panel)" />
+  <text x="100" y="96" text-anchor="middle" font-size="16" font-weight="700" fill="#fff" font-family="var(--font-display)">{active}</text>
+  <text x="100" y="111" text-anchor="middle" font-size="6.5" fill="rgb(255 255 255 / 0.5)" font-family="var(--font-sans)">mixes with</text>
+</svg>

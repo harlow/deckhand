@@ -1,0 +1,411 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Logo from "../components/Logo.astro";
+import Waveform from "../components/Waveform.astro";
+import CamelotWheel from "../components/CamelotWheel.astro";
+import { camelotColor } from "../lib/camelot";
+
+const github = "https://github.com/harlow/deckhand";
+
+const ticker = [
+  ["8A", "124 BPM", "Deep House"],
+  ["5A", "128 BPM", "Tech House"],
+  ["11B", "122 BPM", "Disco"],
+  ["2A", "130 BPM", "Melodic Techno"],
+  ["9A", "126 BPM", "Afro House"],
+  ["4B", "174 BPM", "Drum & Bass"],
+  ["7A", "132 BPM", "Peak Time"],
+  ["10A", "120 BPM", "Minimal"],
+];
+
+const cues = [
+  ["A", "Mix In", "#4ade80"],
+  ["B", "Intro", "#fb923c"],
+  ["C", "Build", "#3d7dff"],
+  ["D", "Build", "#facc15"],
+  ["E", "Main Drop", "#f87171"],
+  ["F", "Break", "#3d7dff"],
+  ["G", "Drop 2", "#a78bfa"],
+  ["H", "Mix Out", "#c084fc"],
+];
+
+const ratings = ["Not for me", "Meh", "Decent", "Great", "Banger"];
+
+const steps = [
+  {
+    n: "01",
+    title: "Analyze",
+    body: "Deckhand listens to your library on your Mac: BPM, beat grid, key, energy and song structure. Only new tracks next time.",
+    cmd: "deckhand analyze",
+  },
+  {
+    n: "02",
+    title: "Pick playlists",
+    body: "Choose playlists or the whole library. Deckhand remembers each drive's selection and settings.",
+    cmd: 'deckhand sync /Volumes/DJUSB',
+  },
+  {
+    n: "03",
+    title: "Plug in and play",
+    body: "Eject, walk to the booth, plug in. Waveforms, cues and keys are already there. No re-analysis on the deck.",
+    cmd: "deckhand eject /Volumes/DJUSB",
+  },
+];
+
+const faqs = [
+  {
+    q: "Do I need Rekordbox?",
+    a: "No. Deckhand writes the OneLibrary database and analysis files itself, straight from Apple Music.",
+  },
+  {
+    q: "Which players work?",
+    a: "Confirmed on the AlphaTheta OMNIS-DUO: browsing, playback, artwork, hot cues and play history. Other OneLibrary players (XDJ-AZ, OPUS-QUAD, CDJ-3000X) use the same format and are next on the test bench.",
+  },
+  {
+    q: "Will it wreck my USB?",
+    a: "It never formats. A drive is only touched once you mark it as Deckhand's, syncs are staged and committed at the end, and the play history your deck writes is kept.",
+  },
+  {
+    q: "What about Apple Music streaming tracks?",
+    a: "Tracks protected by DRM can't be copied to a USB by anyone, so Deckhand skips them and tells you which. Purchased and imported files all work.",
+  },
+  {
+    q: "Does it change my Apple Music library?",
+    a: "Only when you ask: star ratings and playlist edits you make in Deckhand go to Apple Music, and Deckhand keeps a daily backup of your ratings in case your library ever goes missing.",
+  },
+  {
+    q: "What does it cost?",
+    a: "Nothing. Deckhand is free and open source (GPL-3.0). It needs macOS 14 or later.",
+  },
+];
+---
+<Layout>
+  <!-- Nav -->
+  <header class="fixed inset-x-0 top-0 z-40 border-b border-line bg-ink/70 backdrop-blur-xl">
+    <nav class="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
+      <a href="#" class="flex items-center gap-2.5 font-display text-lg font-bold tracking-tight">
+        <Logo class="size-7" />
+        Deckhand
+      </a>
+      <div class="hidden items-center gap-8 text-sm text-white/60 md:flex">
+        <a href="#features" class="transition hover:text-white">Features</a>
+        <a href="#quick-rate" class="transition hover:text-white">Quick Rate</a>
+        <a href="#how" class="transition hover:text-white">How it works</a>
+        <a href="#faq" class="transition hover:text-white">FAQ</a>
+      </div>
+      <a href={github} class="rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:bg-amber">
+        Get Deckhand
+      </a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Hero -->
+    <section class="relative overflow-hidden pt-32 pb-20 sm:pt-40">
+      <div aria-hidden="true" class="pointer-events-none absolute inset-0">
+        <div class="absolute -top-40 left-1/2 h-[560px] w-[900px] -translate-x-1/2 rounded-full bg-amber/20 blur-[140px]"></div>
+        <div class="absolute top-60 -left-40 h-[400px] w-[500px] rounded-full bg-low/20 blur-[120px]"></div>
+        <div class="absolute inset-0 bg-[linear-gradient(to_right,rgb(255_255_255/0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgb(255_255_255/0.04)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_70%)]"></div>
+      </div>
+
+      <div class="relative mx-auto max-w-6xl px-4 text-center sm:px-6">
+        <a href="#how" class="mb-8 inline-flex items-center gap-2 rounded-full border border-line bg-white/5 px-3 py-1 text-xs text-white/70 transition hover:border-amber/50">
+          <span class="size-1.5 animate-pulse-dot rounded-full bg-synced"></span>
+          Confirmed on the OMNIS-DUO
+        </a>
+        <h1 class="mx-auto max-w-4xl font-display text-5xl leading-[0.95] font-bold tracking-tighter text-balance sm:text-7xl lg:text-8xl">
+          Apple Music<br />to the decks.<br />
+          <span class="bg-gradient-to-r from-amber via-drop to-breakdown bg-clip-text text-transparent">No Rekordbox.</span>
+        </h1>
+        <p class="mx-auto mt-8 max-w-2xl text-lg text-pretty text-white/60 sm:text-xl">
+          Deckhand syncs your playlists to a Pioneer DJ / AlphaTheta USB with key, BPM, beat grids,
+          waveforms and hot cues already set. Your library stays in Apple Music, where it belongs.
+        </p>
+        <div class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <a href={github} class="group inline-flex items-center gap-2 rounded-full bg-amber px-6 py-3 font-semibold text-ink shadow-[0_0_40px_-8px_var(--color-amber)] transition hover:scale-[1.03]">
+            Get it for Mac
+            <span class="transition group-hover:translate-x-0.5">→</span>
+          </a>
+          <a href="#how" class="inline-flex items-center gap-2 rounded-full border border-white/15 px-6 py-3 font-semibold text-white/80 transition hover:border-white/40 hover:text-white">
+            See how it works
+          </a>
+        </div>
+        <p class="mt-4 text-xs text-white/40">Free and open source · macOS 14+</p>
+
+        <!-- Deck mock -->
+        <div class="relative mx-auto mt-20 max-w-5xl">
+          <div class="absolute -inset-px rounded-2xl bg-gradient-to-b from-white/20 to-white/0"></div>
+          <div class="relative rounded-2xl bg-panel/90 p-4 text-left shadow-2xl shadow-black/60 backdrop-blur sm:p-6">
+            <div class="mb-5 flex items-center gap-2">
+              <span class="size-3 rounded-full bg-white/10"></span>
+              <span class="size-3 rounded-full bg-white/10"></span>
+              <span class="size-3 rounded-full bg-white/10"></span>
+              <span class="ml-3 flex items-center gap-2 text-sm font-semibold text-white/80"><Logo class="size-4" />Deckhand</span>
+              <span class="ml-auto hidden items-center gap-2 rounded-md bg-white/5 px-2.5 py-1 text-xs sm:flex">
+                <span class="font-semibold">DJUSB</span><span class="text-amber">12 to sync</span>
+              </span>
+            </div>
+            <div class="flex flex-col gap-5 sm:flex-row sm:items-center">
+              <div class="relative size-20 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-drop via-breakdown to-low sm:size-24">
+                <div class="absolute inset-0 grid place-items-center">
+                  <div class="size-14 animate-spin-slow rounded-full bg-[repeating-radial-gradient(circle,#111_0_2px,#1b1b1f_2px_4px)] ring-1 ring-black/40 sm:size-16">
+                    <div class="absolute inset-0 m-auto size-4 rounded-full bg-amber"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="truncate font-display text-2xl font-bold sm:text-3xl">Midnight Signal (Extended Mix)</div>
+                <div class="mt-1 text-white/50">Example Artist · Melodic House & Techno</div>
+                <div class="mt-3 flex flex-wrap items-center gap-2 font-mono text-xs">
+                  <span class="rounded px-2 py-0.5 font-bold text-black" style={`background:${camelotColor("8A")}`}>8A</span>
+                  <span class="rounded bg-white/8 px-2 py-0.5">124.00 BPM</span>
+                  <span class="rounded bg-white/8 px-2 py-0.5">Energy 7</span>
+                  <span class="rounded bg-white/8 px-2 py-0.5">6:42</span>
+                  <span class="text-amber">★★★★★</span>
+                </div>
+              </div>
+            </div>
+            <Waveform class="mt-6" height={110} seed={11} duration="18s" />
+            <div class="mt-3 hidden justify-between font-mono text-[11px] text-white/40 sm:flex">
+              <span>1–8 hot cues · , . 4 beats · [ ] sections</span>
+              <span>Space pause</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Ticker -->
+    <div class="relative overflow-hidden border-y border-line bg-panel/40 py-4" aria-hidden="true">
+      <div class="flex w-max animate-marquee gap-10 font-mono text-sm whitespace-nowrap">
+        {[...ticker, ...ticker].map(([k, bpm, genre]) => (
+          <span class="flex items-center gap-3 text-white/50">
+            <span class="rounded px-1.5 py-0.5 text-xs font-bold text-black" style={`background:${camelotColor(k)}`}>{k}</span>
+            {bpm}
+            <span class="text-white/25">/</span>
+            {genre}
+            <span class="ml-6 text-amber/50">●</span>
+          </span>
+        ))}
+      </div>
+    </div>
+
+    <!-- Pipeline -->
+    <section class="mx-auto max-w-6xl px-4 py-24 sm:px-6">
+      <div class="grid items-center gap-4 font-display text-lg font-semibold sm:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] sm:text-xl">
+        {[
+          ["Apple Music", "Your library, playlists and ratings"],
+          ["Deckhand", "Analyzes and builds the drive"],
+          ["USB", "OneLibrary format"],
+          ["The decks", "Plug in and play"],
+        ].map(([name, sub], i) => (
+          <>
+            {i > 0 && <div class="flow mx-auto h-0.5 w-16 rotate-90 sm:w-16 sm:rotate-0" />}
+            <div class={`rounded-2xl border p-5 text-center ${i === 1 ? "border-amber/50 bg-amber/10" : "border-line bg-panel"}`}>
+              {i === 1 ? <Logo class="mx-auto mb-3 size-8" /> : null}
+              <div>{name}</div>
+              <div class="mt-1 font-sans text-xs font-normal text-white/45">{sub}</div>
+            </div>
+          </>
+        ))}
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="mx-auto max-w-6xl scroll-mt-20 px-4 pb-24 sm:px-6">
+      <p class="font-mono text-xs tracking-[0.2em] text-amber uppercase">Features</p>
+      <h2 class="mt-3 max-w-3xl font-display text-4xl font-bold tracking-tight text-balance sm:text-5xl">
+        Everything the deck needs, nothing you have to babysit.
+      </h2>
+
+      <div class="mt-12 grid gap-4 md:grid-cols-6">
+        <!-- Analysis -->
+        <article class="group relative overflow-hidden rounded-3xl border border-line bg-panel p-6 md:col-span-4 sm:p-8">
+          <h3 class="font-display text-2xl font-bold">Its own ears</h3>
+          <p class="mt-2 max-w-md text-white/55">
+            BPM, beat grid, key, energy and song structure, worked out on your Mac. No extra apps, no tag wrangling,
+            and phrase colors so you can see the drop coming.
+          </p>
+          <Waveform class="mt-8" height={90} seed={3} bars={140} duration="12s" />
+        </article>
+
+        <!-- Hot cues -->
+        <article class="relative overflow-hidden rounded-3xl border border-line bg-panel p-6 md:col-span-2 sm:p-8">
+          <h3 class="font-display text-2xl font-bold">Cues where the music is</h3>
+          <p class="mt-2 text-white/55">Hot cues A–H land on the mix in, builds, drops and mix out. Named, on every track.</p>
+          <div class="mt-6 grid grid-cols-4 gap-2">
+            {cues.map(([k, name, color]) => (
+              <div class="aspect-square rounded-lg p-1.5 text-black transition hover:-translate-y-0.5" style={`background:${color}`}>
+                <div class="font-mono text-xs font-bold">{k}</div>
+                <div class="mt-1 text-[10px] leading-tight font-semibold opacity-75">{name}</div>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <!-- Harmonic -->
+        <article class="relative overflow-hidden rounded-3xl border border-line bg-panel p-6 md:col-span-3 sm:p-8">
+          <div class="flex flex-col gap-6 sm:flex-row sm:items-center">
+            <div class="flex-1">
+              <h3 class="font-display text-2xl font-bold">Mix in key</h3>
+              <p class="mt-2 text-white/55">
+                Camelot keys on every track, a key wheel filter, and "Mixes with now playing" to find what goes next:
+                compatible key, tempo within pitch range.
+              </p>
+            </div>
+            <CamelotWheel class="mx-auto w-48 shrink-0" active="8A" />
+          </div>
+        </article>
+
+        <!-- Sync -->
+        <article class="relative overflow-hidden rounded-3xl border border-line bg-panel p-6 md:col-span-3 sm:p-8">
+          <h3 class="font-display text-2xl font-bold">Only what changed</h3>
+          <p class="mt-2 text-white/55">
+            Syncs are incremental: new tracks copy, renamed playlists update, ratings carry over. It never formats a
+            drive and keeps the play history your deck wrote.
+          </p>
+          <div class="mt-6 space-y-2 rounded-xl bg-ink/60 p-4 font-mono text-xs">
+            <div class="flex justify-between"><span class="text-synced">+ 12 tracks</span><span class="text-white/40">copy + analysis</span></div>
+            <div class="flex justify-between"><span class="text-amber">~ 3 playlists</span><span class="text-white/40">reordered</span></div>
+            <div class="flex justify-between"><span class="text-white/70">= 2,149 tracks</span><span class="text-white/40">already there</span></div>
+            <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div class="played h-full rounded-full bg-gradient-to-r from-synced to-amber" style="--dur:5s"></div>
+            </div>
+          </div>
+        </article>
+
+        <!-- Keyboard -->
+        <article class="relative overflow-hidden rounded-3xl border border-line bg-panel p-6 md:col-span-2 sm:p-8">
+          <h3 class="font-display text-2xl font-bold">Keyboard first</h3>
+          <p class="mt-2 text-white/55">Browse, preview from the drop, queue and rate without touching the mouse.</p>
+          <div class="mt-6 flex flex-wrap gap-2 font-mono text-sm">
+            {["j", "k", "l", "q", "⇧P", "1–8", "[", "]", "⌥5", "?"].map((k) => (
+              <kbd class="rounded-md border border-white/15 border-b-white/5 bg-white/8 px-2.5 py-1 font-bold shadow-[0_2px_0_rgb(255_255_255/0.08)]">{k}</kbd>
+            ))}
+          </div>
+        </article>
+
+        <!-- Ratings -->
+        <article class="relative overflow-hidden rounded-3xl border border-line bg-panel p-6 md:col-span-2 sm:p-8">
+          <h3 class="font-display text-2xl font-bold">Ratings, safe</h3>
+          <p class="mt-2 text-white/55">
+            Stars sync both ways with Apple Music and onto the drive, with a daily backup so years of crate digging
+            never vanish.
+          </p>
+          <div class="mt-6 text-3xl tracking-widest text-amber">★★★★<span class="text-white/15">★</span></div>
+        </article>
+
+        <!-- Up Next -->
+        <article class="relative overflow-hidden rounded-3xl border border-line bg-panel p-6 md:col-span-2 sm:p-8">
+          <h3 class="font-display text-2xl font-bold">Plan the set</h3>
+          <p class="mt-2 text-white/55">An Up Next queue with transition notes and "mixes well next" picks from your own library.</p>
+          <div class="mt-6 space-y-1.5 text-sm">
+            {[["8A", "Now: Midnight Signal"], ["9A", "Afterglow (Club Mix)"], ["8B", "Open Water"]].map(([k, t], i) => (
+              <div class={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${i === 0 ? "bg-white/8" : ""}`}>
+                <span class="rounded px-1.5 font-mono text-[10px] font-bold text-black" style={`background:${camelotColor(k)}`}>{k}</span>
+                <span class="truncate text-white/75">{t}</span>
+              </div>
+            ))}
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- Quick Rate -->
+    <section id="quick-rate" class="relative scroll-mt-20 overflow-hidden border-y border-line bg-panel/40 py-24">
+      <div aria-hidden="true" class="pointer-events-none absolute top-1/2 right-0 h-[500px] w-[600px] -translate-y-1/2 rounded-full bg-drop/10 blur-[140px]"></div>
+      <div class="relative mx-auto grid max-w-6xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[2fr_3fr]">
+        <div>
+          <p class="font-mono text-xs tracking-[0.2em] text-amber uppercase">Quick Rate</p>
+          <h2 class="mt-3 font-display text-4xl font-bold tracking-tight text-balance sm:text-5xl">
+            Rate 2,000 tracks before the coffee gets cold.
+          </h2>
+          <p class="mt-5 text-lg text-white/55">
+            Quick Rate plays every unrated track from just before the first drop. One key to rate, and the next one
+            is already playing: your best guesses first, picked to stay in key and tempo so you stay in the groove.
+          </p>
+          <ul class="mt-6 space-y-2 text-white/70">
+            <li class="flex gap-3"><kbd class="rounded bg-white/10 px-1.5 font-mono text-sm">⌥1–5</kbd> rate and move on</li>
+            <li class="flex gap-3"><kbd class="rounded bg-white/10 px-1.5 font-mono text-sm">j</kbd> not now, ask me next month</li>
+            <li class="flex gap-3"><kbd class="rounded bg-white/10 px-1.5 font-mono text-sm">⇧P</kbd> drop it in a playlist</li>
+          </ul>
+        </div>
+
+        <div class="rounded-2xl border border-line bg-ink/80 p-5 shadow-2xl shadow-black/50 sm:p-6">
+          <div class="flex items-baseline justify-between">
+            <div class="font-display text-lg font-bold">Quick Rate <span class="font-normal text-white/40">· All Tracks</span></div>
+            <span class="font-mono text-xs text-white/40">1,204 of 2,065 left</span>
+          </div>
+          <div class="mt-3 h-1 overflow-hidden rounded-full bg-white/10"><div class="h-full w-[42%] rounded-full bg-amber"></div></div>
+          <div class="mt-5 font-display text-2xl font-bold">Afterglow (Club Mix)</div>
+          <div class="text-white/50">Example Artist · Afro House</div>
+          <div class="mt-2 text-sm text-amber/90">✦ Afro House is a genre you rate highly</div>
+          <Waveform class="mt-4" height={70} seed={21} bars={120} duration="10s" />
+          <div class="mt-5 grid grid-cols-5 gap-1.5 sm:gap-2">
+            {ratings.map((label, i) => (
+              <div class={`rounded-lg border px-1 py-2.5 text-center transition hover:bg-white/10 ${i === 4 ? "border-amber/60 bg-amber/15" : "border-line bg-white/5"}`}>
+                <div class="text-[9px] text-amber sm:text-[10px]">{"★".repeat(i + 1)}</div>
+                <div class="mt-1 truncate text-[11px] font-semibold sm:text-sm">{label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section id="how" class="mx-auto max-w-6xl scroll-mt-20 px-4 py-24 sm:px-6">
+      <p class="font-mono text-xs tracking-[0.2em] text-amber uppercase">How it works</p>
+      <h2 class="mt-3 font-display text-4xl font-bold tracking-tight sm:text-5xl">Three steps to the booth.</h2>
+      <div class="mt-12 grid gap-4 md:grid-cols-3">
+        {steps.map((s) => (
+          <div class="flex flex-col rounded-3xl border border-line bg-panel p-6 sm:p-8">
+            <div class="font-display text-5xl font-bold text-white/10">{s.n}</div>
+            <h3 class="mt-4 font-display text-xl font-bold">{s.title}</h3>
+            <p class="mt-2 flex-1 text-white/55">{s.body}</p>
+            <code class="mt-6 block overflow-x-auto rounded-lg bg-ink px-3 py-2 font-mono text-xs whitespace-nowrap text-synced">
+              <span class="text-white/30">$ </span>{s.cmd}
+            </code>
+          </div>
+        ))}
+      </div>
+      <p class="mt-6 text-sm text-white/40">Prefer clicking? The Mac app does all of this with a Sync button.</p>
+    </section>
+
+    <!-- FAQ -->
+    <section id="faq" class="mx-auto max-w-3xl scroll-mt-20 px-4 pb-24 sm:px-6">
+      <h2 class="font-display text-4xl font-bold tracking-tight">Questions</h2>
+      <div class="mt-8 divide-y divide-line border-y border-line">
+        {faqs.map((f) => (
+          <details class="group py-5">
+            <summary class="flex cursor-pointer list-none items-center justify-between gap-4 font-display text-lg font-semibold">
+              {f.q}
+              <span class="text-2xl font-normal text-amber transition group-open:rotate-45">+</span>
+            </summary>
+            <p class="mt-3 text-white/55">{f.a}</p>
+          </details>
+        ))}
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="px-4 pb-24 sm:px-6">
+      <div class="relative mx-auto max-w-6xl overflow-hidden rounded-[2rem] border border-amber/30 bg-gradient-to-br from-amber/20 via-panel to-low/20 px-6 py-16 text-center sm:py-20">
+        <Logo class="mx-auto size-16" tile spin />
+        <h2 class="mx-auto mt-6 max-w-2xl font-display text-4xl font-bold tracking-tight text-balance sm:text-6xl">
+          Spend your time on the mix, not the export.
+        </h2>
+        <a href={github} class="mt-10 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 font-semibold text-ink transition hover:bg-amber">
+          Get Deckhand for Mac →
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-t border-line">
+    <div class="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-10 text-sm text-white/40 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+      <div class="flex items-center gap-2"><Logo class="size-5" /><span class="font-semibold text-white/70">Deckhand</span> · Free and open source (GPL-3.0)</div>
+      <div>Not affiliated with AlphaTheta, Pioneer DJ or Apple.</div>
+    </div>
+  </footer>
+</Layout>

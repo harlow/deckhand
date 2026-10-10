@@ -1,0 +1,10 @@
+# Netlify builds the marketing site in site/ (Astro + Tailwind).
+[build]
+  base = "site"
+  command = "npm run build"
+  publish = "dist"
+  # Skip deploys for commits that don't touch the site (the Swift app and CLI live alongside it).
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- ."
+
+[build.environment]
+  NODE_VERSION = "22"
