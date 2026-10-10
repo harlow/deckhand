@@ -7,7 +7,7 @@ Apple Music → Deckhand → USB → OMNIS-DUO
 ```
 
 Status: MVP, pending hardware confirmation. See [docs/deckhand-product-spec.md](docs/deckhand-product-spec.md)
-and [docs/formats.md](docs/formats.md).
+and [docs/formats.md](docs/formats.md). Mac app concept: [docs/mac-app.md](docs/mac-app.md).
 
 ## Build
 

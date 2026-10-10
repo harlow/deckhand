@@ -37,6 +37,12 @@
    `--cue-source` and the unanalyzed-track tag fallback were removed). Key, BPM and cues are always Deckhand's;
    MIK is only the answer key for the eval tools. Full analyze ≈ 9 min per 1,000 tracks on this Mac.
 
+## Mac app (design stage)
+
+Concept, mockups and feature list in `docs/mac-app.md`. First pass built (`Sources/DeckhandApp`,
+`Scripts/build-app.sh`): playlists, track table with waveforms/key/energy, filters, player + queue,
+analyze banner and a sync sheet that runs the CLI. Next: editing analysis by hand, then smart crates.
+
 ## Key model retrained (2026-10-08)
 
 S-KEY's ChromaNet fine-tuned on Beatport EDM Key + FMAK + confident MIK library labels (`Scripts/key-training/`,

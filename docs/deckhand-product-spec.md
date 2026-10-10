@@ -1222,6 +1222,8 @@ Safely unmounts the drive.
 
 ## 17. Minimal GUI
 
+> Superseded by the fuller Mac app concept in [mac-app.md](mac-app.md) (2026-10-09).
+
 A GUI is not required to prove the product.
 
 If/when added, keep it deliberately small.

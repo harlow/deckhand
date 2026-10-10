@@ -87,6 +87,12 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
         ),
+        // Native Mac app (SwiftUI). `Scripts/build-app.sh` bundles it as Deckhand.app.
+        .executableTarget(
+            name: "DeckhandApp",
+            dependencies: ["Sync"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .testTarget(name: "OneLibraryTests", dependencies: ["OneLibrary"]),
         .testTarget(name: "AnalysisTests", dependencies: ["Analysis"]),
         .testTarget(name: "SyncTests", dependencies: ["Sync"]),
