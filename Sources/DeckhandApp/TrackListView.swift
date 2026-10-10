@@ -212,25 +212,45 @@ private struct DriveControls: View {
         if let drive = library.activeDrive {
             let job = library.job
             Color.clear.frame(width: 4)
-            HStack(spacing: 6) {
-                Image(systemName: "mediastick")
-                Text(drive.volume.name).fontWeight(.semibold)
-                if job.running, let total = job.total, total > 0 {
-                    Text("\(job.phase) \(Int(Double(job.done) / Double(total) * 100))%")
-                        .monospacedDigit().foregroundStyle(.secondary)
-                } else if job.running {
-                    Text(job.phase).foregroundStyle(.secondary).lineLimit(1)
-                } else if library.pendingChanges > 0 {
-                    Text("\(library.pendingChanges.formatted()) to sync").foregroundStyle(Color.pending)
-                } else {
-                    Text("Up to date").foregroundStyle(.secondary)
+            Menu {
+                Picker("Drive", selection: Binding(get: { library.activeDriveId },
+                                                   set: { library.activeDriveId = $0; library.refreshDrives() })) {
+                    ForEach(library.drives) { d in
+                        Text(d.manifest == nil ? "\(d.volume.name) (not a Deckhand drive)" : d.volume.name)
+                            .tag(Optional(d.id))
+                    }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+                Divider()
+                Button("Eject \(drive.volume.name)") { library.eject(drive) }
+                    .disabled(job.running || library.ejecting.contains(drive.id))
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "mediastick")
+                    Text(drive.volume.name).fontWeight(.semibold)
+                    if job.running, let total = job.total, total > 0 {
+                        Text("\(job.phase) \(Int(Double(job.done) / Double(total) * 100))%")
+                            .monospacedDigit().foregroundStyle(.secondary)
+                    } else if job.running {
+                        Text(job.phase).foregroundStyle(.secondary).lineLimit(1)
+                    } else if library.pendingChanges > 0 {
+                        Text("\(library.pendingChanges.formatted()) to sync").foregroundStyle(Color.pending)
+                    } else {
+                        Text("Up to date").foregroundStyle(.secondary)
+                    }
+                    Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                 }
             }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
             .padding(.horizontal, 10)
             .frame(height: 28)
             .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.white.opacity(0.12)))
-            .help("Changes waiting for \(drive.volume.name)")
+            .help("Changes waiting for \(drive.volume.name). Click to switch drives.")
             Button { library.sync(drive) } label: {
                 HStack(spacing: 6) {
                     if job.running { ProgressView().controlSize(.mini).tint(.white) }
