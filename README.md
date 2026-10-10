@@ -107,7 +107,7 @@ Other commands:
 | Command | What it does |
 |---|---|
 | `playlists`, `devices` | List Apple Music playlists and mounted drives |
-| `status`, `validate` | Show a drive's sync state and check its library for problems |
+| `status`, `validate` | Show exactly what the next sync would change (`--json` for scripts), and check a drive's library for problems |
 | `sync --adopt` | Take over audio that's already on a drive (for example, from a Rekordbox export) instead of copying it again |
 | `import-playlists` | Recreate a drive's existing playlists in Apple Music (`--add-missing` also adds tracks Music doesn't have) |
 | `cleanup` | Remove leftovers from other tools that nothing on the drive uses (`--dry-run` first) |

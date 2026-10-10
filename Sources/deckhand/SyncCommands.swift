@@ -152,7 +152,8 @@ struct SyncCommand: ParsableCommand {
         let after = try planner.verify(volume: v, profile: profile)
         timer.mark("verify")
         let onDrive = after.tracks.filter(\.isOnDrive).count
-        print("\nDone. \(onDrive) tracks in \(after.playlists.filter { !$0.source.isFolder }.count) playlists on \(v.name).")
+        let lists = after.playlists.filter { !$0.source.isFolder }.count
+        print("\nDone. \(onDrive) track\(onDrive == 1 ? "" : "s") in \(lists) playlist\(lists == 1 ? "" : "s") on \(v.name).")
         if !result.analysisFailed.isEmpty {
             print("Analysis failed for \(result.analysisFailed.count) track(s); they're on the drive without BPM, key or cues.")
         }
