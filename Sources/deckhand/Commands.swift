@@ -121,7 +121,7 @@ struct SyncCommand: ParsableCommand {
         timer.mark("open drive")
 
         let wholeLibrary = entireLibrary ?? (manifest.entireLibrary == true)
-        let lib = try AppleMusicLibrary.load(allSongs: wholeLibrary)
+        let lib = try AppleMusicLibrary.loadWithCurrentRatings(allSongs: wholeLibrary)
         var selected = manifest.selectedPlaylistIds
         if !playlist.isEmpty {
             selected = try playlist.map { name in

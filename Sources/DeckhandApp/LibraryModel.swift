@@ -203,7 +203,7 @@ final class LibraryModel {
     func reloadLibrary() async {
         let start = Date()
         guard let (lib, signature) = try? await Task.detached(operation: { () throws -> (SourceLibrary, Int) in
-            let lib = try AppleMusicLibrary.load(allSongs: true)
+            let lib = try AppleMusicLibrary.loadWithCurrentRatings(allSongs: true)
             return (lib, Self.signature(of: lib))
         }).value else { return }
         guard signature != librarySignature else {

@@ -87,6 +87,29 @@ public enum AppleMusicWriter {
         }
     }
 
+    /// Star ratings (0–5) the user set, by track persistent ID, read live from Music. Ratings Music computes from
+    /// album ratings read as 0, as they do from iTunesLibrary.
+    public static func currentRatings() throws -> [String: Int] {
+        var error: NSDictionary?
+        let script = NSAppleScript(source: """
+            tell application "Music" to get {persistent ID, rating, rating kind} of every file track of library playlist 1
+            """)
+        guard let result = script?.executeAndReturnError(&error), error == nil, result.numberOfItems == 3,
+              let ids = result.atIndex(1), let ratings = result.atIndex(2), let kinds = result.atIndex(3),
+              ids.numberOfItems == ratings.numberOfItems, ids.numberOfItems == kinds.numberOfItems else {
+            throw AppleMusicWriterError.script(error?[NSAppleScript.errorMessage] as? String ?? "couldn't read ratings")
+        }
+        let computed: OSType = 0x6B52_7443  // 'kRtC'
+        var out: [String: Int] = [:]
+        out.reserveCapacity(ids.numberOfItems)
+        for i in stride(from: 1, through: ids.numberOfItems, by: 1) {
+            guard let id = ids.atIndex(i)?.stringValue else { continue }
+            let isComputed = kinds.atIndex(i)?.enumCodeValue == computed
+            out[id] = isComputed ? 0 : Int(ratings.atIndex(i)?.int32Value ?? 0) / 20
+        }
+        return out
+    }
+
     /// Adds an audio file to the library and returns the new track's persistent ID and file location
     /// (Music may copy the file into its media folder, depending on the user's settings).
     /// Non-nil metadata values overwrite what Music read from the file's tags.
