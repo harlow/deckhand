@@ -65,20 +65,23 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* A playhead sweeping across a waveform. --dur sets the speed. */
+/* A playhead sweeping across a waveform. --dur sets the speed. Both animate only transform, so the
+   browser composites them instead of re-laying out and repainting the waveform every frame.
+   .playhead is a full-width layer with the line at its left edge; .played is a full-width overlay. */
 .playhead {
   animation: playhead var(--dur, 14s) linear infinite;
 }
 @keyframes playhead {
-  from { left: 0%; }
-  to { left: 100%; }
+  from { transform: translateX(0%); }
+  to { transform: translateX(100%); }
 }
 .played {
+  transform-origin: left;
   animation: played var(--dur, 14s) linear infinite;
 }
 @keyframes played {
-  from { width: 0%; }
-  to { width: 100%; }
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
 }
 
 /* Dots travelling along the sync pipeline. */
