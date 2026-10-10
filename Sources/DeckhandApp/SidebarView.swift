@@ -1,3 +1,4 @@
+import DeckhandAppCore
 import SwiftUI
 
 struct SidebarView: View {
@@ -89,7 +90,8 @@ private struct AllTracksRow: View {
     var body: some View {
         let hasDrive = library.activeDrive?.manifest != nil
         let on = library.entireLibraryOnDrive
-        let pending = library.pendingChanges
+        let status = library.driveStatus
+        let pending = status?.pendingCount ?? 0
         let drive = library.activeDrive?.volume.name ?? "the drive"
         HStack(spacing: 6) {
             Image(systemName: "music.note.list").frame(width: 16)
@@ -100,7 +102,7 @@ private struct AllTracksRow: View {
                     library.setEntireLibraryOnDrive(true)
                 }
             } else {
-                if on {
+                if on, status != nil {
                     Circle().fill(pending == 0 ? Color.synced : Color.pending)
                         .frame(width: 6, height: 6)
                         .help(pending == 0 ? "All tracks up to date on \(drive)" : "\(pending.formatted()) change\(pending == 1 ? "" : "s") to sync")
@@ -148,7 +150,7 @@ private struct PlaylistRow: View {
             if onDrive == false, hovering {
                 DriveActionButton(help: "Sync \(p.name) to \(drive)") { library.setOnDrive(true, p) }
             } else {
-                if onDrive == true {
+                if onDrive == true, let state, state != .unknown {
                     Circle().fill(state == .synced ? Color.synced : Color.pending)
                         .frame(width: 6, height: 6)
                         .help(statusHelp(state))
@@ -171,7 +173,7 @@ private struct PlaylistRow: View {
         }
     }
 
-    private func statusHelp(_ state: PlaylistSync) -> String {
+    private func statusHelp(_ state: DriveStatus.Playlist) -> String {
         switch state {
         case .pending(let n): "\(n.formatted()) change\(n == 1 ? "" : "s") to sync"
         default: "Up to date on \(library.activeDrive?.volume.name ?? "the drive")"
@@ -239,6 +241,7 @@ private struct DriveFooter: View {
             if library.ejecting.contains(drive.id) { return ("Ejecting", .secondary) }
             if drive.manifest == nil { return ("Not set up", .secondary) }
             if library.job.running && library.job.title.hasSuffix(drive.volume.name) { return ("Syncing", .accentColor) }
+            if library.checkingStatus { return ("Checking…", .secondary) }
             if library.pendingWontFit { return ("Won't fit", .red) }
             if library.pendingChanges > 0 { return ("\(library.pendingChanges.formatted()) to sync", Color.pending) }
             return ("Up to date", Color.synced)

@@ -1,3 +1,4 @@
+import DeckhandAppCore
 import Foundation
 import Observation
 
@@ -18,9 +19,13 @@ final class Job {
     private(set) var log = ""
     private(set) var startedAt = Date()
     private(set) var finishedAt = Date()
+    /// A sync's `@result` line: what it did and whether it left the drive up to date.
+    private(set) var report: SyncReport?
+    /// Set when a sync stopped before writing because Music couldn't be read live (`@live`).
+    private(set) var liveWarning: LiveWarning?
 
     @ObservationIgnored private var process: Process?
-    @ObservationIgnored private var pending = ""
+    @ObservationIgnored private var pending = Data()
 
     var running: Bool { state == .running }
 
@@ -39,8 +44,10 @@ final class Job {
         done = 0
         total = nil
         detail = ""
+        report = nil
+        liveWarning = nil
         log = "$ deckhand \(args.joined(separator: " "))\n"
-        pending = ""
+        pending = Data()
         startedAt = Date()
         guard let cli = Self.cli else {
             state = .failed("Couldn't find the deckhand command next to the app. Build it with Scripts/build-app.sh.")
@@ -57,24 +64,44 @@ final class Job {
         let pipe = Pipe()
         p.standardOutput = pipe
         p.standardError = pipe
+        // Output and the exit are delivered in order on the main queue, and the job finishes only once the output has
+        // ended (or shortly after the exit), so the last lines — a sync's `@result` — are always read first.
+        let run = UUID()
+        currentRun = run
+        outputEnded = false
+        exitStatus = nil
+        self.completion = completion
         pipe.fileHandleForReading.readabilityHandler = { [weak self] h in
             let data = h.availableData
-            guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
-            Task { @MainActor in self?.consume(text) }
+            if data.isEmpty { h.readabilityHandler = nil }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, self.currentRun == run else { return }
+                    if data.isEmpty {
+                        self.outputEnded = true
+                        self.finishIfDone()
+                    } else {
+                        self.consume(data)
+                    }
+                }
+            }
         }
         p.terminationHandler = { [weak self] proc in
-            Task { @MainActor in
-                pipe.fileHandleForReading.readabilityHandler = nil
-                guard let self else { return }
-                self.consume("\n")
-                self.finishedAt = Date()
-                let ok = proc.terminationStatus == 0
-                Log.post(ok ? .info : .error, "job", "\(self.title) \(ok ? "finished" : "exited with status \(proc.terminationStatus)") after \(Int(self.finishedAt.timeIntervalSince(self.startedAt))) s")
-                if self.state == .running {
-                    self.state = ok ? .succeeded : .failed(self.lastMessage ?? "exited with status \(proc.terminationStatus)")
+            let status = proc.terminationStatus
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, self.currentRun == run else { return }
+                    self.exitStatus = status
+                    self.finishIfDone()
                 }
-                self.process = nil
-                completion(ok)
+            }
+            // A child process still holding the output open mustn't keep the job running.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                MainActor.assumeIsolated {
+                    guard let self, self.currentRun == run else { return }
+                    self.outputEnded = true
+                    self.finishIfDone()
+                }
             }
         }
         do {
@@ -84,8 +111,30 @@ final class Job {
             Log.info("job", "Started: deckhand \(args.joined(separator: " "))")
         } catch {
             state = .failed(error.localizedDescription)
+            self.completion = nil
+            currentRun = UUID()
             completion(false)
         }
+    }
+
+    @ObservationIgnored private var currentRun = UUID()
+    @ObservationIgnored private var outputEnded = false
+    @ObservationIgnored private var exitStatus: Int32?
+    @ObservationIgnored private var completion: (@MainActor (Bool) -> Void)?
+
+    private func finishIfDone() {
+        guard outputEnded, let status = exitStatus, let completion else { return }
+        self.completion = nil
+        currentRun = UUID()
+        consume(Data("\n".utf8))
+        finishedAt = Date()
+        let ok = status == 0
+        Log.post(ok ? .info : .error, "job", "\(title) \(ok ? "finished" : "exited with status \(status)") after \(Int(finishedAt.timeIntervalSince(startedAt))) s")
+        if state == .running {
+            state = ok ? .succeeded : .failed(lastMessage ?? "exited with status \(status)")
+        }
+        process = nil
+        completion(ok)
     }
 
     func cancel() {
@@ -104,11 +153,12 @@ final class Job {
             .map { $0.trimmingCharacters(in: .whitespaces) }
     }
 
-    private func consume(_ text: String) {
-        pending += text
-        while let nl = pending.firstIndex(of: "\n") {
-            let line = String(pending[..<nl])
-            pending = String(pending[pending.index(after: nl)...])
+    /// Splits output into lines. Bytes, not text: a read can end inside a multi-byte character.
+    private func consume(_ data: Data) {
+        pending.append(data)
+        while let nl = pending.firstIndex(of: UInt8(ascii: "\n")) {
+            let line = String(decoding: pending[pending.startIndex..<nl], as: UTF8.self)
+            pending.removeSubrange(pending.startIndex...nl)
             handle(line)
         }
     }
@@ -124,6 +174,16 @@ final class Job {
             total = Int(f[3])
             detail = f.count > 4 ? f[4] : ""
             return
+        }
+        switch JobLine.parse(line) {
+        case .result(let r)?:
+            report = r
+            Log.info("sync", "Result: generation \(r.generation), \(r.clean ? "clean" : "\(r.pending) still pending")")
+            return
+        case .live(let w)?:
+            liveWarning = w
+            return
+        case nil: break
         }
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }

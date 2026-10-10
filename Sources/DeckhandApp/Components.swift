@@ -1,4 +1,5 @@
 import Analysis
+import DeckhandAppCore
 import DeckhandCore
 import SwiftUI
 
@@ -77,14 +78,20 @@ struct EnergyBar: View {
     }
 }
 
+/// A track's status on the active drive. Nothing for tracks the drive doesn't take, or whose status isn't known
+/// (still checking, audio not hashed yet): unknown is neither synced nor pending.
 struct SyncDot: View {
-    var state: SyncState
+    var state: DriveStatus.Track?
 
     var body: some View {
         switch state {
-        case .onDrive: Circle().fill(Color.synced).frame(width: 7, height: 7).help("On the drive")
+        case .synced: Circle().fill(Color.synced).frame(width: 7, height: 7).help("On the drive")
+        case .retained(let why):
+            Circle().fill(Color.synced).frame(width: 7, height: 7).help("On the drive, kept although its source can't be read: \(why)")
+        case .failed(let why): Circle().fill(Color.synced).frame(width: 7, height: 7).help("On the drive without analysis: \(why)")
         case .pending: Circle().strokeBorder(Color.pending, lineWidth: 2).frame(width: 9, height: 9).help("Waiting to sync")
-        case .notOnDrive, .noDrive: Color.clear.frame(width: 9, height: 9)
+        case .ineligible(let why): Color.clear.frame(width: 9, height: 9).help("Can't go on the drive: \(why)")
+        case .unknown, nil: Color.clear.frame(width: 9, height: 9)
         }
     }
 }

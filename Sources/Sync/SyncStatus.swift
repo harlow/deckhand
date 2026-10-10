@@ -605,8 +605,8 @@ public enum SyncStatus {
             r.recordFingerprint = t.recordFingerprint
             r.fileSize = t.driveSize
             r.rowAnalysis = t.rowAnalysis?.stored
-            // Source fields are part of the row: an unchanged row has an unchanged metadata fingerprint.
-            if t.recordChanged || r.metadataFingerprint == nil { r.metadataFingerprint = Manifest.digest(metadataFingerprint(t.source)) }
+            // Superseded by the record fingerprint; dropped as tracks are written.
+            r.metadataFingerprint = nil
             nextTracks[t.id] = r
         }
         next.tracks = nextTracks
@@ -659,13 +659,6 @@ public enum SyncStatus {
     /// Cover art is reread when the audio file or the track (Music bumps its modification date) changes.
     static func artworkKey(hash: String, size: Int64, modified: Double, trackModified: Date?) -> String {
         "\(hash);\(size);\(modified);\(trackModified?.timeIntervalSince1970 ?? 0)"
-    }
-
-    /// The source fields that end up in the device database; the app compares it until it reads SyncStatus.
-    public static func metadataFingerprint(_ s: SourceTrack) -> String {
-        [s.title, s.artist ?? "", s.album ?? "", s.albumArtist ?? "", s.genre ?? "", s.trackNumber.map(String.init) ?? "",
-         s.discNumber.map(String.init) ?? "", s.year.map(String.init) ?? "", String(s.rating ?? 0), s.comment ?? ""]
-            .joined(separator: "\u{1F}")
     }
 
     static func allocatePath(_ t: SourceTrack, hash: String, owners: [String: String]) -> String {

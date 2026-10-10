@@ -79,16 +79,6 @@ public enum AppleMusicLibrary {
         }
     }
 
-    /// `load`, with ratings read live from Music when it answers. iTunesLibrary's snapshot only catches up when
-    /// Music saves its library, which can trail a rating set seconds ago (Deckhand's own Quick Rate included).
-    public static func loadWithCurrentRatings(allSongs: Bool = false) throws -> SourceLibrary {
-        var lib = try load(allSongs: allSongs)
-        if let ratings = try? AppleMusicWriter.currentRatings() {
-            for (id, stars) in ratings where lib.tracks[id] != nil { lib.tracks[id]?.rating = stars }
-        }
-        return lib
-    }
-
     /// Every song in the library (not only those in user playlists).
     public static func allSongs() throws -> [SourceTrack] {
         let lib: ITLibrary
