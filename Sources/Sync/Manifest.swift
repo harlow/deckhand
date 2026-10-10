@@ -14,6 +14,8 @@ public struct Manifest: Codable, Sendable {
         public var analysisVersion: Int
         /// Inputs the ANLZ files were last written from (cues, writer options); a change forces a rewrite.
         public var anlzFingerprint: String?
+        /// The track's database fields (title, rating, …) when last written; a change rewrites the database.
+        public var metadataFingerprint: String?
     }
 
     public struct Playlist: Codable, Sendable, Equatable {

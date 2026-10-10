@@ -55,6 +55,38 @@ public enum AppleMusicWriter {
         return missing
     }
 
+    /// Removes tracks from a user playlist. They stay in the library (deleting from a user playlist
+    /// never deletes the song).
+    public static func remove(trackIds: [String], fromPlaylist playlistId: String) throws {
+        for batch in stride(from: 0, to: trackIds.count, by: 200).map({ Array(trackIds[$0..<min($0 + 200, trackIds.count)]) }) {
+            _ = try run("""
+                tell application "Music"
+                    set p to first user playlist whose persistent ID is \(quote(playlistId))
+                    if smart of p then error "Smart playlists are edited by their rules in Music."
+                    repeat with tid in {\(batch.map(quote).joined(separator: ", "))}
+                        delete (every track of p whose persistent ID is (contents of tid))
+                    end repeat
+                end tell
+                """)
+        }
+    }
+
+    /// Sets the star rating (0–5; 0 clears it) of library tracks.
+    public static func setRating(_ stars: Int, trackIds: [String]) throws {
+        let value = max(0, min(5, stars)) * 20
+        for batch in stride(from: 0, to: trackIds.count, by: 200).map({ Array(trackIds[$0..<min($0 + 200, trackIds.count)]) }) {
+            _ = try run("""
+                tell application "Music"
+                    repeat with tid in {\(batch.map(quote).joined(separator: ", "))}
+                        try
+                            set rating of (first track of library playlist 1 whose persistent ID is (contents of tid)) to \(value)
+                        end try
+                    end repeat
+                end tell
+                """)
+        }
+    }
+
     /// Adds an audio file to the library and returns the new track's persistent ID and file location
     /// (Music may copy the file into its media folder, depending on the user's settings).
     /// Non-nil metadata values overwrite what Music read from the file's tags.

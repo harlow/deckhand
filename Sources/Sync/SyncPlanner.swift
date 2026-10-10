@@ -153,7 +153,8 @@ public struct SyncPlanner {
         manifest.tracks = Dictionary(uniqueKeysWithValues: tracks.map {
             ($0.source.id, Manifest.Track(contentId: $0.contentId, usbPath: $0.usbPath, contentHash: $0.contentHash,
                                           analysisVersion: TrackAnalysis.currentVersion,
-                                          anlzFingerprint: $0.action == .unchanged ? previous.tracks[$0.source.id]?.anlzFingerprint : nil))
+                                          anlzFingerprint: $0.action == .unchanged ? previous.tracks[$0.source.id]?.anlzFingerprint : nil,
+                                          metadataFingerprint: previous.tracks[$0.source.id]?.metadataFingerprint))
         })
 
         // Playlists: stable IDs, sibling order follows source order.

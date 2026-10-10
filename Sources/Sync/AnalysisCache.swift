@@ -8,6 +8,11 @@ public final class AnalysisCache: @unchecked Sendable {
     let root: URL
     private var fingerprints: [String: String]
     private let lock = NSLock()
+    /// Recently decoded entries: callers read a track's analysis, sections and cues one after another,
+    /// and each file (waveforms included) is large, so decode it once.
+    private var recent: [String: Stored] = [:]
+    private var recentOrder: [String] = []
+    private static let recentLimit = 32
 
     public static func defaultRoot() -> URL {
         if let dir = ProcessInfo.processInfo.environment["DECKHAND_CACHE_DIR"] { return URL(fileURLWithPath: dir) }
@@ -71,15 +76,26 @@ public final class AnalysisCache: @unchecked Sendable {
         stored.cues = cues?.cues.map { [$0.timeMs, $0.energy] }
         stored.trackEnergy = cues?.energy
         try JSONEncoder().encode(stored).write(to: path(hash), options: .atomic)
+        lock.withLock { recent[hash] = nil }
     }
 
     private func load(_ hash: String) -> Stored? {
-        guard let data = try? Data(contentsOf: path(hash)),
-              let stored = try? JSONDecoder().decode(Stored.self, from: data),
+        guard let stored = decoded(hash),
               stored.version == TrackAnalysis.currentVersion,
               stored.cueVersion == CueAnalyzer.version,
               stored.structureVersion == StructureAnalyzer.version,
               stored.policy.map({ $0 == Self.ownAnalysisPolicy }) ?? true else { return nil }
+        return stored
+    }
+
+    private func decoded(_ hash: String) -> Stored? {
+        if let hit = lock.withLock({ recent[hash] }) { return hit }
+        guard let data = try? Data(contentsOf: path(hash)),
+              let stored = try? JSONDecoder().decode(Stored.self, from: data) else { return nil }
+        lock.withLock {
+            if recent.updateValue(stored, forKey: hash) == nil { recentOrder.append(hash) }
+            while recentOrder.count > Self.recentLimit { recent[recentOrder.removeFirst()] = nil }
+        }
         return stored
     }
 

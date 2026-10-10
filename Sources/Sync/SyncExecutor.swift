@@ -15,6 +15,8 @@ public struct SyncExecutor {
         case analyzing(index: Int, total: Int, title: String)
         case analyzed(done: Int, total: Int, title: String)
         case analysisFailed(title: String, error: String)
+        /// Checking (and where needed rewriting) a track's analysis files on the drive.
+        case writingAnalysisFiles(index: Int, total: Int, title: String)
         case writingDatabase
         case committing
         case removing(count: Int)
@@ -106,11 +108,15 @@ public struct SyncExecutor {
 
         var manifest = plan.manifest
         var anlzWritten = 0
-        for t in plan.tracks {
+        var energies: [String: Int] = [:]
+        for (i, t) in plan.tracks.enumerated() {
+            progress(.writingAnalysisFiles(index: i + 1, total: plan.tracks.count, title: t.source.title))
             guard let a = analyses[t.contentHash] ?? cache.analysis(forHash: t.contentHash) else { continue }
             analyses[t.contentHash] = a
             let sections = cache.sections(forHash: t.contentHash)
-            let cues = CueBuilder.cues(detected: cache.detectedCues(forHash: t.contentHash),
+            let detected = cache.detectedCues(forHash: t.contentHash)
+            energies[t.contentHash] = detected?.energy
+            let cues = CueBuilder.cues(detected: detected,
                                        analysis: a, mode: cueMode, hotStyle: hotCueStyle,
                                        sections: sections, buildLeadBars: buildLeadBars)
             let phrases = writePhrases ? sections.flatMap { StructureAnalyzer.phrases(sections: $0, analysis: a) } : nil
@@ -125,7 +131,16 @@ public struct SyncExecutor {
             manifest.tracks[t.source.id]?.anlzFingerprint = fingerprint
             anlzWritten += 1
         }
-        if !plan.hasChanges && anlzWritten == 0 && !force {
+        // Metadata-only edits (a new rating, a retitled track) still need the database rewritten.
+        var metadataChanged = 0
+        for t in plan.tracks {
+            let f = Self.metadataFingerprint(t.source)
+            if manifest.tracks[t.source.id]?.metadataFingerprint != f {
+                manifest.tracks[t.source.id]?.metadataFingerprint = f
+                metadataChanged += 1
+            }
+        }
+        if !plan.hasChanges && anlzWritten == 0 && metadataChanged == 0 && !force {
             progress(.done)
             return false
         }
@@ -139,7 +154,7 @@ public struct SyncExecutor {
             tracks: plan.tracks.map {
                 var e = exportTrack($0, analysis: analyses[$0.contentHash])
                 e.artworkPath = artPaths[$0.source.id]
-                e.color = trackColorRule.color(energy: cache.detectedCues(forHash: $0.contentHash)?.energy)
+                e.color = trackColorRule.color(energy: energies[$0.contentHash] ?? cache.detectedCues(forHash: $0.contentHash)?.energy)
                 return e
             },
             playlists: plan.playlists.map {
@@ -261,6 +276,13 @@ public struct SyncExecutor {
         try FileOps.writeAtomically(files.dat, to: dir.appendingPathComponent("ANLZ0000.DAT"))
         try FileOps.writeAtomically(files.ext, to: dir.appendingPathComponent("ANLZ0000.EXT"))
         try FileOps.writeAtomically(files.twoEx, to: dir.appendingPathComponent("ANLZ0000.2EX"))
+    }
+
+    /// The source fields that end up in the device database (see `exportTrack`).
+    public static func metadataFingerprint(_ s: SourceTrack) -> String {
+        [s.title, s.artist ?? "", s.album ?? "", s.albumArtist ?? "", s.genre ?? "", s.trackNumber.map(String.init) ?? "",
+         s.discNumber.map(String.init) ?? "", s.year.map(String.init) ?? "", String(s.rating ?? 0), s.comment ?? ""]
+            .joined(separator: "\u{1F}")
     }
 
     private func exportTrack(_ t: SyncPlan.TrackEntry, analysis: TrackAnalysis?) -> ExportTrack {

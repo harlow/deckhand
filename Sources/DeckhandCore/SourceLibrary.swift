@@ -21,11 +21,16 @@ public struct SourceTrack: Codable, Sendable, Hashable, Identifiable {
     /// Why the track can't be exported even if it has a location (e.g. DRM-protected).
     public var unavailableReason: String?
     public var dateAdded: Date?
+    /// Listening history from the music app (used for suggestions, never written to the drive).
+    public var playCount: Int?
+    public var skipCount: Int?
+    public var lastPlayed: Date?
 
     public init(id: String, title: String, artist: String? = nil, album: String? = nil, albumArtist: String? = nil,
                 genre: String? = nil, trackNumber: Int? = nil, discNumber: Int? = nil, year: Int? = nil,
                 rating: Int? = nil, comment: String? = nil, durationSeconds: Double? = nil, location: URL? = nil,
-                unavailableReason: String? = nil, dateAdded: Date? = nil) {
+                unavailableReason: String? = nil, dateAdded: Date? = nil,
+                playCount: Int? = nil, skipCount: Int? = nil, lastPlayed: Date? = nil) {
         self.id = id
         self.title = title
         self.artist = artist
@@ -41,6 +46,9 @@ public struct SourceTrack: Codable, Sendable, Hashable, Identifiable {
         self.location = location
         self.unavailableReason = unavailableReason
         self.dateAdded = dateAdded
+        self.playCount = playCount
+        self.skipCount = skipCount
+        self.lastPlayed = lastPlayed
     }
 }
 

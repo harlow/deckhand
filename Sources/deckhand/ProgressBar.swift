@@ -6,6 +6,8 @@ final class ProgressBar: @unchecked Sendable {
     private let label: String
     private let total: Int
     private let isTTY = isatty(STDOUT_FILENO) != 0
+    /// Set by the Mac app: emit `@progress<TAB>label<TAB>done<TAB>total<TAB>detail` lines for it to parse.
+    private let machine = ProcessInfo.processInfo.environment["DECKHAND_PROGRESS"] == "1"
     private let start = Date()
     private let lock = NSLock()
     private var done = 0
@@ -46,6 +48,14 @@ final class ProgressBar: @unchecked Sendable {
         let rate = elapsed > 0 ? Double(done) / elapsed : 0
         let percent = Int(Double(done) / Double(total) * 100)
 
+        if machine {
+            let now = Date()
+            guard force || now.timeIntervalSince(lastDraw) >= 0.1 else { return }
+            lastDraw = now
+            let clean = detail.replacingOccurrences(of: "\t", with: " ").replacingOccurrences(of: "\n", with: " ")
+            print("@progress\t\(label.trimmingCharacters(in: .whitespaces))\t\(done)\t\(total)\t\(clean)")
+            return
+        }
         guard isTTY else {
             let decile = percent / 10
             if decile > lastPlainDecile {

@@ -518,6 +518,7 @@ final class LockedBox<T>: @unchecked Sendable {
 final class SyncProgress: @unchecked Sendable {
     private let copy = LockedBox<ProgressBar?>(nil)
     private let analyze = LockedBox<ProgressBar?>(nil)
+    private let anlz = LockedBox<ProgressBar?>(nil)
     private let failures = LockedBox<[String]>([])
 
     func handle(_ event: SyncExecutor.Event) {
@@ -530,9 +531,15 @@ final class SyncProgress: @unchecked Sendable {
             analyze.update { if $0 == nil { $0 = ProgressBar("Analyzing     ", total: n) } }
         case .analyzed(_, _, let title): analyze.value?.advance(title)
         case .analysisFailed(let title, let error): failures.update { $0.append("\(title): \(error)") }
+        case .writingAnalysisFiles(_, let n, let title):
+            finishCopy()
+            analyze.value?.finish()
+            anlz.update { if $0 == nil { $0 = ProgressBar("Analysis files", total: n) } }
+            anlz.value?.advance(title)
         case .writingDatabase:
             finishCopy()
             analyze.value?.finish()
+            anlz.value?.finish()
             for f in failures.value { warn("  ! analysis failed for \(f)") }
             failures.update { $0.removeAll() }
             print("  writing library database")
@@ -545,6 +552,7 @@ final class SyncProgress: @unchecked Sendable {
     func finish() {
         finishCopy()
         analyze.value?.finish()
+        anlz.value?.finish()
     }
 
     private func finishCopy() {
@@ -634,5 +642,62 @@ struct OutputSettings {
     var summary: String {
         "cues \(cues.rawValue), hot cues \(hotCues.rawValue) (build lead \(buildLead) bars), "
             + "keys \(keyFormat.rawValue), track color \(trackColor.rawValue), phrases \(phrases ? "on" : "off")"
+    }
+}
+
+struct RatingsCommand: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "ratings",
+        abstract: "Back up or restore Apple Music star ratings (Music keeps them only in its library, not the files).",
+        subcommands: [Backup.self, Restore.self]
+    )
+
+    struct Backup: ParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Save every rating to ~/Library/Application Support/Deckhand/Ratings.")
+
+        func run() throws {
+            let lib = try AppleMusicLibrary.load(allSongs: true)
+            let backup = RatingsBackup(tracks: lib.tracks.values)
+            if let url = try backup.save() {
+                print("Saved \(backup.entries.count) ratings to \(url.path)")
+            } else {
+                print("\(backup.entries.count) ratings; unchanged since the last backup.")
+            }
+        }
+    }
+
+    struct Restore: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Put ratings from a backup back into Apple Music.",
+            discussion: "By default only unrated tracks are filled in; ratings you've changed since are kept."
+        )
+
+        @Argument(help: "Backup file (default: the latest backup).")
+        var file: String?
+
+        @Flag(help: "Also replace ratings that differ from the backup.")
+        var overwrite = false
+
+        @Flag(help: "Show what would change without changing anything.")
+        var dryRun = false
+
+        func run() throws {
+            guard let url = file.map({ URL(fileURLWithPath: $0) }) ?? RatingsBackup.latest() else {
+                throw ValidationError("No backup found in \(RatingsBackup.directory.path)")
+            }
+            let backup = try RatingsBackup.load(from: url)
+            let lib = try AppleMusicLibrary.load(allSongs: true)
+            let changes = backup.changes(for: Array(lib.tracks.values), overwrite: overwrite)
+            print("Backup from \(backup.savedAt.formatted()): \(backup.entries.count) ratings; \(changes.count) to restore.")
+            for c in changes.prefix(30) {
+                print("  \(c.title): \(c.from == 0 ? "unrated" : String(repeating: "★", count: c.from)) → \(String(repeating: "★", count: c.to))")
+            }
+            if changes.count > 30 { print("  … and \(changes.count - 30) more") }
+            guard !dryRun, !changes.isEmpty else { return }
+            for (stars, group) in Dictionary(grouping: changes, by: \.to) {
+                try AppleMusicWriter.setRating(stars, trackIds: group.map(\.trackId))
+            }
+            print("Restored \(changes.count) ratings.")
+        }
     }
 }

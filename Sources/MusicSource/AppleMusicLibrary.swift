@@ -104,7 +104,10 @@ public enum AppleMusicLibrary {
             durationSeconds: item.totalTime > 0 ? Double(item.totalTime) / 1000 : nil,
             location: reason == nil ? item.location : nil,
             unavailableReason: reason,
-            dateAdded: item.addedDate
+            dateAdded: item.addedDate,
+            playCount: item.playCount,
+            skipCount: item.skipCount,
+            lastPlayed: item.lastPlayedDate
         )
     }
 
