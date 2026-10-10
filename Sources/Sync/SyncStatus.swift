@@ -279,6 +279,8 @@ public struct ChangeSet: Sendable {
         public var bytesToCopy: Int64 = 0
         /// Everything a sync would do, as one count.
         public var total = 0
+
+        public init() {}
     }
 
     public var summary: Summary {
