@@ -93,16 +93,23 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
         ),
+        // The app's state logic that doesn't need a UI: sync status from the engine, Music's serial event queue,
+        // overlays and result parsing. Tested by DeckhandAppCoreTests.
+        .target(
+            name: "DeckhandAppCore",
+            dependencies: ["Sync", "MusicSource", "DeckhandCore"]
+        ),
         // Native Mac app (SwiftUI). `Scripts/build-app.sh` bundles it as Deckhand.app.
         .executableTarget(
             name: "DeckhandApp",
-            dependencies: ["Sync"],
+            dependencies: ["Sync", "DeckhandAppCore"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(name: "OneLibraryTests", dependencies: ["OneLibrary"]),
         .testTarget(name: "AnalysisTests", dependencies: ["Analysis"]),
-        .testTarget(name: "SyncTests", dependencies: ["Sync"]),
+        .testTarget(name: "SyncTests", dependencies: ["Sync", "DeckhandAppCore", "MusicSource"]),
         .testTarget(name: "EvalSupportTests", dependencies: ["EvalSupport"]),
         .testTarget(name: "DeckhandAppTests", dependencies: ["DeckhandApp"], swiftSettings: [.swiftLanguageMode(.v5)]),
+        .testTarget(name: "DeckhandAppCoreTests", dependencies: ["DeckhandAppCore", "Sync", "MusicSource"]),
     ]
 )
