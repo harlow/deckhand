@@ -2,62 +2,8 @@ import DeckhandCore
 import Foundation
 import OneLibrary
 
-/// The complete set of changes a sync will make, computed before anything is written.
-public struct SyncPlan: Sendable {
-    public enum Action: String, Sendable {
-        case add, replace, unchanged
-        /// Audio already on the drive outside Deckhand's folder; moved into place instead of copied.
-        case adopt
-    }
-    public enum PlaylistAction: String, Sendable { case create, change, unchanged }
-
-    public struct TrackEntry: Sendable {
-        public var source: SourceTrack
-        public var sourceFile: URL
-        public var contentHash: String
-        public var usbPath: String
-        public var contentId: Int
-        public var fileSize: Int64
-        public var action: Action
-        public var needsAnalysis: Bool
-        /// For `.adopt`: the existing file's USB-relative path.
-        public var adoptFrom: String? = nil
-    }
-
-    public struct PlaylistEntry: Sendable {
-        public var source: SourcePlaylist
-        public var playlistId: Int
-        public var parentPlaylistId: Int?
-        public var sequenceNo: Int
-        public var contentIds: [Int]
-        public var action: PlaylistAction
-    }
-
-    public struct Skipped: Sendable {
-        public var playlist: String
-        public var track: String
-        public var reason: String
-    }
-
-    public var volume: Volume
-    public var tracks: [TrackEntry]
-    /// Previously synced tracks no longer referenced by any selected playlist.
-    public var removedTracks: [Manifest.Track]
-    public var playlists: [PlaylistEntry]
-    public var removedPlaylists: [Manifest.Playlist]
-    public var skipped: [Skipped]
-    public var manifest: Manifest
-
-    public var bytesToCopy: Int64 {
-        tracks.filter { $0.action == .add || $0.action == .replace }.reduce(0) { $0 + $1.fileSize }
-    }
-    public var analysisCount: Int { tracks.filter(\.needsAnalysis).count }
-    public var hasChanges: Bool {
-        tracks.contains { $0.action != .unchanged } || !removedTracks.isEmpty
-            || playlists.contains { $0.action != .unchanged } || !removedPlaylists.isEmpty
-    }
-}
-
+/// Gathers the facts `SyncStatus.evaluate` decides from (audio hashes and analysis from the cache, the drive's
+/// files) and evaluates them.
 public struct SyncPlanner {
     let library: SourceLibrary
     let cache: AnalysisCache
@@ -67,171 +13,94 @@ public struct SyncPlanner {
         self.cache = cache
     }
 
-    /// `entireLibrary`: also put every song on the drive, not just those in the selected playlists (requires a
-    /// library loaded with all songs). Playlists are still only the selected ones.
-    /// `adoptable`: audio hash → USB path of existing, unowned files on the drive (see AdoptScanner).
-    public func plan(volume: Volume, selectedPlaylistIds: [String], entireLibrary: Bool = false, previous: Manifest,
-                     adoptable: [String: String] = [:], verifyFiles: Bool = true) throws -> SyncPlan {
-        var adoptable = adoptable
-        var manifest = previous
-        manifest.selectedPlaylistIds = selectedPlaylistIds
-        manifest.entireLibrary = entireLibrary
-
-        let playlists = library.selection(Set(selectedPlaylistIds))
-        var skipped: [SyncPlan.Skipped] = []
-        var skippedKeys = Set<[String]>()
-        var entries: [String: SyncPlan.TrackEntry] = [:]
-        var order: [String] = []
-        var superseded: [Manifest.Track] = []
-        // Players locate analysis files by a hash of the audio path (~200k buckets), so large libraries
-        // get collisions. Deckhand picks its own file names, so it steers new paths clear of them.
-        var anlzOwner: [String: String] = [:]
-        for t in previous.tracks.values { anlzOwner[AnlzPath.directory(forAudioPath: t.usbPath)] = t.usbPath }
-
-        // Tracks, in first-seen playlist order; then (entire library) songs in no playlist.
-        var groups = playlists.filter { !$0.isFolder }
-        if entireLibrary, let all = library.allTrackIds {
-            groups.append(SourcePlaylist(id: "", name: "Library", trackIds: all))
+    /// What syncing to `volume`, whose manifest is `manifest`, would change. `selection` defaults to the drive's
+    /// saved one. `adoptable`: audio hash → USB path of existing, unowned files on the drive (see AdoptScanner).
+    public func plan(volume: Volume, manifest: Manifest, profile: OutputProfile, selection: Selection? = nil,
+                     adoptable: [String: String] = [:], retryFailedAnalysis: Bool = false) -> ChangeSet {
+        let scope = SyncStatus.scope(library: library, selection: selection ?? Selection(manifest))
+        let facts = facts(for: scope.trackIds, manifest: manifest, retryFailedAnalysis: retryFailedAnalysis)
+        var probe = DriveProbe.scan(volume, manifest: manifest)
+        var changes = SyncStatus.evaluate(library: library, manifest: manifest, facts: facts, drive: probe, profile: profile,
+                                          selection: selection, adoptable: adoptable)
+        // Audio already at a new track's path: likely a sync cut short after it replaced the database. That database
+        // knows the content IDs it gave those tracks.
+        let takeovers = changes.tracks.contains {
+            $0.changes.contains(.adopt) && $0.adoptFrom == nil && manifest.tracks[$0.id] == nil
         }
-        for p in groups {
-            for id in p.trackIds where entries[id] == nil {
-                guard let t = library.tracks[id] else { continue }
-                if let reason = Self.eligibilityProblem(t) {
-                    if skippedKeys.insert([p.name, display(t)]).inserted {
-                        skipped.append(.init(playlist: p.name, track: display(t), reason: reason))
-                    }
-                    continue
-                }
-                let file = t.location!
-                let hash = try cache.contentHash(of: file)
-                let prev = previous.tracks[id]
-                var action: SyncPlan.Action
-                let usbPath: String
-                let contentId: Int
-                if let prev, prev.contentHash == hash {
-                    usbPath = prev.usbPath
-                    contentId = prev.contentId
-                    let present = !verifyFiles || FileManager.default.fileExists(atPath: volume.url(forUsbPath: usbPath).path)
-                    action = present ? .unchanged : .replace
-                } else {
-                    var variant = 1
-                    var candidate = Self.usbPath(for: t, file: file, hash: hash)
-                    while let owner = anlzOwner[AnlzPath.directory(forAudioPath: candidate)], owner != candidate {
-                        variant += 1
-                        candidate = Self.usbPath(for: t, file: file, hash: hash, variant: variant)
-                    }
-                    usbPath = candidate
-                    if let prev { superseded.append(prev) }
-                    contentId = prev?.contentId ?? manifest.nextContentId
-                    if prev == nil { manifest.nextContentId += 1 }
-                    action = prev == nil ? .add : .replace
-                    // Already at its exact path (the name embeds the audio fingerprint), e.g. after an
-                    // interrupted sync: nothing to copy.
-                    if prev == nil, verifyFiles, FileManager.default.fileExists(atPath: volume.url(forUsbPath: usbPath).path) {
-                        action = .unchanged
-                    }
-                }
-                anlzOwner[AnlzPath.directory(forAudioPath: usbPath)] = usbPath
-                let analyzed = cache.isAnalyzed(hash)
-                // Outdated or missing analysis files don't make the audio "changed": the executor rewrites
-                // ANLZ files whenever their inputs differ or they're missing, without touching audio.
-                var adoptFrom: String?
-                if action != .unchanged, let existing = adoptable.removeValue(forKey: hash) {
-                    action = .adopt
-                    adoptFrom = existing
-                }
-                entries[id] = .init(source: t, sourceFile: file, contentHash: hash, usbPath: usbPath, contentId: contentId,
-                                    fileSize: FileOps.size(file), action: action, needsAnalysis: !analyzed, adoptFrom: adoptFrom)
-                order.append(id)
+        if takeovers, probe.databaseId != nil,
+           let ids = try? DeviceLibrary.contentIds(database: volume.url(forUsbPath: DriveProbe.databasePath)) {
+            let own = DriveProbe.key(DriveProbe.audioRoot + "/")
+            probe.databaseContentIds = Dictionary(ids.map { (DriveProbe.key($0.key), $0.value) }.filter { $0.0.hasPrefix(own) },
+                                                  uniquingKeysWith: { a, _ in a })
+            changes = SyncStatus.evaluate(library: library, manifest: manifest, facts: facts, drive: probe, profile: profile,
+                                          selection: selection, adoptable: adoptable)
+        }
+        return changes
+    }
+
+    /// The self-check after a sync: the drive's manifest and files and the tracks' facts read afresh and evaluated
+    /// with the drive's saved selection. Clean unless something changed during the sync or a step failed.
+    public func verify(volume: Volume, profile: OutputProfile) throws -> ChangeSet {
+        guard let manifest = try Manifest.load(from: volume) else { throw SyncError.notInitialized(volume.name) }
+        var profile = profile
+        profile.rewriteAnalysisFiles = false
+        return plan(volume: volume, manifest: manifest, profile: profile)
+    }
+
+    /// Facts for the given tracks: hashes (cached by path, size and modification time), analysis summaries and
+    /// recorded failures. A track whose file can't be read is looked up by the audio the drive holds.
+    public func facts(for ids: [String], manifest: Manifest, retryFailedAnalysis: Bool = false) -> [String: TrackFacts] {
+        var out: [String: TrackFacts] = [:]
+        out.reserveCapacity(ids.count)
+        for id in ids {
+            guard let t = library.tracks[id] else { continue }
+            out[id] = Self.facts(for: t, previousHash: manifest.tracks[id]?.contentHash, cache: cache,
+                                 retryFailedAnalysis: retryFailedAnalysis)
+        }
+        try? cache.save()
+        return out
+    }
+
+    public static func facts(for t: SourceTrack, previousHash: String?, cache: AnalysisCache,
+                             retryFailedAnalysis: Bool = false) -> TrackFacts {
+        var f = TrackFacts(audio: .unknown)
+        var hash: String?
+        if let reason = unavailableReason(t) {
+            f.audio = .unavailable(reason)
+        } else if let url = t.location, let a = FileOps.attributes(url) {
+            do {
+                let h = try cache.contentHash(of: url, size: a.size, modified: a.modified)
+                f.audio = .ok(hash: h, size: a.size, modified: a.modified)
+                hash = h
+            } catch {
+                f.audio = .unavailable("Couldn't read \(url.path): \(error)")
             }
+        } else {
+            f.audio = .unavailable("Local file is missing: \(t.location?.path ?? "")")
         }
-
-        let tracks = order.compactMap { entries[$0] }
-        let keptIds = Set(order)
-        let keptPaths = Set(tracks.map(\.usbPath))
-        let removed = (previous.tracks.filter { !keptIds.contains($0.key) }.map(\.value) + superseded)
-            .filter { !keptPaths.contains($0.usbPath) }
-        manifest.tracks = Dictionary(uniqueKeysWithValues: tracks.map {
-            let prev = previous.tracks[$0.source.id]
-            // Same audio at the same path (even if it must be copied again): its ANLZ files are still valid.
-            let unchanged = prev?.contentHash == $0.contentHash && prev?.usbPath == $0.usbPath
-            return ($0.source.id, Manifest.Track(contentId: $0.contentId, usbPath: $0.usbPath, contentHash: $0.contentHash,
-                                                 analysisVersion: TrackAnalysis.currentVersion,
-                                                 anlzFingerprint: unchanged ? prev?.anlzFingerprint : nil,
-                                                 anlzInputs: unchanged ? prev?.anlzInputs : nil,
-                                                 metadataFingerprint: prev?.metadataFingerprint,
-                                                 artworkKey: prev?.artworkKey, artworkHash: prev?.artworkHash))
-        })
-
-        // Playlists: stable IDs, sibling order follows source order.
-        var playlistEntries: [SyncPlan.PlaylistEntry] = []
-        var idFor: [String: Int] = [:]
-        var siblingCount: [String: Int] = [:]
-        for p in playlists {
-            let id = previous.playlists[p.id]?.playlistId ?? {
-                defer { manifest.nextPlaylistId += 1 }
-                return manifest.nextPlaylistId
-            }()
-            idFor[p.id] = id
+        if let h = hash ?? previousHash {
+            f.analysis = cache.summary(forHash: h).map(AnalysisFacts.init)
+            if f.analysis == nil, !retryFailedAnalysis { f.analysisFailure = cache.analysisFailure(forHash: h) }
         }
-        for p in playlists {
-            let parent = p.parentId.flatMap { idFor[$0] }
-            let parentKey = p.parentId.flatMap { idFor[$0] == nil ? nil : $0 } ?? ""
-            let sequenceNo = siblingCount[parentKey, default: 0]
-            siblingCount[parentKey] = sequenceNo + 1
-            let contentIds = p.trackIds.compactMap { entries[$0]?.contentId }
-            let record = Manifest.Playlist(playlistId: idFor[p.id]!, name: p.name, parentPlaylistId: parent,
-                                           sequenceNo: sequenceNo, contentIds: contentIds)
-            let action: SyncPlan.PlaylistAction = previous.playlists[p.id] == nil ? .create
-                : previous.playlists[p.id] == record ? .unchanged : .change
-            playlistEntries.append(.init(source: p, playlistId: record.playlistId, parentPlaylistId: parent,
-                                         sequenceNo: record.sequenceNo, contentIds: contentIds, action: action))
-        }
-        let keptPlaylists = Set(playlists.map(\.id))
-        let removedPlaylists = previous.playlists.filter { !keptPlaylists.contains($0.key) }.map(\.value)
-        manifest.playlists = Dictionary(uniqueKeysWithValues: playlistEntries.map {
-            ($0.source.id, Manifest.Playlist(playlistId: $0.playlistId, name: $0.source.name, parentPlaylistId: $0.parentPlaylistId,
-                                             sequenceNo: $0.sequenceNo, contentIds: $0.contentIds))
-        })
-
-        return SyncPlan(volume: volume, tracks: tracks, removedTracks: removed, playlists: playlistEntries,
-                        removedPlaylists: removedPlaylists, skipped: skipped, manifest: manifest)
+        return f
     }
 
-    private func display(_ t: SourceTrack) -> String {
-        [t.artist, t.title].compactMap { $0 }.joined(separator: " — ")
-    }
-
-    /// Why a track can't be exported, or nil if it can.
-    public static func eligibilityProblem(_ t: SourceTrack) -> String? {
+    /// Why a track can't be exported right now, or nil if it can.
+    public static func unavailableReason(_ t: SourceTrack) -> String? {
         if let r = t.unavailableReason { return r }
         guard let url = t.location else { return "Track has no local file" }
-        guard FileManager.default.isReadableFile(atPath: url.path) else {
-            return FileManager.default.fileExists(atPath: url.path) ? "Local file is not readable: \(url.path)" : "Local file is missing: \(url.path)"
-        }
         guard AudioFileType(fileExtension: url.pathExtension) != nil else {
             return "Unsupported file type (.\(url.pathExtension))"
+        }
+        guard FileManager.default.isReadableFile(atPath: url.path) else {
+            return FileManager.default.fileExists(atPath: url.path) ? "Local file is not readable: \(url.path)" : "Local file is missing: \(url.path)"
         }
         return nil
     }
 
-    /// "/Contents/Deckhand/<hh>/<Artist - Title> [<hash8>].<ext>"; variants 2+ add "-<n>" to avoid
-    /// analysis-path collisions.
     static func usbPath(for t: SourceTrack, file: URL, hash: String, variant: Int = 1) -> String {
-        let base = [t.artist, t.title].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " - ")
-        let name = sanitize(base.isEmpty ? file.deletingPathExtension().lastPathComponent : base)
-        let digest = hash.split(separator: ":").last.map(String.init) ?? hash
-        let tag = variant > 1 ? "\(digest.prefix(8))-\(variant)" : String(digest.prefix(8))
-        return "/Contents/Deckhand/\(digest.prefix(2))/\(name) [\(tag)].\(file.pathExtension.lowercased())"
+        SyncStatus.usbPath(for: t, file: file, hash: hash, variant: variant)
     }
 
-    public static func sanitize(_ s: String) -> String {
-        let illegal = CharacterSet(charactersIn: "/\\:*?\"<>|").union(.controlCharacters)
-        var out = String(String.UnicodeScalarView(s.precomposedStringWithCanonicalMapping.unicodeScalars.map {
-            illegal.contains($0) ? "_" : $0
-        }))
-        out = out.trimmingCharacters(in: CharacterSet(charactersIn: " .")).replacingOccurrences(of: "  ", with: " ")
-        if out.count > 80 { out = String(out.prefix(80)).trimmingCharacters(in: CharacterSet(charactersIn: " .")) }
-        return out.isEmpty ? "Track" : out
-    }
+    public static func sanitize(_ s: String) -> String { SyncStatus.sanitize(s) }
 }
