@@ -10,60 +10,35 @@ struct SidebarView: View {
         @Bindable var library = library
         List(selection: $library.selection) {
             Section("Library") {
-                Label("All Tracks", systemImage: "music.note.list")
-                    .badge(library.allIds.count)
+                AllTracksRow(selected: library.selection == .all)
                     .tag(SidebarItem.all)
                 Label("Needs Analysis", systemImage: "waveform")
                     .badge(library.unanalyzedCount)
                     .tag(SidebarItem.needsAnalysis)
             }
 
-            Section {
-                ForEach(library.playlistEntries) { e in
-                    HStack(spacing: 6) {
-                        Label(e.playlist.name, systemImage: e.playlist.isFolder ? "folder" : "music.note.list")
-                            .lineLimit(1)
-                        Spacer(minLength: 4)
-                        PlaylistBadge(count: library.trackCount(of: e.playlist), state: library.playlistSync(e.playlist))
-                    }
-                    .padding(.leading, CGFloat(e.depth) * 14)
-                    .background {
-                        if dropTarget == e.playlist.id {
-                            RoundedRectangle(cornerRadius: 5).strokeBorder(Color.accentColor, lineWidth: 2).padding(-4)
-                        }
-                    }
-                    .dropDestination(for: String.self) { items, _ in
-                        let ids = TrackDrag.decode(items)
-                        guard !ids.isEmpty, !e.playlist.isFolder else { return false }
-                        Task { await library.add(ids, to: e.playlist) }
-                        return true
-                    } isTargeted: { over in
-                        if over, !e.playlist.isFolder { dropTarget = e.playlist.id } else if dropTarget == e.playlist.id { dropTarget = nil }
-                    }
-                    .tag(SidebarItem.playlist(e.playlist.id))
+            if let groups = library.drivePlaylistGroups, let drive = library.activeDrive?.volume.name {
+                Section {
+                    ForEach(groups.on) { e in row(e, onDrive: true) }
+                } header: {
+                    playlistsHeader(library.entireLibraryOnDrive ? "On \(drive) · Entire Library" : "On \(drive)")
                 }
-            } header: {
-                HStack {
-                    Text("Playlists")
-                    Spacer()
-                    Button { newName = ""; naming = true } label: { Image(systemName: "plus") }
-                        .buttonStyle(.borderless)
-                        .help("New playlist in Apple Music")
+                if !groups.off.isEmpty {
+                    Section("Not on \(drive)") {
+                        ForEach(groups.off) { e in row(e, onDrive: false) }
+                    }
+                }
+            } else {
+                Section {
+                    ForEach(library.playlistEntries) { e in row(e, onDrive: nil) }
+                } header: {
+                    playlistsHeader("Playlists")
                 }
             }
 
-            Section("Drives") {
-                if library.drives.isEmpty {
-                    Text("No USB drive connected").foregroundStyle(.secondary)
-                }
-                ForEach(library.drives) { d in
-                    DriveRow(drive: d, active: d.id == library.activeDriveId)
-                        .contentShape(Rectangle())
-                        .onTapGesture { library.activeDriveId = d.id; library.refreshDrives() }
-                }
-            }
         }
         .listStyle(.sidebar)
+        .safeAreaInset(edge: .bottom) { DriveFooter() }
         .alert("New Playlist", isPresented: $naming) {
             TextField("Name", text: $newName)
             Button("Create") {
@@ -75,43 +50,228 @@ struct SidebarView: View {
             Text("Creates the playlist in Apple Music.")
         }
     }
-}
 
-private struct DriveRow: View {
-    @Environment(LibraryModel.self) private var library
-    var drive: Drive
-    var active: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Image(systemName: "mediastick")
-                Text(drive.volume.name).fontWeight(active ? .semibold : .regular)
-                Spacer()
-                if library.ejecting.contains(drive.id) {
-                    ProgressView().controlSize(.small).help("Ejecting…")
-                } else {
-                    Button { library.eject(drive) } label: { Image(systemName: "eject") }
-                        .buttonStyle(.borderless)
-                        .help("Eject \(drive.volume.name)")
-                }
-            }
-            let used = Double(drive.volume.capacity - drive.volume.available)
-            ProgressView(value: used, total: Double(max(drive.volume.capacity, 1)))
-                .progressViewStyle(.linear)
-                .tint(active ? .accentColor : .gray)
-            Text("\(bytes(drive.volume.capacity - drive.volume.available)) of \(bytes(drive.volume.capacity))")
-                .font(.caption).foregroundStyle(.secondary)
-            if let m = drive.manifest {
-                Text(m.lastSyncedAt.map { "Synced \($0.formatted(.relative(presentation: .named)))" } ?? "Never synced")
-                    .font(.caption).foregroundStyle(.secondary)
-            } else {
-                Text("Not a Deckhand drive").font(.caption).foregroundStyle(.secondary)
-            }
+    private func playlistsHeader(_ title: String) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Button { newName = ""; naming = true } label: { Image(systemName: "plus") }
+                .buttonStyle(.borderless)
+                .help("New playlist in Apple Music")
         }
-        .padding(.vertical, 2)
-        .opacity(drive.manifest == nil ? 0.6 : 1)
     }
 
-    private func bytes(_ n: Int64) -> String { ByteCountFormatter.string(fromByteCount: n, countStyle: .file) }
+    private func row(_ e: PlaylistEntry, onDrive: Bool?) -> some View {
+        PlaylistRow(entry: e, onDrive: onDrive, selected: library.selection == .playlist(e.playlist.id))
+            .background {
+                if dropTarget == e.playlist.id {
+                    RoundedRectangle(cornerRadius: 5).strokeBorder(Color.accentColor, lineWidth: 2).padding(-4)
+                }
+            }
+            .dropDestination(for: String.self) { items, _ in
+                let ids = TrackDrag.decode(items)
+                guard !ids.isEmpty, !e.playlist.isFolder else { return false }
+                Task { await library.add(ids, to: e.playlist) }
+                return true
+            } isTargeted: { over in
+                if over, !e.playlist.isFolder { dropTarget = e.playlist.id } else if dropTarget == e.playlist.id { dropTarget = nil }
+            }
+            .tag(SidebarItem.playlist(e.playlist.id))
+    }
+}
+
+/// All Tracks, which can also go on the drive: the whole library, every song and playlist.
+private struct AllTracksRow: View {
+    @Environment(LibraryModel.self) private var library
+    var selected: Bool
+    @State private var hovering = false
+
+    var body: some View {
+        let hasDrive = library.activeDrive?.manifest != nil
+        let on = library.entireLibraryOnDrive
+        let pending = library.pendingChanges
+        let drive = library.activeDrive?.volume.name ?? "the drive"
+        HStack(spacing: 6) {
+            Image(systemName: "music.note.list").frame(width: 16)
+            Text("All Tracks").lineLimit(1)
+            Spacer(minLength: 4)
+            if hasDrive, !on, hovering {
+                DriveActionButton(help: "Sync your entire library (every song and playlist) to \(drive)") {
+                    library.setEntireLibraryOnDrive(true)
+                }
+            } else {
+                if on {
+                    Circle().fill(pending == 0 ? Color.synced : Color.pending)
+                        .frame(width: 6, height: 6)
+                        .help(pending == 0 ? "Entire library up to date on \(drive)" : "\(pending.formatted()) change\(pending == 1 ? "" : "s") to sync")
+                }
+                Text(library.allIds.count.formatted())
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(minHeight: 22)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .contextMenu {
+            if hasDrive {
+                Button(on ? "Stop Syncing Entire Library to \(drive)" : "Sync Entire Library to \(drive)") {
+                    library.setEntireLibraryOnDrive(!on)
+                }
+            }
+        }
+    }
+}
+
+/// A playlist in the sidebar. On the drive: a sync-status dot by the count; removed from the drive with the context
+/// menu. Not on the drive: dimmed, with an Add button on hover.
+private struct PlaylistRow: View {
+    @Environment(LibraryModel.self) private var library
+    var entry: PlaylistEntry
+    /// Nil without a Deckhand drive.
+    var onDrive: Bool?
+    var selected: Bool
+    @State private var hovering = false
+
+    var body: some View {
+        let p = entry.playlist
+        let state = library.playlistSync(p)
+        let drive = library.activeDrive?.volume.name ?? "the drive"
+        HStack(spacing: 6) {
+            Image(systemName: p.isFolder ? "folder" : "music.note.list")
+                .foregroundStyle(onDrive == false && !selected ? .secondary : .primary)
+                .frame(width: 16)
+            Text(p.name)
+                .lineLimit(1)
+                .foregroundStyle(onDrive == false && !selected ? .secondary : .primary)
+            Spacer(minLength: 4)
+            if onDrive == false, hovering {
+                DriveActionButton(help: "Sync \(p.name) to \(drive)") { library.setOnDrive(true, p) }
+            } else {
+                if onDrive == true {
+                    Circle().fill(state == .synced ? Color.synced : Color.pending)
+                        .frame(width: 6, height: 6)
+                        .help(statusHelp(state))
+                }
+                Text(library.trackCount(of: p).formatted())
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(minHeight: 22)
+        .padding(.leading, CGFloat(entry.depth) * 14)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .contextMenu {
+            if onDrive == true, !library.entireLibraryOnDrive {
+                Button("Remove from \(drive)") { library.setOnDrive(false, p) }
+            } else if onDrive == false {
+                Button("Add to \(drive)") { library.setOnDrive(true, p) }
+            }
+        }
+    }
+
+    private func statusHelp(_ state: PlaylistSync) -> String {
+        switch state {
+        case .pending(let n): "\(n.formatted()) change\(n == 1 ? "" : "s") to sync"
+        default: "Up to date on \(library.activeDrive?.volume.name ?? "the drive")"
+        }
+    }
+}
+
+/// The active drive, pinned under the playlists: its sync status and space, with a menu to switch drives,
+/// sync the entire library, or eject. The playlist groups above follow whichever drive is active.
+private struct DriveFooter: View {
+    @Environment(LibraryModel.self) private var library
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let drive = library.activeDrive ?? library.drives.first {
+                HStack(spacing: 8) {
+                    Image(systemName: "externaldrive")
+                    Text(drive.volume.name).fontWeight(.semibold).lineLimit(1)
+                    Spacer(minLength: 4)
+                    status(drive)
+                    Menu {
+                        Picker("Drive", selection: Binding(get: { library.activeDriveId },
+                                                           set: { library.activeDriveId = $0; library.refreshDrives() })) {
+                            ForEach(library.drives) { d in
+                                Text(d.manifest == nil ? "\(d.volume.name) (not a Deckhand drive)" : d.volume.name).tag(Optional(d.id))
+                            }
+                        }
+                        .pickerStyle(.inline)
+                        .labelsHidden()
+                        Divider()
+                        Toggle("Sync Entire Library", isOn: Binding(get: { library.entireLibraryOnDrive },
+                                                                  set: { library.setEntireLibraryOnDrive($0) }))
+                            .disabled(drive.manifest == nil)
+                        Button("Eject \(drive.volume.name)") { library.eject(drive) }
+                            .disabled(library.ejecting.contains(drive.id))
+                    } label: {
+                        Image(systemName: "chevron.down").font(.caption.weight(.semibold))
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help(library.drives.count > 1 ? "Switch drives, or eject" : "Drive options")
+                }
+                let used = drive.volume.capacity - drive.volume.available
+                ProgressView(value: Double(used), total: Double(max(drive.volume.capacity, 1)))
+                    .progressViewStyle(.linear)
+                    .tint(library.pendingWontFit ? .red : .accentColor)
+                HStack {
+                    Text("\(LibraryModel.bytes(used)) / \(LibraryModel.bytes(drive.volume.capacity))")
+                    Spacer()
+                    if let m = drive.manifest {
+                        Text(m.lastSyncedAt.map { $0.formatted(.relative(presentation: .named)) } ?? "Never synced")
+                    }
+                }
+                .font(.caption).foregroundStyle(.secondary)
+            } else {
+                Label("No USB drive connected", systemImage: "externaldrive").foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(.bar)
+        .overlay(alignment: .top) { Divider() }
+    }
+
+    @ViewBuilder private func status(_ drive: Drive) -> some View {
+        let (text, color): (String, Color) = {
+            if library.ejecting.contains(drive.id) { return ("Ejecting", .secondary) }
+            if drive.manifest == nil { return ("Not set up", .secondary) }
+            if library.job.running && library.job.title.hasSuffix(drive.volume.name) { return ("Syncing", .accentColor) }
+            if library.pendingWontFit { return ("Won't fit", .red) }
+            if library.pendingChanges > 0 { return ("\(library.pendingChanges.formatted()) to sync", Color.pending) }
+            return ("Up to date", Color.synced)
+        }()
+        Text(text)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(color)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.15), in: Capsule())
+    }
+}
+
+/// "+ Add" at a sidebar row's right edge on hover, in place of its count. Removing is in the row's context menu,
+/// so selecting a playlist never puts a destructive button under the pointer.
+private struct DriveActionButton: View {
+    var help: String
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label("Add", systemImage: "plus")
+                .labelStyle(.titleAndIcon)
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 7)
+                .frame(height: 20)
+                .foregroundStyle(.white)
+                .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 5))
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
 }

@@ -6,11 +6,6 @@ struct QueueView: View {
 
     var body: some View {
         List {
-            if library.job.state != .idle {
-                JobCard()
-                    .listRowSeparator(.hidden)
-                    .padding(.vertical, 4)
-            }
             Section {
                 if player.queue.isEmpty {
                     Text("Drag tracks here, or right-click them and choose Play Next or Add to Up Next.")
@@ -71,6 +66,12 @@ struct QueueView: View {
             }
         }
         .listStyle(.inset)
+        // Pinned to the bottom so a running job doesn't push Up Next around.
+        .safeAreaInset(edge: .bottom) {
+            if library.job.state != .idle {
+                JobCard().padding(12)
+            }
+        }
         .dropDestination(for: String.self) { items, _ in
             let rows = TrackDrag.decode(items).compactMap { library.rows[$0] }
             player.enqueue(rows)

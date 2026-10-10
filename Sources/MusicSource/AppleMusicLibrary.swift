@@ -108,7 +108,8 @@ public enum AppleMusicLibrary {
             playCount: item.playCount,
             skipCount: item.skipCount,
             lastPlayed: item.lastPlayedDate,
-            modifiedDate: item.modifiedDate
+            modifiedDate: item.modifiedDate,
+            fileSize: item.fileSize > 0 ? Int64(item.fileSize) : nil
         )
     }
 

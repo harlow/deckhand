@@ -89,41 +89,6 @@ struct SyncDot: View {
     }
 }
 
-/// Sidebar playlist trailer: track count, then a small sync-status dot for the chosen drive.
-struct PlaylistBadge: View {
-    var count: Int
-    var state: PlaylistSync
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Text(count.formatted())
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-            dot.frame(width: 8, height: 8)
-        }
-        .help(help)
-    }
-
-    @ViewBuilder private var dot: some View {
-        switch state {
-        case .synced: Circle().fill(Color.synced)
-        case .pending: Circle().fill(Color.pending)
-        case .notOnDrive: Circle().strokeBorder(Color.secondary.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [2, 1.5]))
-        case .noDrive: Color.clear
-        }
-    }
-
-    private var help: String {
-        let tracks = "\(count.formatted()) track\(count == 1 ? "" : "s")"
-        switch state {
-        case .synced: return "\(tracks) · on the drive, up to date"
-        case .pending(let n): return "\(tracks) · \(n) change\(n == 1 ? "" : "s") waiting to sync"
-        case .notOnDrive: return "\(tracks) · not on the drive"
-        case .noDrive: return tracks
-        }
-    }
-}
-
 /// Three-band waveform (low blue, mid amber, high white) with cue ticks and an optional playhead.
 struct WaveformView: View {
     var overview: Overview

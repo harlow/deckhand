@@ -223,6 +223,9 @@ private struct DriveControls: View {
                 .pickerStyle(.inline)
                 .labelsHidden()
                 Divider()
+                Toggle("Sync Entire Library", isOn: Binding(get: { library.entireLibraryOnDrive },
+                                                          set: { library.setEntireLibraryOnDrive($0) }))
+                Divider()
                 Button("Eject \(drive.volume.name)") { library.eject(drive) }
                     .disabled(job.running || library.ejecting.contains(drive.id))
             } label: {
@@ -235,7 +238,9 @@ private struct DriveControls: View {
                     } else if job.running {
                         Text(job.phase).foregroundStyle(.secondary).lineLimit(1)
                     } else if library.pendingChanges > 0 {
-                        Text("\(library.pendingChanges.formatted()) to sync").foregroundStyle(Color.pending)
+                        let size = library.pendingBytes > 0 ? " · \(LibraryModel.bytes(library.pendingBytes))" : ""
+                        Text("\(library.pendingChanges.formatted()) to sync\(size)\(library.pendingWontFit ? " · won't fit" : "")")
+                            .foregroundStyle(library.pendingWontFit ? Color.red : Color.pending)
                     } else {
                         Text("Up to date").foregroundStyle(.secondary)
                     }

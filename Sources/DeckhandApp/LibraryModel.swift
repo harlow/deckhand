@@ -140,12 +140,14 @@ final class LibraryModel {
     @ObservationIgnored private var syncCache: [String: SyncState] = [:]
     @ObservationIgnored private var playlistSyncCache: [String: PlaylistSync] = [:]
     @ObservationIgnored private var pendingCache: Int?
+    @ObservationIgnored private var pendingBytesCache: Int64?
     @ObservationIgnored private var syncGeneration = 0
 
     private func invalidateSync() {
         syncCache.removeAll(keepingCapacity: true)
         playlistSyncCache.removeAll(keepingCapacity: true)
         pendingCache = nil
+        pendingBytesCache = nil
         syncGeneration &+= 1
     }
 
@@ -352,7 +354,7 @@ final class LibraryModel {
     func sync(_ drive: Drive) {
         guard !job.running else { flash("Wait for \(job.title.lowercased()) to finish"); return }
         guard drive.canSync else {
-            flash("Choose \(drive.volume.name)'s playlists once with `deckhand sync \(drive.volume.url.path)` in Terminal")
+            flash("Add a playlist to \(drive.volume.name) first (hover it in the sidebar and click Add)")
             return
         }
         job.run("Syncing \(drive.volume.name)", ["sync", drive.volume.url.path, "-y", "--analyze"]) { [weak self] _ in
@@ -367,6 +369,113 @@ final class LibraryModel {
         for (id, row) in rows where !row.analyzed && row.checked { updated[id]?.checked = false }
         rows = updated
         Task { await loadAnalysis() }
+    }
+
+    // MARK: Drive selection
+
+    /// Bytes still to copy to the active drive: tracks it should hold but doesn't yet (Music's file sizes).
+    var pendingBytes: Int64 {
+        guard let m = activeDrive?.manifest else { return 0 }
+        _ = rows.isEmpty
+        if let cached = pendingBytesCache { return cached }
+        let bytes = scope.reduce(Int64(0)) { sum, id in
+            m.tracks[id] == nil ? sum + (rows[id]?.source.fileSize ?? 0) : sum
+        }
+        pendingBytesCache = bytes
+        return bytes
+    }
+
+    /// True when what's waiting to copy is more than the active drive has free.
+    var pendingWontFit: Bool {
+        guard let drive = activeDrive else { return false }
+        return pendingBytes > drive.volume.available
+    }
+
+    /// Whether the active drive holds every song and playlist.
+    var entireLibraryOnDrive: Bool { activeDrive?.manifest?.entireLibrary == true }
+
+    /// Whether a playlist is on the active drive; a folder is when all the playlists in it are.
+    func isOnDrive(_ p: SourcePlaylist) -> Bool {
+        guard let m = activeDrive?.manifest else { return false }
+        return isOnDrive(p, m)
+    }
+
+    private func isOnDrive(_ p: SourcePlaylist, _ m: Manifest) -> Bool {
+        if m.entireLibrary == true { return true }
+        let leaves = leafPlaylistIds(of: p)
+        return !leaves.isEmpty && Set(leaves).isSubset(of: m.selectedPlaylistIds)
+    }
+
+    /// Sidebar playlists split by whether they're on the active drive. A folder shows in a group when any playlist
+    /// inside it does. Nil without a Deckhand drive.
+    var drivePlaylistGroups: (on: [PlaylistEntry], off: [PlaylistEntry])? {
+        guard let m = activeDrive?.manifest else { return nil }
+        var on: [PlaylistEntry] = [], off: [PlaylistEntry] = []
+        for e in playlistEntries {
+            let leaves = leafPlaylistIds(of: e.playlist)
+            let onCount = m.entireLibrary == true ? leaves.count : leaves.filter(m.selectedPlaylistIds.contains).count
+            if onCount > 0 { on.append(e) }
+            if onCount < leaves.count || (e.playlist.isFolder && leaves.isEmpty) { off.append(e) }
+        }
+        return (on, off)
+    }
+
+    private func leafPlaylistIds(of p: SourcePlaylist) -> [String] {
+        p.isFolder ? playlists.filter { $0.parentId == p.id }.flatMap { leafPlaylistIds(of: $0) } : [p.id]
+    }
+
+    /// Puts a playlist (or every playlist in a folder) on the active drive or takes it off. Saved to the drive
+    /// right away; the next sync copies or removes the tracks.
+    func setOnDrive(_ on: Bool, _ p: SourcePlaylist) {
+        let ids = leafPlaylistIds(of: p)
+        updateSelection { m in
+            var selected = m.selectedPlaylistIds.filter { !ids.contains($0) }
+            if on { selected += ids }
+            m.selectedPlaylistIds = selected
+        }
+    }
+
+    /// Syncs the whole library (every song and playlist) to the active drive, or goes back to chosen playlists.
+    func setEntireLibraryOnDrive(_ on: Bool) {
+        updateSelection { m in
+            m.entireLibrary = on
+            // Leaving entire-library mode keeps the playlists the user had chosen before, not all of them.
+            if !on { m.selectedPlaylistIds = m.chosenPlaylistIds ?? [] }
+            if on { m.chosenPlaylistIds = m.selectedPlaylistIds }
+        }
+    }
+
+    static func bytes(_ n: Int64) -> String { ByteCountFormatter.string(fromByteCount: n, countStyle: .file) }
+
+    private func updateSelection(_ change: @escaping @Sendable (inout Manifest) -> Void) {
+        guard let drive = activeDrive, drive.manifest != nil else { return }
+        if job.running, job.title.hasSuffix(drive.volume.name) {
+            flash("Wait for \(job.title.lowercased()) to finish")
+            return
+        }
+        let volume = drive.volume
+        Task {
+            // Re-read first: the CLI may have saved a newer manifest since the drive was last read.
+            let result: Result<Manifest, Error> = await Task.detached {
+                Result {
+                    guard var m = try Manifest.load(from: volume) else { throw SyncError.notInitialized(volume.name) }
+                    change(&m)
+                    try m.save(to: volume)
+                    return try Manifest.load(from: volume) ?? m
+                }
+            }.value
+            switch result {
+            case .success(let m):
+                guard let i = drives.firstIndex(where: { $0.id == drive.id }) else { return }
+                drives[i].manifest = m
+                updateScope()
+                if pendingWontFit {
+                    flash("That's \(Self.bytes(pendingBytes)) to copy, but \(volume.name) only has \(Self.bytes(volume.available)) free")
+                }
+            case .failure(let error):
+                flash("Couldn't update \(volume.name): \(error)")
+            }
+        }
     }
 
     // MARK: Drives
@@ -473,7 +582,7 @@ final class LibraryModel {
     }
 
     private func computePlaylistSync(_ p: SourcePlaylist, _ m: Manifest) -> PlaylistSync {
-        guard m.entireLibrary == true || m.selectedPlaylistIds.contains(p.id) else { return .notOnDrive }
+        guard isOnDrive(p, m) else { return .notOnDrive }
         let ids = trackIds(of: p)
         var changes = ids.filter { rows[$0].map { syncState($0) == .pending } ?? false }.count
         if !p.isFolder {
