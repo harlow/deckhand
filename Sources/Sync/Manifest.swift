@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// Deckhand's record of what it wrote to a drive, stored at `/.deckhand/manifest.json`.
@@ -52,26 +53,63 @@ public struct Manifest: Codable, Sendable {
     public var artwork: [String: Int]?
     public var nextImageId: Int?
 
+    /// Incremented on every save; picks the newer of the two manifest files. Optional for older manifests.
+    public var generation: Int?
+
     public init() {}
 
     static func url(on volume: Volume) -> URL {
         volume.url.appendingPathComponent(directory).appendingPathComponent(fileName)
     }
 
-    public static func load(from volume: Volume) throws -> Manifest? {
-        let u = url(on: volume)
-        guard FileManager.default.fileExists(atPath: u.path) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(Manifest.self, from: Data(contentsOf: u))
+    /// The manifest is saved alternately to two files, overwriting the older one in place: on FAT sticks creating
+    /// and renaming files costs ~0.5 s each, and a write cut short leaves the other copy intact.
+    static func urls(root: URL) -> [URL] {
+        let dir = root.appendingPathComponent(directory)
+        return [dir.appendingPathComponent(fileName), dir.appendingPathComponent("manifest-b.json")]
     }
 
-    public func save(to volume: Volume) throws {
-        let u = Self.url(on: volume)
-        try FileManager.default.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
+    public static func load(from volume: Volume) throws -> Manifest? { try load(root: volume.url) }
+
+    static func load(root: URL) throws -> Manifest? {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        var firstError: Error?
+        var newest: Manifest?
+        for u in urls(root: root) where FileManager.default.fileExists(atPath: u.path) {
+            do {
+                let m = try decoder.decode(Manifest.self, from: Data(contentsOf: u))
+                if (m.generation ?? 0) >= (newest?.generation ?? -1) { newest = m }
+            } catch {
+                firstError = firstError ?? error
+            }
+        }
+        if let newest { return newest }
+        if let firstError { throw firstError }
+        return nil
+    }
+
+    public func save(to volume: Volume) throws { try save(root: volume.url) }
+
+    func save(root: URL) throws {
+        var m = self
+        m.generation = (generation ?? 0) + 1
+        let target = Self.urls(root: root)[m.generation! % 2 == 1 ? 0 : 1]
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try FileOps.writeAtomically(try encoder.encode(self), to: u)
+        encoder.outputFormatting = [.sortedKeys]
+        try FileOps.write(try encoder.encode(m), to: target)
+    }
+}
+
+extension Manifest {
+    /// Fingerprints are stored as short digests (full ones run to kilobytes per track). Older manifests hold the
+    /// full strings, which still match.
+    public static func digest(_ fingerprint: String) -> String {
+        "d:" + SHA256.hash(data: Data(fingerprint.utf8)).prefix(12).map { String(format: "%02x", $0) }.joined()
+    }
+
+    public static func matches(_ stored: String?, _ fingerprint: String) -> Bool {
+        stored == fingerprint || stored == digest(fingerprint)
     }
 }

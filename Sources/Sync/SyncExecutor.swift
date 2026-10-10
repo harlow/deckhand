@@ -121,7 +121,7 @@ public struct SyncExecutor {
             let inputs = "\(summary.revision);\(settingsKey)"
             let previous = manifest.tracks[t.source.id]
             // Same cache entry, settings and build as last time: the fingerprint can't have changed.
-            if !forced, previous?.anlzFingerprint != nil, previous?.anlzInputs == inputs { continue }
+            if !forced, previous?.anlzFingerprint != nil, Manifest.matches(previous?.anlzInputs, inputs) { continue }
             guard let a = analyses[t.contentHash] ?? cache.analysis(forHash: t.contentHash) else { continue }
             analyses[t.contentHash] = a
             let sections = cache.sections(forHash: t.contentHash)
@@ -132,22 +132,23 @@ public struct SyncExecutor {
             let phrases = writePhrases ? sections.flatMap { StructureAnalyzer.phrases(sections: $0, analysis: a) } : nil
             let phraseKey = phrases.map { $0.phrases.map { "\($0.beat):\($0.kind)" }.joined(separator: ",") } ?? "-"
             let fingerprint = "v\(a.version);pqt2=\(anlzOptions.includeExtendedBeatGrid);cues=\(CueBuilder.fingerprint(cues));pssi=\(phraseKey)"
-            manifest.tracks[t.source.id]?.anlzInputs = inputs
+            manifest.tracks[t.source.id]?.anlzInputs = Manifest.digest(inputs)
             inputsRecorded += 1
-            if !forced && previous?.anlzFingerprint == fingerprint { continue }
+            if !forced && Manifest.matches(previous?.anlzFingerprint, fingerprint) {
+                manifest.tracks[t.source.id]?.anlzFingerprint = Manifest.digest(fingerprint)
+                continue
+            }
             try ensureMounted(volume)
             try writeAnlz(for: t, analysis: a, cues: cues, phrases: phrases, on: volume)
-            manifest.tracks[t.source.id]?.anlzFingerprint = fingerprint
+            manifest.tracks[t.source.id]?.anlzFingerprint = Manifest.digest(fingerprint)
             anlzWritten += 1
         }
         // Metadata-only edits (a new rating, a retitled track) still need the database rewritten.
         var metadataChanged = 0
         for t in plan.tracks {
             let f = Self.metadataFingerprint(t.source)
-            if manifest.tracks[t.source.id]?.metadataFingerprint != f {
-                manifest.tracks[t.source.id]?.metadataFingerprint = f
-                metadataChanged += 1
-            }
+            if !Manifest.matches(manifest.tracks[t.source.id]?.metadataFingerprint, f) { metadataChanged += 1 }
+            manifest.tracks[t.source.id]?.metadataFingerprint = Manifest.digest(f)
         }
         if !plan.hasChanges && anlzWritten == 0 && metadataChanged == 0 && !force {
             // Keep what was learned so the next sync skips those checks; the database is unaffected.
@@ -188,10 +189,12 @@ public struct SyncExecutor {
         // previous database (not, say, a Rekordbox export on a drive being taken over).
         let deckhandWroteDB = plan.manifest.lastSyncedAt != nil
         try OneLibraryDatabase.write(contents, to: local, previous: deckhandWroteDB ? dbURL : nil)
+        timer.mark("db build")
 
         // 5. Validate.
         let issues = try OneLibraryValidator.validate(database: local, volumeRoot: volume.url)
         if !issues.isEmpty { throw OneLibraryError.validation(issues) }
+        timer.mark("db validate")
 
         try ensureMounted(volume)
         let staging = rbDir.appendingPathComponent(".deckhand-staging-exportLibrary.db")
@@ -201,14 +204,17 @@ public struct SyncExecutor {
         // 6. Commit: flush everything written so far, then rename the staged database over the old one.
         progress(.committing)
         FileOps.syncFilesystem()
+        timer.mark("commit flush")
         for suffix in ["-wal", "-shm"] { unlink(dbURL.path + suffix) }
         unlink(rbDir.appendingPathComponent("exportLibrary.db.deckhand-backup").path) // left by older versions
         guard rename(staging.path, dbURL.path) == 0 else {
             throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: [NSFilePathErrorKey: dbURL.path])
         }
 
+        timer.mark("commit swap")
         manifest.lastSyncedAt = Date()
         try manifest.save(to: volume)
+        timer.mark("commit manifest")
         FileOps.syncFilesystem()
 
         timer.mark("commit")
@@ -355,14 +361,16 @@ extension SyncExecutor {
 }
 
 /// Prints phase durations to stderr when DECKHAND_TIMING is set.
-final class PhaseTimer {
+public final class PhaseTimer {
     private var last = Date()
+
+    public init() {}
     private let enabled = ProcessInfo.processInfo.environment["DECKHAND_TIMING"] != nil
 
-    func mark(_ phase: String) {
+    public func mark(_ phase: String) {
         guard enabled else { return }
         let now = Date()
-        FileHandle.standardError.write(Data(String(format: "[timing] %@ %.1fs\n", phase, now.timeIntervalSince(last)).utf8))
+        FileHandle.standardError.write(Data(String(format: "[timing] %@ %.2fs\n", phase, now.timeIntervalSince(last)).utf8))
         last = now
     }
 }

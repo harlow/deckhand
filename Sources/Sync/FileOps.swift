@@ -42,10 +42,13 @@ enum FileOps {
             removeAppleDouble(of: created)
             removeAppleDouble(of: created.deletingLastPathComponent())
         }
-        let fd = open(url.path, O_WRONLY | O_CREAT | O_TRUNC, 0o644)
+        // Overwrite, then trim to the new length: O_TRUNC frees and reallocates clusters, which costs up to
+        // ~0.3 s per file on FAT sticks; rewriting a same-sized file this way takes milliseconds.
+        let fd = open(url.path, O_WRONLY | O_CREAT, 0o644)
         guard fd >= 0 else { throw posixError(url.path) }
         do {
             try body(fd)
+            guard ftruncate(fd, lseek(fd, 0, SEEK_CUR)) == 0 else { throw posixError(url.path) }
         } catch {
             close(fd)
             unlink(url.path)

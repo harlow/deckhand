@@ -456,7 +456,7 @@ final class LibraryModel {
     private func computeSyncState(_ row: TrackRow, _ m: Manifest) -> SyncState {
         if let t = m.tracks[row.id] {
             if let h = row.hash, h != t.contentHash { return .pending }
-            if let f = t.metadataFingerprint, f != SyncExecutor.metadataFingerprint(row.source) { return .pending }
+            if let f = t.metadataFingerprint, !Manifest.matches(f, SyncExecutor.metadataFingerprint(row.source)) { return .pending }
             if row.analyzed && t.analysisVersion != TrackAnalysis.currentVersion { return .pending }
             return scope.contains(row.id) ? .onDrive : .pending
         }

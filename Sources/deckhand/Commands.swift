@@ -114,9 +114,11 @@ struct SyncCommand: ParsableCommand {
     @Flag(help: .hidden) var rewriteAnalysis = false
 
     func run() throws {
+        let timer = PhaseTimer()
         let v = try Volume(url: URL(fileURLWithPath: volume))
         guard let manifest = try Manifest.load(from: v) else { throw SyncError.notInitialized(v.name) }
         if !dryRun { try v.checkWritable() }
+        timer.mark("open drive")
 
         let wholeLibrary = entireLibrary || (playlist.isEmpty && manifest.entireLibrary == true)
         let lib = try AppleMusicLibrary.load(allSongs: wholeLibrary)
@@ -132,7 +134,9 @@ struct SyncCommand: ParsableCommand {
             selected = try promptForPlaylists(lib)
         }
 
+        timer.mark("load library")
         let cache = try AnalysisCache()
+        timer.mark("open cache")
         var adoptable: [String: String] = [:]
         if adopt {
             let bar = LockedBox<ProgressBar?>(nil)
@@ -144,6 +148,7 @@ struct SyncCommand: ParsableCommand {
         }
         var plan = try SyncPlanner(library: lib, cache: cache)
             .plan(volume: v, selectedPlaylistIds: selected, entireLibrary: wholeLibrary, previous: manifest, adoptable: adoptable)
+        timer.mark("plan")
         printPlan(plan)
 
         if dryRun {
