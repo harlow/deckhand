@@ -421,6 +421,12 @@ struct CleanupCommand: ParsableCommand {
             print("\nDelete these from \(v.name)? This can't be undone. [y/N] ", terminator: "")
             guard ["y", "yes"].contains(readLine()?.lowercased() ?? "") else { print("Cancelled."); return }
         }
+        // A running sync's new files aren't in the manifest yet and would look like leftovers.
+        let lock = try SyncLock.acquire(on: v)
+        defer { lock.release() }
+        guard try Manifest.load(from: v)?.generationNumber == manifest.generationNumber else {
+            throw ValidationError("\(v.name) was synced while cleanup was scanning it. Run cleanup again.")
+        }
         let failed = cleanup.apply(v)
         print(failed.isEmpty ? "Removed." : "Removed, except \(failed.count) item(s) that couldn't be deleted.")
     }
