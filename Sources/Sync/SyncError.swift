@@ -41,7 +41,7 @@ public enum SyncError: Error, CustomStringConvertible {
         case .driveBusy(let n, let held):
             return "\"\(n)\" is being synced by another Deckhand process (pid \(held.pid), since \(held.startedAt.formatted())). Try again when it finishes."
         case .incompletePlan(let n):
-            return "\(n) track(s) haven't been checked yet; can't sync until they are."
+            return "Some of the library couldn't be read (\(n) track(s) unknown, or Apple Music returned nothing); nothing was changed."
         }
     }
 }

@@ -48,6 +48,20 @@ public struct AnalysisFacts: Sendable, Equatable {
         self.init(revision: s.revision, bpm: s.bpm, key: s.key, energy: s.energy, durationSeconds: s.durationSeconds,
                   sampleRate: s.sampleRate)
     }
+
+    /// The row values in a compact form for the manifest (`Manifest.Track.rowAnalysis`); doubles round-trip exactly.
+    var stored: String {
+        let k = key.map { "\($0.tonic)\($0.mode == .minor ? "m" : "M")" } ?? ""
+        return "\(bpm)|\(k)|\(energy.map(String.init) ?? "")|\(durationSeconds)|\(sampleRate)"
+    }
+
+    init?(stored: String) {
+        let f = stored.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+        guard f.count == 5, let bpm = Double(f[0]), let duration = Double(f[3]), let rate = Int(f[4]) else { return nil }
+        var key: MusicalKey?
+        if let mode = f[1].last, let tonic = Int(f[1].dropLast()) { key = MusicalKey(tonic: tonic, mode: mode == "m" ? .minor : .major) }
+        self.init(revision: "", bpm: bpm, key: key, energy: Int(f[2]), durationSeconds: duration, sampleRate: rate)
+    }
 }
 
 /// Which playlists go on a drive, and whether every song does.
@@ -77,6 +91,8 @@ public struct Scope: Sendable {
     let firstPlaylist: [String: String]
     /// Entire library chosen but the library was loaded without all songs: tracks outside playlists are unknown.
     let incomplete: Bool
+    /// The library came back empty, more likely a failed read than everything deleted: nothing is judged.
+    public let unreadable: Bool
 }
 
 /// Everything a sync would change on a drive, decided by `SyncStatus.evaluate` from facts alone. The executor
@@ -158,6 +174,8 @@ public struct ChangeSet: Sendable {
         var driveSize: Int64 = 0
         var artworkKey: String?
         var artworkPath: String?
+        /// Analysis the row keeps while the current analysis isn't available (see `Manifest.Track.rowAnalysis`).
+        var keptAnalysis: AnalysisFacts?
         /// Some of its analysis files are missing.
         var anlzMissing = false
         var recordFingerprint: String?
@@ -169,6 +187,9 @@ public struct ChangeSet: Sendable {
         }
 
         var isPlaced: Bool { usbPath != nil }
+
+        /// The analysis values its database row is written with.
+        var rowAnalysis: AnalysisFacts? { facts.analysis ?? keptAnalysis }
 
         /// Copies audio from the source.
         var copies: Bool { !changes.isDisjoint(with: [.new, .audioChanged, .missingOnDrive]) }
@@ -239,7 +260,9 @@ public struct ChangeSet: Sendable {
     public var isClean: Bool { summary.total == 0 }
 
     /// Every fact was known; only complete change sets can be carried out.
-    public var isComplete: Bool { summary.unknown == 0 && summary.playlistsUnknown == 0 && !scope.incomplete }
+    public var isComplete: Bool {
+        summary.unknown == 0 && summary.playlistsUnknown == 0 && !scope.incomplete && !scope.unreadable
+    }
 
     public struct Summary: Sendable, Codable, Equatable {
         /// Tracks the selection puts on the drive.
@@ -304,6 +327,7 @@ public enum SyncStatus {
         var seen = Set<String>()
         var ids = selection.playlistIds.filter { seen.insert($0).inserted }
         // An empty library is more likely a failed read than every playlist deleted.
+        let unreadable = library.playlists.isEmpty && library.tracks.isEmpty
         if !library.playlists.isEmpty {
             let known = Set(library.playlists.map(\.id))
             ids = ids.filter(known.contains)
@@ -322,7 +346,8 @@ public enum SyncStatus {
                 order.append(id)
             }
         }
-        return Scope(playlistIds: ids, playlists: playlists, trackIds: order, firstPlaylist: first, incomplete: incomplete)
+        return Scope(playlistIds: ids, playlists: playlists, trackIds: order, firstPlaylist: first, incomplete: incomplete,
+                     unreadable: unreadable)
     }
 
     /// Decides what syncing `library` (as `selection`, by default the drive's saved one) to a drive with `manifest`
@@ -403,6 +428,7 @@ public enum SyncStatus {
 
         // 2. Content IDs for tracks new to the drive. Audio found at its path but unknown to the manifest keeps the ID
         // the drive's database gave it (a sync cut short after replacing the database): player history refers to it.
+        // Other IDs that database gave out aren't reused either, so history can't move to a different track.
         var usedIds = Set(manifest.tracks.values.map(\.contentId))
         if let dbIds = drive.databaseContentIds {
             for i in needsId where changes[i].contains(.adopt) && tracks[i].adoptFrom == nil {
@@ -411,6 +437,7 @@ public enum SyncStatus {
                     usedIds.insert(cid)
                 }
             }
+            usedIds.formUnion(dbIds.values)
         }
         var nextContentId = manifest.nextContentId
         for i in needsId where tracks[i].contentId == nil {
@@ -424,7 +451,8 @@ public enum SyncStatus {
         // 3. Analysis, artwork and database row of each track on the drive.
         let anlzKey = profile.anlzKey
         var bytes: Int64 = 0
-        var copied = Set<String>()
+        // Tracks sharing a file (same audio and name) place it once, from the first one's source.
+        var placedSize: [String: Int64] = [:]
         for i in tracks.indices where tracks[i].isPlaced && tracks[i].status != .unknown {
             var t = tracks[i]
             var c = changes[i]
@@ -435,14 +463,26 @@ public enum SyncStatus {
             if case .retained = t.status { retained = true }
             let audioWork = !c.isDisjoint(with: [.new, .audioChanged, .missingOnDrive, .adopt])
             if case .ok(_, let size, _) = t.facts.audio, audioWork {
-                t.driveSize = size
-                if !c.contains(.adopt), copied.insert(DriveProbe.key(t.usbPath!)).inserted { bytes += size }
+                let key = DriveProbe.key(t.usbPath!)
+                if let first = placedSize[key] {
+                    t.driveSize = first
+                } else {
+                    t.driveSize = size
+                    placedSize[key] = size
+                    if !c.contains(.adopt) { bytes += size }
+                }
             } else {
                 var sourceSize: Int64?
                 if case .ok(_, let size, _) = t.facts.audio { sourceSize = size }
                 t.driveSize = record?.fileSize ?? drive.size(t.usbPath!) ?? sourceSize ?? 0
             }
 
+            if t.facts.analysis == nil, let kept = record?.rowAnalysis.flatMap(AnalysisFacts.init(stored:)),
+               drive.hasAllAnlz(forAudio: t.usbPath!) {
+                // Its analysis files are still on the drive, from analysis that isn't current now (source offline,
+                // analyzer changed): the row keeps the values written with them rather than losing BPM, key and grid.
+                t.keptAnalysis = kept
+            }
             if let a = t.facts.analysis {
                 t.anlzMissing = !drive.hasAllAnlz(forAudio: t.usbPath!)
                 if t.anlzMissing || record?.anlzFingerprint == nil || profile.rewriteAnalysisFiles
@@ -524,12 +564,12 @@ public enum SyncStatus {
             playlists.append(.init(source: p, record: record, status: status))
         }
         let selectedPlaylists = Set(scope.playlists.map(\.id))
-        let removedPlaylists = manifest.playlists.filter { !selectedPlaylists.contains($0.key) }
+        let removedPlaylists = scope.unreadable ? [] : manifest.playlists.filter { !selectedPlaylists.contains($0.key) }
             .sorted { $0.value.playlistId < $1.value.playlistId }.map(\.value)
 
         // 5. Tracks leaving the drive. With the library's songs unknown, nothing outside its playlists is judged.
         let inScope = Set(tracks.map(\.id))
-        if !scope.incomplete {
+        if !scope.incomplete && !scope.unreadable {
             for (id, r) in manifest.tracks where !inScope.contains(id) { removals.append((id, r, .deselected)) }
         }
         let keptPaths = Set(tracks.compactMap { $0.usbPath.map(DriveProbe.key) })
@@ -545,7 +585,7 @@ public enum SyncStatus {
         next.settings = profile.settings.dictionary
         next.nextContentId = nextContentId
         next.nextPlaylistId = nextPlaylistId
-        var nextTracks = scope.incomplete ? manifest.tracks.filter { !inScope.contains($0.key) } : [:]
+        var nextTracks = scope.incomplete || scope.unreadable ? manifest.tracks.filter { !inScope.contains($0.key) } : [:]
         for t in tracks where t.isPlaced {
             let prev = manifest.tracks[t.id]
             if t.status == .unknown {
@@ -562,12 +602,13 @@ public enum SyncStatus {
             r.contentId = t.contentId!
             r.recordFingerprint = t.recordFingerprint
             r.fileSize = t.driveSize
+            r.rowAnalysis = t.rowAnalysis?.stored
             // Source fields are part of the row: an unchanged row has an unchanged metadata fingerprint.
             if t.recordChanged || r.metadataFingerprint == nil { r.metadataFingerprint = Manifest.digest(metadataFingerprint(t.source)) }
             nextTracks[t.id] = r
         }
         next.tracks = nextTracks
-        next.playlists = Dictionary(uniqueKeysWithValues: playlists.map {
+        next.playlists = scope.unreadable ? manifest.playlists : Dictionary(uniqueKeysWithValues: playlists.map {
             ($0.source.id, $0.status == .unknown ? manifest.playlists[$0.source.id] ?? $0.record : $0.record)
         })
         if profile.artwork, let art = manifest.artwork {
@@ -596,7 +637,7 @@ public enum SyncStatus {
 
     /// The database row for a track on the drive. Evaluate fingerprints it; the executor writes it.
     static func exportTrack(_ t: ChangeSet.Track, settings: OutputSettings, fallbackDate: Date) -> ExportTrack {
-        let s = t.source, a = t.facts.analysis, path = t.usbPath!
+        let s = t.source, a = t.rowAnalysis, path = t.usbPath!
         let duration = a?.durationSeconds ?? s.durationSeconds ?? 0
         let bitrate = duration > 0 ? Int((Double(t.driveSize) * 8 / duration / 1000).rounded()) : 0
         return ExportTrack(

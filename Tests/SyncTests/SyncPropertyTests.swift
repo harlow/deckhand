@@ -48,7 +48,26 @@ import Testing
             let context = "seed \(seed) step \(step)"
             for _ in 0..<Int.random(in: 1...3, using: &rng) {
                 let id = pick(ids)
-                switch Int.random(in: 0..<17, using: &rng) {
+                switch Int.random(in: 0..<20, using: &rng) {
+                case 17:
+                    // Analysis stops being current (analyzer changed, cache lost).
+                    if available(id) { try? FileManager.default.removeItem(at: h.cache.root.appendingPathComponent("analysis/\(try h.hash(id)).json")) }
+                case 18:
+                    if let art = try h.manifest().artwork?.values.first {
+                        try? FileManager.default.removeItem(at: h.volume.url(forUsbPath: ArtworkWriter.path(imageId: art)))
+                    }
+                case 19:
+                    // A duplicate: same audio and name, other tags.
+                    guard available(id), let t = h.library.tracks[id] else { break }
+                    let dup = "T\(nextTrack)"
+                    nextTrack += 1
+                    try h.addTrack(dup, title: t.title, artist: t.artist, audio: "x")
+                    try FileManager.default.removeItem(at: h.file(dup))
+                    try FileManager.default.copyItem(at: h.file(id), to: h.file(dup))
+                    try h.writeAudio(h.file(dup), audio: audioVersion[id].map { "\(id)-\($0)" } ?? id, tag: "dup \(dup)")
+                    ids.append(dup)
+                    h.library.allTrackIds = ids
+                    h.library.playlists[Int.random(in: 1..<h.library.playlists.count, using: &rng)].trackIds.append(dup)
                 case 0: h.edit(id) { $0.rating = Int.random(in: 0...5, using: &rng) }
                 case 1: h.edit(id) { $0.title = "Song \(id) v\(Int.random(in: 0...9, using: &rng))" }
                 case 2:
@@ -123,6 +142,13 @@ import Testing
                 }
             }
             h.analyzeMissing = Int.random(in: 0..<4, using: &rng) == 0
+            if Int.random(in: 0..<5, using: &rng) == 0 {
+                // Unplugged just before the manifest is saved; the next sync recovers.
+                var e = h.executor()
+                e.stopBeforeManifest = true
+                let plan = try h.evaluate()
+                if !plan.isClean { _ = try? e.execute(plan, on: h.volume) }
+            }
 
             let before = try h.manifest()
             let run = try h.sync()

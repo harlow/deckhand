@@ -30,8 +30,9 @@ public struct SyncResult: Sendable {
 /// Carries out a ChangeSet on a drive.
 ///
 /// Order: move/copy audio → analyze → analysis files → artwork → build and validate the database locally → check
-/// the manifest wasn't replaced meanwhile → write and swap in the database → save the manifest → delete what
-/// left the drive. Until the swap, the drive's existing library stays valid.
+/// the manifest wasn't replaced meanwhile → write and swap in the database → flush → save the manifest → delete
+/// what left the drive. Until the swap, the drive's existing library stays valid; files the manifest vouches for
+/// are only rewritten in place after it stops vouching for them, so a sync cut short never leaves them trusted.
 public struct SyncExecutor {
     public enum Event: Sendable {
         case copying(index: Int, total: Int, title: String)
@@ -54,6 +55,8 @@ public struct SyncExecutor {
     public var retryFailedAnalysis = false
 
     static let dbRelativePath = DriveProbe.databasePath
+    /// For tests: stop as if the drive were unplugged just before the manifest is saved.
+    var stopBeforeManifest = false
 
     public init(cache: AnalysisCache, progress: @escaping @Sendable (Event) -> Void = { _ in }) {
         self.cache = cache
@@ -75,12 +78,15 @@ public struct SyncExecutor {
 
         let timer = PhaseTimer()
         let base = changes.base
+        // The drive's manifest as this sync last saved or read it.
+        var saved = base
         let profile = changes.profile
         var tracks = changes.tracks
         var manifest = changes.nextManifest
 
         // 1. Audio.
         try placeAudio(&tracks, on: volume, result: &result)
+        var wroteFiles = !result.copied.isEmpty || !result.adopted.isEmpty
         timer.mark("copy")
 
         // 2. Analysis.
@@ -118,6 +124,7 @@ public struct SyncExecutor {
 
         // 3. Analysis files.
         let anlzWork = tracks.indices.filter { tracks[$0].changes.contains(.analysisFiles) }
+        var vouchingWithdrawn = false
         for (n, i) in anlzWork.enumerated() {
             let t = tracks[i]
             progress(.writingAnalysisFiles(index: n + 1, total: anlzWork.count, title: t.source.title))
@@ -131,12 +138,23 @@ public struct SyncExecutor {
                                          detected: cache.detectedCues(forHash: hash), profile: profile)
             let unchanged = Manifest.matches(manifest.tracks[t.id]?.anlzFingerprint, built.fingerprint)
             if t.anlzMissing || !unchanged || profile.rewriteAnalysisFiles {
-                try volume.ensureMounted()
-                // Rewriting files the manifest already vouches for: a write cut short mustn't leave them half-written.
-                let wrote = try writeAnlz(path: t.usbPath!, analysis: a, cues: built.cues, phrases: built.phrases,
-                                          options: profile.anlzOptions, on: volume, atomically: unchanged,
-                                          force: profile.rewriteAnalysisFiles)
-                if wrote { result.anlzWritten.append(t.id) }
+                let writes = anlzWrites(path: t.usbPath!, analysis: a, cues: built.cues, phrases: built.phrases,
+                                        options: profile.anlzOptions, on: volume, force: profile.rewriteAnalysisFiles)
+                if !writes.isEmpty {
+                    try volume.ensureMounted()
+                    if !vouchingWithdrawn, let r = base.tracks[t.id], r.usbPath == t.usbPath, r.contentHash == t.contentHash,
+                       r.anlzFingerprint != nil {
+                        // The manifest vouches for these files. Overwriting them in place first needs a saved manifest
+                        // that doesn't (one write and flush covers every track this phase may rewrite).
+                        let before = saved
+                        saved = try withdrawVouching(for: anlzWork.map { tracks[$0].id }, basedOn: saved, on: volume)
+                        if manifest.takeEdits(from: saved, since: before) { result.keptConcurrentEdits = true }
+                        vouchingWithdrawn = true
+                    }
+                    for (url, data) in writes { try FileOps.write(data, to: url) }
+                    wroteFiles = true
+                    result.anlzWritten.append(t.id)
+                }
             }
             manifest.tracks[t.id]?.anlzInputs = Manifest.digest(SyncStatus.anlzInputs(AnalysisFacts(summary), key: profile.anlzKey))
             manifest.tracks[t.id]?.anlzFingerprint = Manifest.digest(built.fingerprint)
@@ -148,6 +166,7 @@ public struct SyncExecutor {
         var orphanedArt: [String] = []
         if profile.artwork, let provider = artwork {
             orphanedArt = try writeArtwork(&tracks, &manifest, changes: changes, provider: provider, on: volume, result: &result)
+            if result.imagesWritten > 0 { wroteFiles = true }
             timer.mark("artwork")
         }
 
@@ -160,6 +179,7 @@ public struct SyncExecutor {
             if fingerprint != base.tracks[t.id]?.recordFingerprint { rowsChanged = true }
             manifest.tracks[t.id]?.recordFingerprint = fingerprint
             manifest.tracks[t.id]?.fileSize = t.driveSize
+            manifest.tracks[t.id]?.rowAnalysis = t.rowAnalysis?.stored
             rows.append(row)
         }
         let playlistsChanged = changes.playlists.contains { $0.status != .clean } || !changes.removedPlaylists.isEmpty
@@ -189,7 +209,7 @@ public struct SyncExecutor {
 
             try volume.ensureMounted()
             // Last chance to back out with the drive's library untouched: another sync must not have saved meanwhile.
-            try Manifest.checkUnchanged(since: base, on: volume)
+            try Manifest.checkUnchanged(since: saved, on: volume)
             let staging = rbDir.appendingPathComponent(".deckhand-staging-exportLibrary.db")
             try FileOps.write(try Data(contentsOf: local), to: staging)
             timer.mark("database")
@@ -207,12 +227,14 @@ public struct SyncExecutor {
             timer.mark("commit swap")
         }
 
-        // 7. Manifest.
-        if manifest != base {
-            let saved = try Manifest.commit(manifest, basedOn: base, on: volume)
-            result.keptConcurrentEdits = saved.selectedPlaylistIds != manifest.selectedPlaylistIds
-                || saved.entireLibrary != manifest.entireLibrary || saved.settings != manifest.settings
-            result.manifest = saved
+        // 7. Manifest, once the files it vouches for are on the stick (the database path flushed already).
+        if wroteFiles && !result.wroteDatabase { FileOps.syncFilesystem() }
+        if stopBeforeManifest { throw SyncError.volumeDisappeared(volume.name) }
+        if manifest != saved {
+            let committed = try Manifest.commit(manifest, basedOn: saved, on: volume)
+            if committed.selectedPlaylistIds != manifest.selectedPlaylistIds || committed.entireLibrary != manifest.entireLibrary
+                || committed.settings != manifest.settings { result.keptConcurrentEdits = true }
+            result.manifest = committed
             timer.mark("commit manifest")
         }
         FileOps.syncFilesystem()
@@ -248,7 +270,7 @@ public struct SyncExecutor {
         var copies = 0
         for i in work {
             let t = tracks[i]
-            guard case .ok(let hash, let size, _) = t.facts.audio, let src = t.source.location, let path = t.usbPath else { continue }
+            guard case .ok(let hash, _, _) = t.facts.audio, let src = t.source.location, let path = t.usbPath else { continue }
             let dst = volume.url(forUsbPath: path)
             try volume.ensureMounted()
             if let done = placed[DriveProbe.key(path)] {
@@ -270,9 +292,10 @@ public struct SyncExecutor {
                 result.adopted.append(t.id)
             } else if t.changes.contains(.adopt) {
                 // Already at its path. Copies are renamed into place only when complete, but FAT can lose unflushed
-                // data in a crash, so it's only trusted if it holds the same audio.
-                if FileOps.size(dst) == size, (try? AudioHash.hash(dst)) == hash {
-                    actual = size
+                // data in a crash, so it's only trusted if it holds the same audio. Its tags may differ (another
+                // track with the same audio and name owns it): that's fine, and it isn't copied over.
+                if (try? AudioHash.hash(dst)) == hash {
+                    actual = FileOps.size(dst)
                     result.adopted.append(t.id)
                 }
             }
@@ -368,27 +391,33 @@ public struct SyncExecutor {
         return recorded.filter { used[$0.key] == nil }.map { ArtworkWriter.path(imageId: $0.value) }
     }
 
-    /// Writes the files whose bytes differ from what's on the drive (all of them when `force`). A fingerprint can
-    /// change without the bytes changing (it includes the analysis version), and reading is cheaper than writing on
-    /// flash. Returns whether anything was written.
-    private func writeAnlz(path: String, analysis: TrackAnalysis, cues: [CuePoint], phrases: PhraseAnalysis?,
-                           options: AnlzWriter.Options, on volume: Volume, atomically: Bool, force: Bool) throws -> Bool {
+    /// The track's analysis files whose bytes differ from what's on the drive (all of them when `force`). A
+    /// fingerprint can change without the bytes changing (it includes the analysis version), and reading is cheaper
+    /// than writing on flash.
+    private func anlzWrites(path: String, analysis: TrackAnalysis, cues: [CuePoint], phrases: PhraseAnalysis?,
+                            options: AnlzWriter.Options, on volume: Volume, force: Bool) -> [(URL, Data)] {
         let totalSamples = UInt64((analysis.durationSeconds * Double(analysis.sampleRate)).rounded())
         let files = AnlzWriter(audioPath: path, analysis: analysis, totalSamples: totalSamples, cues: cues,
                                phrases: phrases, options: options).build()
         let dir = volume.url(forUsbPath: AnlzPath.directory(forAudioPath: path))
-        var wrote = false
-        for (data, name) in [(files.dat, "ANLZ0000.DAT"), (files.ext, "ANLZ0000.EXT"), (files.twoEx, "ANLZ0000.2EX")] {
+        return [(files.dat, "ANLZ0000.DAT"), (files.ext, "ANLZ0000.EXT"), (files.twoEx, "ANLZ0000.2EX")].compactMap { data, name in
             let url = dir.appendingPathComponent(name)
-            if !force, FileOps.size(url) == Int64(data.count), (try? Data(contentsOf: url)) == data { continue }
-            if atomically {
-                try FileOps.writeAtomically(data, to: url)
-            } else {
-                try FileOps.write(data, to: url)
-            }
-            wrote = true
+            if !force, FileOps.size(url) == Int64(data.count), (try? Data(contentsOf: url)) == data { return nil }
+            return (url, data)
         }
-        return wrote
+    }
+
+    /// Saves the manifest no longer vouching for these tracks' analysis files, and flushes, before any is rewritten in
+    /// place: if the sync is then cut short, the next one checks those files instead of trusting half-written ones.
+    private func withdrawVouching(for ids: [String], basedOn base: Manifest, on volume: Volume) throws -> Manifest {
+        var m = base
+        for id in ids {
+            m.tracks[id]?.anlzInputs = nil
+            m.tracks[id]?.anlzFingerprint = nil
+        }
+        let saved = try Manifest.commit(m, basedOn: base, on: volume)
+        FileOps.syncFilesystem()
+        return saved
     }
 
     /// The cues and phrases a track's analysis files hold, and their fingerprint (`Manifest.Track.anlzFingerprint`).

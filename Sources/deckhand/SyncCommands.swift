@@ -45,6 +45,10 @@ struct SyncCommand: ParsableCommand {
 
         let wholeLibrary = entireLibrary ?? (manifest.entireLibrary == true)
         var lib = try AppleMusicLibrary.loadWithCurrentRatings(allSongs: wholeLibrary)
+        if lib.playlists.isEmpty && lib.tracks.isEmpty && !manifest.tracks.isEmpty {
+            throw ValidationError("Apple Music returned an empty library, so nothing on \(v.name) was changed. Check that Music "
+                                  + "has its library and Deckhand may read it (System Settings → Privacy & Security → Media & Apple Music).")
+        }
         // nil: the drive's saved selection, read again if it changes before the sync starts writing.
         var selection: Selection?
         if !playlist.isEmpty {
@@ -241,6 +245,7 @@ struct StatusCommand: ParsableCommand {
             for line in pendingLines(changes, limit: verbose ? .max : 0) { print("  \(line)") }
         }
         for line in noteLines(changes) { print(line) }
+        if changes.scope.unreadable { print("Apple Music returned an empty library; nothing can be judged.") }
         if !changes.isComplete { print("Some facts are unknown; status is incomplete.") }
     }
 }

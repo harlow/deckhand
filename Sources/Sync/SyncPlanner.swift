@@ -22,12 +22,12 @@ public struct SyncPlanner {
         var probe = DriveProbe.scan(volume, manifest: manifest)
         var changes = SyncStatus.evaluate(library: library, manifest: manifest, facts: facts, drive: probe, profile: profile,
                                           selection: selection, adoptable: adoptable)
-        // Audio already at a new track's path: likely a sync cut short after it replaced the database. That database
-        // knows the content IDs it gave those tracks.
+        // Audio already at a new track's path, or a database other than the one recorded: likely a sync cut short
+        // after it replaced the database. Its content IDs are kept for those tracks and not reused for others.
         let takeovers = changes.tracks.contains {
             $0.changes.contains(.adopt) && $0.adoptFrom == nil && manifest.tracks[$0.id] == nil
         }
-        if takeovers, probe.databaseId != nil,
+        if takeovers || changes.drive.contains(.databaseChanged), probe.databaseId != nil,
            let ids = try? DeviceLibrary.contentIds(database: volume.url(forUsbPath: DriveProbe.databasePath)) {
             let own = DriveProbe.key(DriveProbe.audioRoot + "/")
             probe.databaseContentIds = Dictionary(ids.map { (DriveProbe.key($0.key), $0.value) }.filter { $0.0.hasPrefix(own) },

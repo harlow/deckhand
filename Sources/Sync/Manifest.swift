@@ -35,6 +35,9 @@ public struct Manifest: Codable, Sendable, Equatable {
         /// Size of the copy on the drive. Tag edits can grow the source without changing its audio, and then it
         /// isn't copied again.
         public var fileSize: Int64? = nil
+        /// The analysis values the row was written with (`AnalysisFacts.stored`), kept for while its analysis files
+        /// stay on the drive but the analysis isn't current (source offline, analyzer changed).
+        public var rowAnalysis: String? = nil
     }
 
     public struct Playlist: Codable, Sendable, Equatable {
@@ -224,10 +227,18 @@ public struct Manifest: Codable, Sendable, Equatable {
         }
         guard let a = rest(base), a == rest(theirs) else { return nil }
         var m = ours
-        if theirs.selectedPlaylistIds != base.selectedPlaylistIds { m.selectedPlaylistIds = theirs.selectedPlaylistIds }
-        if theirs.entireLibrary != base.entireLibrary { m.entireLibrary = theirs.entireLibrary }
-        if theirs.settings != base.settings { m.settings = theirs.settings }
+        m.takeEdits(from: theirs, since: base)
         return m
+    }
+
+    /// Takes the selection, entire-library and settings edits `theirs` made since `base`. Returns whether there were any.
+    @discardableResult
+    mutating func takeEdits(from theirs: Manifest, since base: Manifest) -> Bool {
+        var took = false
+        if theirs.selectedPlaylistIds != base.selectedPlaylistIds { selectedPlaylistIds = theirs.selectedPlaylistIds; took = true }
+        if theirs.entireLibrary != base.entireLibrary { entireLibrary = theirs.entireLibrary; took = true }
+        if theirs.settings != base.settings { settings = theirs.settings; took = true }
+        return took
     }
 }
 

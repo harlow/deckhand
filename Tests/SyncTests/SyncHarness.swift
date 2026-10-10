@@ -184,10 +184,11 @@ final class SyncHarness {
         #expect(Set(r.anlzWritten).isSubset(of: Set(r.anlzChecked)), sourceLocation: sourceLocation)
         #expect(Set(r.artworkChecked) == ids(.artworkCheck), sourceLocation: sourceLocation)
         #expect(Set(r.removed) == Set(c.removedTracks.filter(\.deletesFiles).map(\.record.usbPath)), sourceLocation: sourceLocation)
-        // A database write is predicted exactly, except that analysis can fail and art can turn out unchanged.
+        // A database write is predicted exactly, except that analysis can fail, art can turn out unchanged and an
+        // adopted file can turn out the same size.
         if r.wroteDatabase {
             #expect(c.needsDatabaseWrite || !ids(.artworkCheck).isEmpty, sourceLocation: sourceLocation)
-        } else if ids(.analyze).isEmpty {
+        } else if ids(.analyze).isEmpty && ids(.adopt).isEmpty {
             #expect(!c.needsDatabaseWrite, sourceLocation: sourceLocation)
         }
         if c.isClean { #expect(r.manifest == nil && !r.wroteDatabase && r.anlzWritten.isEmpty, sourceLocation: sourceLocation) }
