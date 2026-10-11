@@ -7,8 +7,10 @@ import Observation
 @MainActor @Observable
 final class Job {
     enum State: Equatable { case idle, running, succeeded, failed(String), cancelled }
+    enum Kind: Equatable { case library, sync(driveID: String, driveName: String) }
 
     private(set) var state: State = .idle
+    private(set) var kind: Kind = .library
     private(set) var title = ""
     /// Current step, e.g. "Analysis files" or "Writing library database".
     private(set) var phase = ""
@@ -28,6 +30,7 @@ final class Job {
     @ObservationIgnored private var pending = Data()
 
     var running: Bool { state == .running }
+    var isUSBSync: Bool { if case .sync = kind { true } else { false } }
 
     /// The `deckhand` binary next to this app's executable (both are built into the same directory).
     static var cli: URL? {
@@ -37,8 +40,10 @@ final class Job {
         }
     }
 
-    func run(_ title: String, _ args: [String], completion: @escaping @MainActor (Bool) -> Void = { _ in }) {
+    func run(_ title: String, _ args: [String], kind: Kind = .library,
+             completion: @escaping @MainActor (Bool) -> Void = { _ in }) {
         guard !running else { return }
+        self.kind = kind
         self.title = title
         phase = "Starting…"
         done = 0

@@ -1,0 +1,98 @@
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/18] Write sources
+[4/18] Write swift-version--58304C5D6DBC2206.txt
+[6/10] Emitting module DeckhandApp
+[7/10] Compiling DeckhandApp LibraryModel.swift
+[7/12] Write Objects.LinkFileList
+ld: warning: building for macOS-14.0, but linking with dylib '/opt/homebrew/opt/sqlcipher/lib/libsqlcipher.dylib' which was built for newer version 26.0
+[8/12] Linking DeckhandApp
+[9/12] Applying DeckhandApp
+[11/14] Compiling DeckhandAppTests DedicatedLibraryModelTests.swift
+[12/14] Emitting module DeckhandAppTests
+[12/14] Write Objects.LinkFileList
+ld: warning: building for macOS-14.0, but linking with dylib '/opt/homebrew/opt/sqlcipher/lib/libsqlcipher.dylib' which was built for newer version 26.0
+[13/14] Linking DeckhandPackageTests
+Build complete! (8.39s)
+Test Suite 'Selected tests' started at 2026-10-11 10:39:03.727.
+Test Suite 'DeckhandPackageTests.xctest' started at 2026-10-11 10:39:03.728.
+Test Suite 'DeckhandPackageTests.xctest' passed at 2026-10-11 10:39:03.728.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-11 10:39:03.728.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+◇ Test run started.
+↳ Testing Library Version: 1743
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite AudioRepairTests started.
+◇ Suite DedicatedLibraryModelTests started.
+◇ Suite UnavailableAudioTests started.
+◇ Test protectedAudioRepairKeepsIdentityMembershipRatingsAndSurvivesRestartAndReimport() started.
+◇ Test invalidFilesAndFailedTransactionsLeaveTheTrackUnchanged() started.
+◇ Test usbSelectionAndReconnectKeepPlaylistAndKeyboardOrderAndLibraryOwnership() started.
+◇ Test protectedAudioIsNotDescribedAsADisconnectedDisk() started.
+◇ Test missingFileCanBeRelocatedAndReconnectRecheckRestoresAvailability() started.
+◇ Test failedImportKeepsLibraryEditableAndRestartsWithMissingAudio() started.
+◇ Test earlierLibraryFolderCheckboxStagesAllDescendantsWithoutOpeningSyncOrWritingUSB() started.
+◇ Test cleanUSBStaysCleanAcrossLaunchAndConfirmationIsDistinctFromPendingChanges() started.
+◇ Test unreadableExistingUSBDoesNotBecomeAnEmptySetupTarget() started.
+◇ Test collapsedFoldersPersistSkipKeyboardRowsAndKeepTracks() started.
+◇ Test insertionReordersTopLevelAndFolderChildrenPreservingIdentityAcrossRestartAndReimport() started.
+◇ Test invalidFirstImportDoesNotInitializeOrReplaceAnEmptyLibrary() started.
+◇ Test removeReaddAndFailedSecondaryImportPreserveDefaultLocalEditsAndIdentities() started.
+◇ Test savedEmptyAndPopulatedLibrariesNeverStartInChooser(populated:) started.
+◇ Test playlistDropCopiesOnlyNewTracksAndPersistsWithoutMovingOrEditingSource() started.
+◇ Test startupChecksCacheWithoutHashingUnseenAudio() started.
+◇ Test repairingProtectedAudioUpdatesTheWorkspaceAndSurvivesRestartAndReimport() started.
+◇ Test musicExportKeepsRatingsUnlessExplicitlySelected() started.
+◇ Test associationRejectsChangedAudioConcurrentManifestAndBusyDrive() started.
+◇ Test playlistDropPreservesFolderMovesRejectsInvalidAndDeduplicatesTrackPayloads() started.
+◇ Test savedLibraryReadsNeverImportAndExplicitReimportKeepsLocalWork() started.
+◇ Test newAndMismatchedUSBsOfferSetupWithoutWritingOrChangingTheLibrary() started.
+◇ Test firstLaunchWaitsForSavedLibraryCheckBeforeShowingChooser() started.
+◇ Test addingAndUpdatingSecondaryImportKeepsDefaultAndChangingDefaultPersistsWithoutReadingSource() started.
+◇ Test startupReadFailureShowsErrorAndRetryRechecksSavedLibrary() started.
+◇ Test distinguishesNoLocalFileFromUnavailableSavedPathAndMixedReasons() started.
+◇ Test deletePlaylistClearsSelectedAndRecentPlaylistButKeepsTracksAcrossRestart() started.
+◇ Test previousDeckhandUSBPreviewsWithoutWritingAndExplicitAssociationKeepsSelection() started.
+◇ Test playlistAndTrackDragPayloadsDoNotOverlap() started.
+◇ Test movingIntoCollapsedNestedFolderRevealsDestinationAndKeepsUSBPlaylistIdentity() started.
+◇ Test emptyLibraryThenFolderMusicAndSecondFolderKeepsMixedPlaylistAndRatingsAcrossRestart() started.
+◇ Test case passing 1 argument populated → true to savedEmptyAndPopulatedLibrariesNeverStartInChooser(populated:) started.
+◇ Test case passing 1 argument populated → false to savedEmptyAndPopulatedLibrariesNeverStartInChooser(populated:) started.
+✔ Test protectedAudioIsNotDescribedAsADisconnectedDisk() passed after 0.003 seconds.
+✔ Test distinguishesNoLocalFileFromUnavailableSavedPathAndMixedReasons() passed after 0.002 seconds.
+✔ Suite UnavailableAudioTests passed after 0.003 seconds.
+✔ Test missingFileCanBeRelocatedAndReconnectRecheckRestoresAvailability() passed after 0.022 seconds.
+✔ Test protectedAudioRepairKeepsIdentityMembershipRatingsAndSurvivesRestartAndReimport() passed after 0.024 seconds.
+✔ Test invalidFilesAndFailedTransactionsLeaveTheTrackUnchanged() passed after 0.044 seconds.
+✔ Suite AudioRepairTests passed after 0.044 seconds.
+✔ Test playlistAndTrackDragPayloadsDoNotOverlap() passed after 0.142 seconds.
+✔ Test startupReadFailureShowsErrorAndRetryRechecksSavedLibrary() passed after 0.143 seconds.
+✔ Test firstLaunchWaitsForSavedLibraryCheckBeforeShowingChooser() passed after 0.144 seconds.
+✔ Test invalidFirstImportDoesNotInitializeOrReplaceAnEmptyLibrary() passed after 0.146 seconds.
+✔ Test repairingProtectedAudioUpdatesTheWorkspaceAndSurvivesRestartAndReimport() passed after 0.148 seconds.
+✔ Test unreadableExistingUSBDoesNotBecomeAnEmptySetupTarget() passed after 0.149 seconds.
+✔ Test startupChecksCacheWithoutHashingUnseenAudio() passed after 0.395 seconds.
+✔ Test savedEmptyAndPopulatedLibrariesNeverStartInChooser(populated:) with 2 test cases passed after 0.397 seconds.
+✔ Test playlistDropPreservesFolderMovesRejectsInvalidAndDeduplicatesTrackPayloads() passed after 0.404 seconds.
+✔ Test newAndMismatchedUSBsOfferSetupWithoutWritingOrChangingTheLibrary() passed after 0.406 seconds.
+✔ Test collapsedFoldersPersistSkipKeyboardRowsAndKeepTracks() passed after 0.407 seconds.
+✔ Test movingIntoCollapsedNestedFolderRevealsDestinationAndKeepsUSBPlaylistIdentity() passed after 0.603 seconds.
+✔ Test failedImportKeepsLibraryEditableAndRestartsWithMissingAudio() passed after 0.631 seconds.
+✔ Test musicExportKeepsRatingsUnlessExplicitlySelected() passed after 0.632 seconds.
+✔ Test deletePlaylistClearsSelectedAndRecentPlaylistButKeepsTracksAcrossRestart() passed after 0.633 seconds.
+✔ Test previousDeckhandUSBPreviewsWithoutWritingAndExplicitAssociationKeepsSelection() passed after 0.635 seconds.
+✔ Test addingAndUpdatingSecondaryImportKeepsDefaultAndChangingDefaultPersistsWithoutReadingSource() passed after 0.636 seconds.
+✔ Test emptyLibraryThenFolderMusicAndSecondFolderKeepsMixedPlaylistAndRatingsAcrossRestart() passed after 0.639 seconds.
+✔ Test playlistDropCopiesOnlyNewTracksAndPersistsWithoutMovingOrEditingSource() passed after 0.640 seconds.
+✔ Test insertionReordersTopLevelAndFolderChildrenPreservingIdentityAcrossRestartAndReimport() passed after 0.641 seconds.
+✔ Test removeReaddAndFailedSecondaryImportPreserveDefaultLocalEditsAndIdentities() passed after 0.642 seconds.
+✔ Test associationRejectsChangedAudioConcurrentManifestAndBusyDrive() passed after 0.644 seconds.
+✔ Test usbSelectionAndReconnectKeepPlaylistAndKeyboardOrderAndLibraryOwnership() passed after 0.645 seconds.
+✔ Test savedLibraryReadsNeverImportAndExplicitReimportKeepsLocalWork() passed after 0.650 seconds.
+✔ Test earlierLibraryFolderCheckboxStagesAllDescendantsWithoutOpeningSyncOrWritingUSB() passed after 0.679 seconds.
+✔ Test cleanUSBStaysCleanAcrossLaunchAndConfirmationIsDistinctFromPendingChanges() passed after 0.685 seconds.
+✔ Suite DedicatedLibraryModelTests passed after 0.686 seconds.
+✔ Test run with 31 tests in 3 suites passed after 0.686 seconds.

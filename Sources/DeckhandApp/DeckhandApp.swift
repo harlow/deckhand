@@ -3,12 +3,15 @@ import SwiftUI
 
 @main
 struct DeckhandApp: App {
+    static var displayName: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Deckhand"
+    }
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var library = LibraryModel()
     @State private var player = Player()
 
     var body: some Scene {
-        WindowGroup("Deckhand") {
+        WindowGroup(Self.displayName) {
             ContentView()
                 .environment(library)
                 .environment(player)
@@ -26,6 +29,10 @@ struct DeckhandApp: App {
         // cropped top and bottom (sidebar's first rows and Quick Rate's track details disappear).
         .windowResizability(.contentMinSize)
 
+        Settings {
+            MusicImportsView().environment(library).preferredColorScheme(.dark)
+        }
+
         Window("Deckhand Console", id: "console") {
             ConsoleView().preferredColorScheme(.dark)
         }
@@ -33,11 +40,26 @@ struct DeckhandApp: App {
         .commands {
             ConsoleCommands()
             TrackCommands()
+            CommandMenu("Library") {
+                Button("Add Music…") { library.choosingSource = true }
+                    .keyboardShortcut("l", modifiers: [.command, .option])
+                    .disabled(!library.sourceCanChange)
+                Divider()
+                Button("Sync USB") { library.requestSync() }
+                    .keyboardShortcut("s", modifiers: [.command, .shift])
+                    .disabled(library.activeDrive == nil || !library.sourceAvailable || !library.sourceCanChange)
+                Button("Analyze Library") { library.analyzeLibrary() }
+                    .disabled(!library.sourceAvailable || !library.sourceCanChange || library.unanalyzedCount == 0)
+                Button("Export Playlists…") { library.showingDestinations = true }
+                    .disabled(!library.sourceAvailable || !library.sourceCanChange)
+                Divider()
+                SettingsLink { Text("Library Settings…") }
+            }
             CommandGroup(after: .sidebar) {
                 Divider()
-                Button("Next Playlist") { library.selectAdjacentSidebarItem(1) }
+                Button("Next Playlist") { library.selectAdjacentSidebarItem(1); library.focusTrackList() }
                     .keyboardShortcut("]", modifiers: [.command, .shift])
-                Button("Previous Playlist") { library.selectAdjacentSidebarItem(-1) }
+                Button("Previous Playlist") { library.selectAdjacentSidebarItem(-1); library.focusTrackList() }
                     .keyboardShortcut("[", modifiers: [.command, .shift])
             }
             CommandMenu("Playback") {

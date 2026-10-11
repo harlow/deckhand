@@ -82,6 +82,7 @@ let package = Package(
             name: "MusicSource",
             dependencies: ["DeckhandCore"]
         ),
+        .target(name: "DeckhandLibrary", dependencies: ["DeckhandCore", "MusicSource", "CSQLCipher"]),
         .target(
             name: "Sync",
             dependencies: ["DeckhandCore", "OneLibrary", "Analysis", "MusicSource"]
@@ -89,7 +90,7 @@ let package = Package(
         .executableTarget(
             name: "deckhand",
             dependencies: [
-                "Sync",
+                "Sync", "DeckhandLibrary",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
         ),
@@ -97,7 +98,7 @@ let package = Package(
         // overlays and result parsing. Tested by DeckhandAppCoreTests.
         .target(
             name: "DeckhandAppCore",
-            dependencies: ["Sync", "MusicSource", "DeckhandCore"]
+            dependencies: ["Sync", "MusicSource", "DeckhandCore", "DeckhandLibrary"]
         ),
         // Native Mac app (SwiftUI). `Scripts/build-app.sh` bundles it as Deckhand.app.
         .executableTarget(
@@ -111,5 +112,7 @@ let package = Package(
         .testTarget(name: "EvalSupportTests", dependencies: ["EvalSupport"]),
         .testTarget(name: "DeckhandAppTests", dependencies: ["DeckhandApp"], swiftSettings: [.swiftLanguageMode(.v5)]),
         .testTarget(name: "DeckhandAppCoreTests", dependencies: ["DeckhandAppCore", "Sync", "MusicSource"]),
+        .testTarget(name: "MusicSourceTests", dependencies: ["MusicSource", "DeckhandCore"]),
+        .testTarget(name: "DeckhandLibraryTests", dependencies: ["DeckhandLibrary", "MusicSource", "Sync"]),
     ]
 )

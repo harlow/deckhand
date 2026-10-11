@@ -1,0 +1,9 @@
+[0/1] Planning build
+Building for debugging...
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'DeckhandApp' complete! (0.66s)
+Building for debugging...
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'deckhand' complete! (0.12s)
+/tmp/deckhand-keyboard-build/Deckhand.app: replacing existing signature
+Built /tmp/deckhand-keyboard-build/Deckhand.app (open it with: open /tmp/deckhand-keyboard-build/Deckhand.app)

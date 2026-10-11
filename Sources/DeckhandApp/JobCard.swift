@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Progress for the running sync or analysis, shown at the top of the right-hand pane.
+/// Detailed progress/log for a job: library jobs in the queue pane, USB jobs in the drive popover.
 struct JobCard: View {
     @Environment(LibraryModel.self) private var library
+    var onDismiss: () -> Void = {}
     @State private var showLog = false
 
     var body: some View {
@@ -15,7 +16,7 @@ struct JobCard: View {
                 if job.running {
                     Button("Cancel") { job.cancel() }.buttonStyle(.borderless)
                 } else {
-                    Button { job.dismiss() } label: { Image(systemName: "xmark") }
+                    Button { job.dismiss(); onDismiss() } label: { Image(systemName: "xmark") }
                         .buttonStyle(.borderless)
                         .help("Dismiss")
                 }

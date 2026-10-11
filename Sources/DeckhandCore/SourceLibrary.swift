@@ -84,6 +84,10 @@ public protocol ArtworkProvider: Sendable {
 
 /// A snapshot of the source library: all playlists (in source order) and the tracks they reference.
 public struct SourceLibrary: Codable, Sendable {
+    /// Owning connection. Nil is the original Apple Music library, for backwards compatibility.
+    public var sourceID: String?
+    /// Previous import connections whose IDs were retained during migration into a dedicated library.
+    public var sourceAliases: [String]?
     public var playlists: [SourcePlaylist]
     public var tracks: [String: SourceTrack]
     /// Every song in the library in library order, when loaded with all songs (else nil).
@@ -91,7 +95,7 @@ public struct SourceLibrary: Codable, Sendable {
     /// Cover art lookup, if the source can provide it. Not persisted.
     public var artwork: (any ArtworkProvider)?
 
-    enum CodingKeys: String, CodingKey { case playlists, tracks, allTrackIds }
+    enum CodingKeys: String, CodingKey { case sourceID, sourceAliases, playlists, tracks, allTrackIds }
 
     public init(playlists: [SourcePlaylist], tracks: [String: SourceTrack], artwork: (any ArtworkProvider)? = nil) {
         self.playlists = playlists

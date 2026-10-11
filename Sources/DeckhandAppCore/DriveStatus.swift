@@ -128,7 +128,11 @@ public struct DriveStatus: Sendable, Equatable {
         let ids = Set(c.playlists.map(\.source.id))
         for p in c.playlists where p.source.parentId.map({ !ids.contains($0) }) ?? true { _ = walk(p) }
         for p in c.removedPlaylists { details.append("Playlist “\(p.name)”: leaving the drive") }
-        for change in c.drive.sorted(by: { $0.rawValue < $1.rawValue }) { details.append(Self.describe(change)) }
+        for change in c.drive.sorted(by: { $0.rawValue < $1.rawValue }) {
+            // Old manifests never recorded a database identity; a missing identity doesn't prove replacement.
+            details.append(change == .databaseChanged && c.base.databaseId == nil
+                ? "Update the USB's library database for this version of Deckhand" : Self.describe(change))
+        }
 
         self.tracks = tracks
         self.playlists = playlists

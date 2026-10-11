@@ -16,6 +16,39 @@ public enum AppleMusicWriterError: Error, CustomStringConvertible {
 /// Creates playlists in Music.app via AppleScript. iTunesLibrary.framework is read-only, so this
 /// is the supported way to write.
 public enum AppleMusicWriter {
+    public static func playlistExists(_ id: String) throws -> Bool {
+        try run("tell application \"Music\" to return exists (first user playlist whose persistent ID is \(quote(id)))") == "true"
+    }
+
+    public static func playlistTracks(_ id: String) throws -> [String] {
+        let text = try run("""
+            tell application "Music"
+                set p to first user playlist whose persistent ID is \(quote(id))
+                set tids to persistent ID of every track of p
+                set AppleScript's text item delimiters to ","
+                return tids as text
+            end tell
+            """)
+        return text.split(separator: ",").map(String.init)
+    }
+
+    /// Used only for Deckhand-managed destination copies, after checking their last exported membership.
+    public static func replacePlaylist(_ id: String, trackIDs: [String]) throws {
+        // Resolve all references before removing anything from the destination playlist.
+        _ = try run("""
+            tell application "Music"
+                set p to first user playlist whose persistent ID is \(quote(id))
+                if smart of p then error "Cannot replace a smart playlist."
+                repeat with tid in {\(trackIDs.map(quote).joined(separator: ", "))}
+                    set t to first track of library playlist 1 whose persistent ID is (contents of tid)
+                end repeat
+                delete every track of p
+            end tell
+            """)
+        let missing = try add(trackIds: trackIDs, toPlaylist: id)
+        if !missing.isEmpty { throw AppleMusicWriterError.script("Some tracks couldn't be added to the Music playlist.") }
+    }
+
     /// Creates a playlist (or folder) and returns its persistent ID.
     public static func createPlaylist(named name: String, isFolder: Bool, inFolder parentId: String?) throws -> String {
         let kind = isFolder ? "folder playlist" : "user playlist"

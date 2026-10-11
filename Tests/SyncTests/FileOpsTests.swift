@@ -9,6 +9,27 @@ import Testing
         try FileManager.default.contentsOfDirectory(atPath: url.path).sorted()
     }
 
+    @Test func statMetadataFollowsLinksAndReusesExistingAudioFingerprint() throws {
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("audio.wav"), link = dir.appendingPathComponent("linked.wav")
+        try FileOps.write(Data(repeating: 4, count: 1234), to: file)
+        let time = Date(timeIntervalSince1970: 1_700_000_000.1234567)
+        try FileManager.default.setAttributes([.modificationDate: time], ofItemAtPath: file.path)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: file)
+        let expected = try FileManager.default.attributesOfItem(atPath: file.path)
+        let attributes = try #require(FileOps.attributes(link))
+        #expect(attributes.size == 1234)
+        let oldTimestamp = (expected[.modificationDate] as! Date).timeIntervalSince1970
+        #expect(attributes.modified == oldTimestamp)
+        let cache = try AnalysisCache(root: dir.appendingPathComponent("cache"))
+        #expect(cache.cachedContentHash(of: file) == nil)
+        let hash = try cache.contentHash(of: file, size: attributes.size, modified: oldTimestamp)
+        #expect(try cache.contentHash(of: file) == hash)
+        #expect(cache.cachedContentHash(of: file, size: attributes.size, modified: attributes.modified) == hash)
+        #expect(cache.cachedContentHash(of: file) == hash)
+        #expect(FileOps.attributes(dir.appendingPathComponent("missing.wav")) == nil)
+    }
+
     @Test func writeCreatesDirectoriesAndOverwrites() throws {
         let file = dir.appendingPathComponent("P001/0000ABCD/ANLZ0000.DAT")
         try FileOps.write(Data([1, 2, 3, 4]), to: file)

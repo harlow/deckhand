@@ -5,20 +5,20 @@
 <h1 align="center">Deckhand</h1>
 
 <p align="center">
-  <strong>Apple Music to the decks. No Rekordbox.</strong><br>
+  <strong>Your music library, ready for the decks.</strong><br>
   <a href="https://deckhand.rocks">deckhand.rocks</a>
 </p>
 
-Deckhand syncs your Apple Music playlists to a Pioneer DJ / AlphaTheta USB drive (OneLibrary format) with key,
-BPM, beat grids, waveforms and hot cues already set. Your library stays in Apple Music. Deckhand does the
-analysis and builds the drive.
+Deckhand imports tracks and playlists from Apple Music, Rekordbox XML, or folders into a local library,
+then syncs to a Pioneer DJ / AlphaTheta USB drive (OneLibrary format) with key, BPM, beat grids, waveforms
+and hot cues already set. Playlists and ratings save in Deckhand; audio stays in place.
 
 Free and open source · macOS 14+
 
 ![Deckhand](docs/images/app.png)
 
 ```
-Apple Music  →  Deckhand  →  USB  →  the decks
+Music / Rekordbox XML / Folders  →  Deckhand library  →  USB  →  the decks
 ```
 
 ## Features
@@ -32,13 +32,32 @@ Apple Music  →  Deckhand  →  USB  →  the decks
   wrote.
 - **Camelot keys everywhere.** A key wheel filter and "Mixes with now playing" (compatible key, tempo within
   pitch range) help you find the next track.
-- **Ratings, kept safe.** Star ratings sync both ways with Apple Music and go onto the drive. Deckhand also
-  keeps a daily backup, because Music stores ratings only in its library database.
+- **Playlists and ratings, saved locally.** Keep them across source changes and restarts. Explicitly sync
+  playlist copies and edited ratings to Music, export Rekordbox XML, or send them to a drive.
 - **Quick Rate.** Plays each unrated track from just before its first drop. One key rates it and moves on.
 - **Keyboard first.** Browse, preview, queue and rate without touching the mouse.
 - **A Mac app and a CLI.** Use the SwiftUI app, or script everything with `deckhand`.
 
 ![Deckhand keyboard shortcuts](docs/images/keyboard-shortcuts.png)
+
+## Deckhand library
+
+On first launch, choose **Apple Music / iTunes**, **Rekordbox** (a collection XML export),
+**Folder on Computer**, or **Start Empty**. All imports join one Deckhand library; playlists can mix
+tracks from different imports. Your saved tracks, playlists and ratings persist independently of imports.
+
+Every edit saves locally in `~/Library/Application Support/Deckhand/Library/library.sqlite`.
+**Add Music…** brings tracks and playlists into the same library. **Library Settings** keeps import
+history with an optional **Re-import** action for each input. Opening the library reads saved data;
+external changes arrive only when you import them.
+**Sync USB** sends the chosen content directly to the selected drive. Library → **Export Playlists…**
+sends playlist copies to a Deckhand folder in Music or exports Rekordbox XML. Audio stays at its original
+paths. Empty folders work too: add audio, then re-import that folder from Library Settings.
+
+The CLI uses the saved library for playlists, analysis, status and sync once initialized. Before that
+it reads Music; `--music` explicitly selects Music for analyze/status/sync. USB analysis comes from
+Deckhand. File relocation and continuous two-way sync are future work.
+See [the source plan](docs/plans/library-sources.md) and [test report](docs/plans/dedicated-library-e2e.md).
 
 ## Requirements
 
@@ -106,7 +125,7 @@ Other commands:
 
 | Command | What it does |
 |---|---|
-| `playlists`, `devices` | List Apple Music playlists and mounted drives |
+| `playlists`, `devices` | List saved library playlists and mounted drives |
 | `status`, `validate` | Show exactly what the next sync would change (`--json` for scripts), and check a drive's library for problems |
 | `sync --adopt` | Take over audio that's already on a drive (for example, from a Rekordbox export) instead of copying it again |
 | `import-playlists` | Recreate a drive's existing playlists in Apple Music (`--add-missing` also adds tracks Music doesn't have) |
@@ -135,7 +154,8 @@ instead of using Deckhand's analysis.
 | `Sync` | Planner (diff), executor (copy, analyze, stage, commit), manifest, analysis cache |
 | `OneLibrary` | ANLZ writer, `exportLibrary.db` writer, validator |
 | `Analysis` | Decoding (AVFoundation), waveforms, BPM and beat grid, key ensemble, cues, energy, song structure |
-| `MusicSource` | Apple Music via `iTunesLibrary.framework` |
+| `MusicSource` | Music, folder and Rekordbox XML import adapters |
+| `DeckhandLibrary` | Persistent local library and explicit Music export |
 | `DeckhandCore` | Normalized source model, `TrackAnalysis`, `MusicalKey` |
 | `CQMDSP` | Vendored [qm-dsp](https://github.com/c4dm/qm-dsp) (GPL) for beat tracking and key features |
 | `CKeyFinder` | Vendored [libKeyFinder](https://github.com/mixxxdj/libkeyfinder) (GPL-3) with an Accelerate FFT backend |

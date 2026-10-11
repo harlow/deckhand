@@ -1,10 +1,12 @@
 import AppKit
 import DeckhandAppCore
 import DeckhandCore
+import DeckhandLibrary
 import Foundation
 import MusicSource
 import Observation
 import Sync
+import UniformTypeIdentifiers
 
 /// A downsampled three-band waveform for drawing, normalized per band to the track's loudest frame.
 struct Overview: Equatable, Sendable {
@@ -66,13 +68,22 @@ struct Drive: Identifiable, Sendable {
     var manifest: Manifest?
     /// The drive's files, read with the manifest (Deckhand drives only).
     var probe: DriveProbe?
+    var isReading = false
+    var readError: String?
     var id: String { volume.url.path }
-    var canSync: Bool { manifest.map { $0.entireLibrary == true || !$0.selectedPlaylistIds.isEmpty } ?? false }
+    var canSync: Bool {
+        manifest.map { $0.entireLibrary == true || !$0.selectedPlaylistIds.isEmpty || !$0.tracks.isEmpty || !$0.playlists.isEmpty } ?? false
+    }
 
     /// Reads a mounted drive's manifest and files. Off the main thread: USB reads can take seconds.
     nonisolated static func read(_ volume: Volume) -> Drive {
-        let manifest = try? Manifest.load(from: volume)
-        return Drive(volume: volume, manifest: manifest, probe: manifest.map { DriveProbe.scan(volume, manifest: $0) })
+        do {
+            let manifest = try Manifest.load(from: volume)
+            return Drive(volume: volume, manifest: manifest, probe: manifest.map { DriveProbe.scan(volume, manifest: $0) })
+        } catch {
+            // An unreadable existing manifest is not an empty USB available for initialization.
+            return Drive(volume: volume, readError: error.localizedDescription)
+        }
     }
 }
 
@@ -111,12 +122,188 @@ enum SyncNotice: Equatable {
     /// Reading everything again after the sync still found work to do.
     case leftover(driveId: String, drive: String, count: Int, details: [String])
     /// The sync stopped before writing because Music couldn't be read live.
-    case staleLibrary(driveId: String, drive: String, reason: String)
 }
 
 @MainActor @Observable
 final class LibraryModel {
-    let cache: AnalysisCache? = try? AnalysisCache()
+    let cache: AnalysisCache?
+    private(set) var source: SourceConnection?
+    var choosingSource = false
+    private(set) var connectingSource = false
+    private(set) var recentSources: [SourceConnection] = []
+    private(set) var hasLibrary = false
+    private(set) var libraryID: String?
+    private(set) var sourceError: String?
+    private(set) var connections: [LibraryConnection] = []
+    private(set) var sourceConflicts = 0
+    var showingDestinations = false
+    var showingUSBConnection = false
+    var showingUSBChanges = false
+    private(set) var exportingMusic = false
+    private(set) var musicExportResult: String?
+    @ObservationIgnored private var localStore: DeckhandLibraryStore?
+    @ObservationIgnored private var appliedLibraryRevision: UInt64 = 0
+    @ObservationIgnored private let libraryDirectory: URL
+    @ObservationIgnored private let legacyDirectory: URL
+    @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let observesChanges: Bool
+    @ObservationIgnored private let musicImport: (@Sendable () async throws -> SourceLibrary)?
+    @ObservationIgnored private let driveReader: (@Sendable () -> [Drive])?
+    private(set) var pendingSourceEdits = 0
+
+    var playlistDestination: String { "Deckhand" }
+    var sourceAvailable: Bool { hasLibrary && loadState == .loaded }
+    var sourceCanChange: Bool { !job.running && !startingSync && !exportingMusic && !connectingSource && pendingSourceEdits == 0 }
+    var canEditLibrary: Bool { sourceAvailable && !associatingUSB }
+    private(set) var associatingUSB = false
+    private(set) var usbAssociationError: String?
+    var importConnections: [LibraryConnection] { connections.filter(\.isConnected) }
+    private(set) var unavailableAudioIssues: [UnavailableAudioIssue] = []
+    var unavailableTracks: Int { unavailableAudioIssues.count }
+
+    func driveMatchesSource(_ drive: Drive) -> Bool {
+        sourceAvailable && (drive.manifest?.acceptsSource(libraryID) ?? false)
+    }
+
+    func canAdoptDrive(_ drive: Drive) -> Bool {
+        guard sourceAvailable, !drive.isReading, drive.readError == nil, let library else { return false }
+        return drive.manifest?.canAdoptLibrary(library) == true
+    }
+
+    /// A proven older library can be previewed without writing its USB manifest. Execution still requires
+    /// explicit reassociation; the CLI's owner check continues to reject an unassociated drive.
+    func canPreviewDrive(_ drive: Drive) -> Bool { driveMatchesSource(drive) || canAdoptDrive(drive) }
+
+    var selectedUSBPlaylists: [SourcePlaylist] {
+        guard let drive = activeDrive, canPreviewDrive(drive), let manifest = drive.manifest else { return [] }
+        let ids = Set(manifest.selectedPlaylistIds)
+        return playlists.filter { !$0.isFolder && ids.contains($0.id) }
+    }
+
+    var wouldClearUSB: Bool {
+        guard let drive = activeDrive, canPreviewDrive(drive), let m = drive.manifest else { return false }
+        return m.entireLibrary != true && selectedUSBPlaylists.isEmpty && (!m.tracks.isEmpty || !m.playlists.isEmpty)
+    }
+
+    var usbIsUpToDate: Bool {
+        guard let drive = activeDrive, !drive.isReading, drive.readError == nil,
+              driveMatchesSource(drive), drive.canSync, let status = driveStatus else { return false }
+        return status.complete && !status.wontFit && status.pendingCount == 0 && status.summary.unknown == 0
+    }
+
+    /// Opening the app checks the USB before offering an action. A different saved library identity
+    /// requires explicit confirmation, even when the evaluator finds no music or playlist changes.
+    var usbSyncEnabled: Bool {
+        guard let drive = activeDrive else { return false }
+        return sourceCanChange && sourceAvailable && !drive.isReading && !checkingStatus && !usbIsUpToDate
+    }
+
+    var usbPrimaryActionTitle: String {
+        guard let drive = activeDrive, drive.readError == nil else { return "Sync" }
+        if driveMatchesSource(drive) { return "Sync" }
+        // A safe earlier-library preview already has a concrete sync plan. Its ownership
+        // confirmation is part of Sync, rather than another setup operation.
+        if canPreviewDrive(drive), pendingChanges > 0 { return "Sync" }
+        return "Setup"
+    }
+
+    var usbToolbarStatusText: String? {
+        guard let drive = activeDrive, !job.running, !drive.isReading, !checkingStatus, !usbIsUpToDate else { return nil }
+        if drive.readError != nil { return "USB unavailable" }
+        if drive.manifest == nil { return "Set up USB" }
+        if !canPreviewDrive(drive) { return "Different library" }
+        return usbStatusText
+    }
+
+    var usbToolbarNeedsAction: Bool {
+        guard let drive = activeDrive, usbToolbarStatusText != nil else { return false }
+        return !driveMatchesSource(drive) || pendingChanges > 0 || pendingWontFit
+    }
+
+    func usbLibraryMissingItems(for drive: Drive) -> String? {
+        guard let manifest = drive.manifest, let library else { return nil }
+        let tracks = Set(manifest.tracks.keys).subtracting(library.tracks.keys).count
+        let playlists = Set(manifest.playlists.keys).union(manifest.selectedPlaylistIds)
+            .subtracting(library.playlists.map(\.id)).count
+        var items: [String] = []
+        if tracks > 0 { items.append("\(tracks.formatted()) \(tracks == 1 ? "track" : "tracks")") }
+        if playlists > 0 { items.append("\(playlists.formatted()) \(playlists == 1 ? "playlist" : "playlists")") }
+        guard !items.isEmpty else { return nil }
+        return items.joined(separator: " and ") + " from this USB \(tracks + playlists == 1 ? "isn't" : "aren't") in this Deckhand library."
+    }
+
+    var usbStatusText: String {
+        guard let drive = activeDrive else { return "No USB connected" }
+        if drive.isReading { return "Checking USB…" }
+        if drive.readError != nil { return "USB unavailable" }
+        if drive.manifest == nil { return "Not set up" }
+        guard canPreviewDrive(drive) else { return "Needs attention" }
+        guard let status = driveStatus else { return "Checking changes…" }
+        if status.wontFit { return "Won't fit" }
+        if status.pendingCount > 0 {
+            return "\(status.pendingCount.formatted()) \(status.pendingCount == 1 ? "change" : "changes") to sync"
+        }
+        if status.summary.unknown > 0 { return "\(status.summary.unknown.formatted()) tracks to check" }
+        if !status.complete { return "Check sync details" }
+        if !driveMatchesSource(drive) { return "Link library" }
+        if !drive.canSync { return "Choose playlists" }
+        return "Up to date"
+    }
+
+    func adoptDrive(_ drive: Drive, showNotice: Bool = true) async {
+        guard sourceCanChange, let library, let id = libraryID, canAdoptDrive(drive) else { return }
+        let expectedOwner = drive.manifest?.sourceID
+        let expectedGeneration = drive.manifest?.generationNumber
+        let expectedDevice = drive.manifest?.deviceId
+        let expectedRevision = appliedLibraryRevision
+        let draft = selectionDraft(for: drive)
+        let draftKey = selectionDraftKey(for: drive)
+        let previousDeckhand = expectedOwner?.hasPrefix("deckhand:") == true
+        let cache = cache
+        pendingSourceEdits += 1
+        associatingUSB = true
+        usbAssociationError = nil
+        defer { pendingSourceEdits -= 1; associatingUSB = false }
+        do {
+            // An older local library needs audio continuity proof as well as IDs. Only the USB's saved
+            // tracks are checked, on explicit association; opening the library never hashes all music.
+            if previousDeckhand, let saved = drive.manifest {
+                try await Task.detached {
+                    guard let cache else { throw DeckhandLibraryError.invalid("Couldn't check this USB's music. Try again.") }
+                    for (trackID, record) in saved.tracks {
+                        guard let track = library.tracks[trackID], let location = track.location,
+                              (try? cache.contentHash(of: location)) == record.contentHash else {
+                            throw DeckhandLibraryError.invalid("Couldn't verify “\(library.tracks[trackID]?.title ?? trackID)” against the USB. Its audio is unavailable or doesn't match. The USB was unchanged; restore the matching file and try again.")
+                        }
+                    }
+                }.value
+            }
+            guard appliedLibraryRevision == expectedRevision else {
+                throw DeckhandLibraryError.invalid("Your library changed while checking this USB. Review its changes again.")
+            }
+            let manifest = try await Task.detached {
+                try Manifest.edit(on: drive.volume) { manifest in
+                    guard manifest.sourceID == expectedOwner, manifest.deviceId == expectedDevice,
+                          manifest.generationNumber == expectedGeneration, manifest.canAdoptLibrary(library) else {
+                        throw DeckhandLibraryError.invalid("This USB changed while you were reviewing it. Review its changes again.")
+                    }
+                    manifest.sourceID = id
+                    manifest.format = Manifest.currentFormat
+                    if let draft {
+                        manifest.selectedPlaylistIds = draft.playlistIDs
+                        manifest.entireLibrary = draft.entireLibrary
+                    }
+                }
+            }.value
+            if let draftKey { defaults.removeObject(forKey: draftKey) }
+            setManifest(manifest, for: drive.id)
+            if showNotice { flash("\(drive.volume.name) is ready. Its playlist selection was kept.") }
+        } catch {
+            usbAssociationError = error.localizedDescription
+            flash("Couldn't use this library: \(error.localizedDescription)")
+            await refreshDrive(drive.id)
+        }
+    }
 
     private(set) var rows: [String: TrackRow] = [:] { didSet { contentVersion &+= 1 } }
     /// Library order: newest first.
@@ -132,24 +319,24 @@ final class LibraryModel {
             guard activeDriveId != oldValue else { return }
             statusStore.reset()
             publishStatus()
-            if let name = activeDrive?.volume.name { UserDefaults.standard.set(name, forKey: "activeDrive") }
+            if let name = activeDrive?.volume.name { defaults.set(name, forKey: "activeDrive") }
             evaluateStatus()
         }
     }
-    var selection: SidebarItem? = LibraryModel.savedSelection {
+    var selection: SidebarItem? = .all {
         didSet {
             let value: String? = switch selection {
             case .playlist(let id): id
             case .needsAnalysis: "needsAnalysis"
             default: nil
             }
-            UserDefaults.standard.set(value, forKey: "selection")
+            defaults.set(value, forKey: "selection")
             Log.info("ui", "Selected \(title)")
         }
     }
 
-    private static var savedSelection: SidebarItem {
-        switch UserDefaults.standard.string(forKey: "selection") {
+    private static func savedSelection(in defaults: UserDefaults) -> SidebarItem {
+        switch defaults.string(forKey: "selection") {
         case nil: .all
         case "needsAnalysis": .needsAnalysis
         case "suggestions": .all   // a sidebar item that no longer exists
@@ -159,18 +346,33 @@ final class LibraryModel {
     var filter = TrackFilter()
     var sort: TrackSort?
 
-    /// The library as the engine sees it: iTunesLibrary's snapshot, Music's live fields and ratings still being
-    /// written. Sync status is evaluated from this; rows show the same values.
+    /// The saved Deckhand library shared by the UI, analysis, and USB sync.
     @ObservationIgnored private var library: SourceLibrary?
     /// Every Apple Event the app sends goes through this one serial queue.
     @ObservationIgnored private var bridge: MusicBridge!
-    @ObservationIgnored private var ratings = RatingOverlay()
     @ObservationIgnored private var driveReads = ReadLedger()
 
-    init() {
-        bridge = MusicBridge { [weak self] result in
-            DispatchQueue.main.async { MainActor.assumeIsolated { self?.ratingFinished(result) } }
+    init(libraryDirectory: URL = DeckhandLibraryStore.defaultDirectory,
+         legacyDirectory: URL? = nil, defaults: UserDefaults = .standard,
+         observesChanges: Bool = true, cache: AnalysisCache? = try? AnalysisCache(),
+         musicImport: (@Sendable () async throws -> SourceLibrary)? = nil,
+         driveReader: (@Sendable () -> [Drive])? = nil) {
+        self.cache = cache
+        self.libraryDirectory = libraryDirectory
+        self.legacyDirectory = legacyDirectory ?? (ProcessInfo.processInfo.environment["DECKHAND_LIBRARY_DIR"] == nil
+            ? LocalLibraryStore.directory : libraryDirectory.appendingPathComponent("LegacyLibraries"))
+        self.defaults = defaults
+        self.observesChanges = observesChanges
+        self.musicImport = musicImport
+        self.driveReader = driveReader
+        if let data = defaults.data(forKey: "librarySources") {
+            recentSources = (try? JSONDecoder().decode([SourceConnection].self, from: data)) ?? []
         }
+        selection = Self.savedSelection(in: defaults)
+        recentPlaylistIds = defaults.stringArray(forKey: "recentPlaylists") ?? []
+        collapsedPlaylistFolders = Set(defaults.stringArray(forKey: folderExpansionKey) ?? [])
+        snoozes = defaults.dictionary(forKey: "reviewSnoozes") as? [String: Double] ?? [:]
+        bridge = MusicBridge { _ in } // Import reads only; local edits never enqueue Music writes.
     }
 
     var activeDrive: Drive? { drives.first { $0.id == activeDriveId } }
@@ -188,86 +390,247 @@ final class LibraryModel {
 
     /// Progress of the first library read; the track list shows a loading panel until `.loaded`.
     private(set) var loadState = LoadState.loading
+    enum StartupScreen: Equatable {
+        case loading, sourceChooser, workspace
+        case failed(String)
+    }
+
+    /// An unopened library is unknown, not a first launch. Wait for the saved-library read before onboarding.
+    var startupScreen: StartupScreen {
+        switch loadState {
+        case .loading, .slow: .loading
+        case .failed(let error): .failed(error)
+        case .loaded: hasLibrary ? .workspace : .sourceChooser
+        }
+    }
     /// Whether Music could be read live on the last library read.
     private(set) var live = LiveState.unknown
 
     func load() async {
-        refreshDrives()
-        observeMounts()
-        observeMusic()
-        await readLibrary()
-    }
-
-    /// Reads the Apple Music library (again, after a failure: the loading panel's Try Again).
-    func readLibrary() async {
-        loadState = .loading
-        let attempt = UUID()
-        loadAttempt = attempt
-        Task {
-            try? await Task.sleep(for: .seconds(10))
-            if loadAttempt == attempt, loadState == .loading { loadState = .slow }
-        }
+        if observesChanges { refreshDrives(); observeMounts() }
         do {
-            try await reloadLibrary("launch")
+            localStore = try DeckhandLibraryStore(directory: libraryDirectory)
+            if !CommandLine.arguments.contains("--choose-source") {
+                try await localStore?.migrateLegacy(recentSources, directory: legacyDirectory)
+            }
+            if let snapshot = await localStore?.snapshot(checkAvailability: true) { applyLocal(snapshot) }
+            if CommandLine.arguments.contains("--choose-source"), hasLibrary { choosingSource = true }
         } catch {
-            loadState = .failed("\(error)")
-            Log.error("library", "Couldn't read Apple Music: \(error)")
-            return
+            loadState = .failed(error.localizedDescription)
+            sourceError = error.localizedDescription
         }
-        backUpRatings()
     }
 
-    @ObservationIgnored private var reloading = false
-    @ObservationIgnored private var reloadAgain = false
-    @ObservationIgnored private var reloadWaiters: [CheckedContinuation<Void, Never>] = []
+    func retryLoad() async {
+        await closeLibrary()
+        loadState = .loading
+        sourceError = nil
+        await load()
+    }
 
-    /// Reads Apple Music again: iTunesLibrary's snapshot, then Music's live fields (behind any rating writes still
-    /// queued). Returns once a read begun after the call has been applied; calls during a read share the next one.
+    func startEmptyLibrary() async {
+        guard let localStore, sourceCanChange else { return }
+        do { applyLocal(try await localStore.startEmpty()); choosingSource = false }
+        catch { flash(error.localizedDescription) }
+    }
+
+    func disconnectSource() async {
+        guard let localStore, sourceCanChange else { return }
+        scheduledReload?.cancel()
+        do { applyLocal(try await localStore.disconnectSource()) }
+        catch { flash(error.localizedDescription) }
+    }
+
+    /// Changing the update default never imports again or changes the saved library.
+    func setPrimaryImport(_ id: String?) async {
+        guard let localStore, sourceCanChange else { return }
+        do { applyLocal(try await localStore.selectSource(id)) }
+        catch { flash("Couldn't change the default import: \(error.localizedDescription)") }
+    }
+
+    func removeImport(_ id: String) async {
+        guard let localStore, sourceCanChange else { return }
+        do { applyLocal(try await localStore.removeConnection(id)) }
+        catch { flash("Couldn't remove the import connection: \(error.localizedDescription)") }
+    }
+
+    /// Test teardown releases the single-writer lock before reopening the same library.
+    func closeLibrary() async { scheduledReload?.cancel(); await localStore?.close(); localStore = nil }
+
+    /// Selecting a folder/XML never imports files into Music or modifies the source file.
+    func chooseSource(_ kind: SourceConnection.Kind) {
+        guard sourceCanChange else { flash("Wait for the current operation to finish before importing music"); return }
+        if kind == .music { Task { await connect(SourceConnection(kind: .music)) }; return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = kind == .folder
+        panel.canChooseFiles = kind == .rekordbox
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Add Music"
+        panel.message = kind == .folder ? "Audio files stay in this folder. Playlists and ratings are saved in Deckhand."
+            : "In Rekordbox, choose File → Export Collection in xml format, then select that XML file."
+        if kind == .rekordbox { panel.allowedContentTypes = [.xml] }
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url, let self else { return }
+            let connection = self.recentSources.first { $0.kind == kind && $0.location == url.standardizedFileURL }
+                ?? SourceConnection(kind: kind, location: url)
+            Task { await self.connect(connection) }
+        }
+    }
+
+    func connect(_ connection: SourceConnection, makePrimary: Bool? = nil) async {
+        guard sourceCanChange, let localStore else { return }
+        let setPrimary = makePrimary ?? (source?.id == connection.id || importConnections.allSatisfy { $0.lastImported == nil })
+        connectingSource = true
+        scheduledReload?.cancel()
+        sourceError = nil
+        defer { connectingSource = false }
+        do {
+            let snapshot: DeckhandLibrarySnapshot
+            if connection.kind == .music {
+                let imported: SourceLibrary
+                if let musicImport { imported = try await musicImport() }
+                else {
+                    var read = try await Task.detached { try AppleMusicLibrary.load(allSongs: true) }.value
+                    let liveRead = await readLive()
+                    if let fields = liveRead.fields { MusicLive.overlay(fields, onto: &read) }
+                    live = liveRead.state
+                    imported = read
+                }
+                snapshot = try await localStore.importLibrary(imported, from: connection, makePrimary: setPrimary)
+            } else { snapshot = try await localStore.refresh(connection, makePrimary: setPrimary) }
+            applyLocal(snapshot)
+            choosingSource = false
+        } catch {
+            try? await localStore.recordFailure(connection, error: error.localizedDescription)
+            applyLocal(await localStore.snapshot(checkAvailability: true))
+            sourceError = "Couldn't import \(connection.name): \(error.localizedDescription). Your Deckhand playlists are still saved."
+            if !hasLibrary { loadState = .loaded }
+            Log.error("library", sourceError ?? error.localizedDescription)
+        }
+    }
+
+    /// Import history names the exact input; re-importing never relies on an update default.
+    func reimport(_ connection: SourceConnection) async {
+        await connect(connection, makePrimary: false)
+    }
+
+    /// The one-time confirmation verifies ownership before continuing the requested sync.
+    func syncWithCurrentLibrary(_ drive: Drive) async {
+        await adoptDrive(drive, showNotice: false)
+        guard let current = activeDrive, current.id == drive.id,
+              driveMatchesSource(current), usbAssociationError == nil else { return }
+        showingUSBChanges = false
+        if !usbIsUpToDate { requestSync() }
+    }
+
+    /// The same primary action handles a new USB, a legacy USB, and everyday syncing.
+    func requestSync() {
+        guard let drive = activeDrive, sourceAvailable, sourceCanChange else { return }
+        if driveMatchesSource(drive) {
+            if wouldClearUSB { showingUSBChanges = true } else { sync(drive) }
+        }
+        else if canAdoptDrive(drive) { showingUSBChanges = true }
+        else { showingUSBConnection = true }
+    }
+
+    func initializeDrive(_ drive: Drive) {
+        guard sourceAvailable, sourceCanChange, drive.manifest == nil, drive.readError == nil, !drive.isReading else { return }
+        job.run("Setting up \(drive.volume.name)", ["init", drive.volume.url.path]) { [weak self] ok in
+            guard let self else { return }
+            if ok {
+                self.showingUSBConnection = false
+                Task { await self.refreshDrive(drive.id) }
+                self.flash("Check the playlists you want on USB in the sidebar, then Sync.")
+            }
+        }
+    }
+
+    func exportRekordbox(sourceID: String? = nil) {
+        guard let localStore, sourceAvailable, pendingSourceEdits == 0 else { return }
+        guard let id = sourceID ?? connections.first(where: { $0.connection.kind == .rekordbox })?.id else { return }
+        Task {
+            do {
+                let export = try await localStore.rekordboxExport(for: id)
+                let panel = NSSavePanel()
+                panel.allowedContentTypes = [.xml]
+                panel.nameFieldStringValue = "Deckhand.xml"
+                panel.message = "Export your Deckhand library. Select the saved XML as the Imported Library in Rekordbox."
+                panel.begin { [weak self] response in
+                    guard response == .OK, let destination = panel.url else { return }
+                    Task {
+                        do {
+                            try await Task.detached { try export.write(to: destination) }.value
+                            self?.flash("Exported Deckhand playlists to XML. Import the XML playlists in Rekordbox.")
+                        } catch { self?.flash("Couldn't export playlists: \(error.localizedDescription)") }
+                    }
+                }
+            } catch { flash(error.localizedDescription) }
+        }
+    }
+
+    func exportMusic(playlistIDs: [String], includeRatings: Bool = false, destination: any MusicDestination = AppleMusicDestination()) async {
+        guard let localStore, sourceAvailable, sourceCanChange else { return }
+        exportingMusic = true
+        musicExportResult = nil
+        defer { exportingMusic = false }
+        do {
+            var plan = try await localStore.musicExport(playlistIDs: playlistIDs)
+            if !includeRatings { plan.ratingIDs = [] }
+            _ = try await MusicExport.execute(plan, destination: destination) { receipt in
+                try await localStore.saveMusicReceipt(receipt)
+            }
+            musicExportResult = "Saved \(plan.playlists.count) playlist(s) to the Deckhand folder in Music."
+        } catch { musicExportResult = "Music export stopped: \(error.localizedDescription)" }
+    }
+
+    private func sourceArguments() throws -> [String] {
+        guard sourceAvailable, let library else { throw LibrarySourceError.unavailable("Reconnect your library before continuing.") }
+        guard pendingSourceEdits == 0 else { throw LibrarySourceError.unavailable("Wait for playlist and rating changes to finish saving.") }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("deckhand-source-\(UUID().uuidString).json")
+        try JSONEncoder().encode(library).write(to: url, options: .atomic)
+        return ["--source-library", url.path]
+    }
+
+    private func removeSnapshot(_ args: [String]) {
+        if args.count == 2 { try? FileManager.default.removeItem(atPath: args[1]) }
+    }
+
+    /// Reads the saved library only. External changes arrive through Add Music or an explicit re-import.
+    func readLibrary() async {
+        guard sourceCanChange else { return }
+        if let snapshot = await localStore?.snapshot(checkAvailability: true) { applyLocal(snapshot) }
+    }
+
+    func chooseAudioFile(for issue: UnavailableAudioIssue, completion: @escaping (String?) -> Void) {
+        guard sourceCanChange else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = ["mp3", "m4a", "mp4", "aac", "wav", "aif", "aiff", "flac"].compactMap { UTType(filenameExtension: $0) }
+        panel.prompt = "Use Audio File"
+        panel.message = "Choose the audio for “\(issue.track.title)”. Its playlists and rating will be kept."
+        if let url = issue.track.location { panel.directoryURL = url.deletingLastPathComponent() }
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url, let self else { return }
+            Task {
+                do { try await self.locateAudioFile(for: issue.id, at: url); completion(nil) }
+                catch { completion(error.localizedDescription) }
+            }
+        }
+    }
+
+    func locateAudioFile(for id: String, at url: URL) async throws {
+        guard sourceCanChange, let localStore else { throw DeckhandLibraryError.invalid("Wait for the current operation to finish.") }
+        pendingSourceEdits += 1
+        defer { pendingSourceEdits -= 1 }
+        let snapshot = try await localStore.locateAudioFile(for: id, at: url)
+        noteEdit()
+        applyLocal(snapshot)
+    }
+
     func reloadLibrary(_ reason: String) async throws {
-        if reloading {
-            reloadAgain = true
-            await withCheckedContinuation { reloadWaiters.append($0) }
-            return
-        }
-        reloading = true
-        defer {
-            // Also after a failed read: nobody may be left waiting.
-            reloading = false
-            reloadAgain = false
-            let rest = reloadWaiters
-            reloadWaiters = []
-            rest.forEach { $0.resume() }
-        }
-        repeat {
-            reloadAgain = false
-            let waiters = reloadWaiters
-            reloadWaiters = []
-            defer { waiters.forEach { $0.resume() } }
-            try await readMusic(reason)
-        } while reloadAgain
-    }
-
-    /// One library read, applied. Touches nothing on the main thread when nothing changed.
-    private func readMusic(_ reason: String) async throws {
-        let start = Date()
-        let snapshot = try await Task.detached { try AppleMusicLibrary.load(allSongs: true) }.value
-        let snapshotMs = Int(Date().timeIntervalSince(start) * 1000)
-        let read = await readLive()
-        let (lib, signature) = await Task.detached { () -> (SourceLibrary, Int) in
-            var lib = snapshot
-            if let fields = read.fields { MusicLive.overlay(fields, onto: &lib) }
-            return (lib, Self.signature(of: lib))
-        }.value
-        var merged = lib
-        ratings.apply(to: &merged, readAt: read.sequence)
-        if live != read.state { live = read.state }
-        let total = Int(Date().timeIntervalSince(start) * 1000)
-        if !ratings.isEmpty || signature != librarySignature || library == nil {
-            await apply(merged, signature: signature)
-            Log.info("library", "Read Apple Music (\(reason)): \(lib.tracks.count) tracks in \(total) ms (snapshot \(snapshotMs) ms, live: \(read.state))")
-        } else {
-            Log.info("library", "Apple Music unchanged (\(reason), checked in \(total) ms, live: \(read.state))")
-        }
+        // USB status and execution use the saved Deckhand library, never an implicit external import.
+        if let snapshot = await localStore?.snapshot(checkAvailability: true) { applyLocal(snapshot) }
     }
 
     @ObservationIgnored private var askingAccess = false
@@ -307,46 +670,10 @@ final class LibraryModel {
         }
     }
 
-    @ObservationIgnored private var librarySignature: Int?
-
-    nonisolated private static func signature(of lib: SourceLibrary) -> Int {
-        var h = Hasher()
-        h.combine(lib.tracks)
-        h.combine(lib.playlists)
-        h.combine(lib.allTrackIds)
-        return h.finalize()
-    }
-
-    /// Builds rows off the main thread; only assigns them on it.
-    private func apply(_ lib: SourceLibrary, signature: Int) async {
-        let start = Date()
-        let snapshot = rows, version = contentVersion
-        var merged = await Task.detached { Self.merge(lib, into: snapshot) }.value
-        // Ratings set meanwhile stay shown.
-        var lib = lib
-        ratings.apply(to: &lib, readAt: nil)
-        // Rows changed meanwhile (analysis loaded, a rating set): merge into the current ones instead.
-        if contentVersion != version { merged = Self.merge(lib, into: rows) }
-        Log.measure("library", "Assigning rows") {
-            if merged.changed { rows = merged.rows }
-            if allIds != merged.allIds { allIds = merged.allIds }
-            let named = Self.demoNamed(lib.playlists)
-            if playlists != named { playlists = named }
-            artwork = lib.artwork
-            loadState = .loaded
-        }
-        library = lib
-        librarySignature = signature
-        if merged.changed { rehashTried.removeAll() }
-        Log.info("library", "Applied Apple Music in \(Int(Date().timeIntervalSince(start) * 1000)) ms\(merged.changed ? "" : " (rows unchanged)")")
-        evaluateStatus()
-        if rows.values.contains(where: { !$0.checked }) { Task { await loadAnalysis() } }
-    }
-
     nonisolated private static func merge(_ lib: SourceLibrary, into old: [String: TrackRow])
         -> (rows: [String: TrackRow], allIds: [String], changed: Bool) {
-        var rows = old
-        var changed = false
+        var rows = old.filter { lib.tracks[$0.key]?.location != nil }
+        var changed = rows.count != old.count
         for t in lib.tracks.values {
             guard let url = t.location else { continue }
             if var row = rows[t.id] {
@@ -356,10 +683,17 @@ final class LibraryModel {
                 row.title = t.title
                 row.artist = t.artist ?? ""
                 row.genre = t.genre ?? ""
+                row.duration = t.durationSeconds ?? 0
                 // A moved or rewritten file (Music rewrites tags) has a new hash key: hash it again.
                 if fileChanged {
                     row.location = url
                     row.checked = false
+                    row.hash = nil
+                    row.analyzed = false
+                    row.bpm = nil
+                    row.key = nil
+                    row.energy = nil
+                    row.overview = nil
                 }
                 if rows[t.id] != row { rows[t.id] = row; changed = true }
                 continue
@@ -388,14 +722,15 @@ final class LibraryModel {
 
     private struct Loaded: Sendable {
         var id: String
+        var location: URL
         var hash: String?
         var analysis: (bpm: Double, key: MusicalKey?, energy: Int?, overview: Overview)?
     }
 
     @ObservationIgnored private var loadingAnalysis = false
 
-    /// Reads each track's cached analysis in the background (hashing files the cache hasn't seen), then evaluates
-    /// sync status again: tracks it hashed were unknown until now.
+    /// Opening the workspace reads cached results only. Audio reads belong to explicit Analyze/Sync actions,
+    /// so a permission prompt or inaccessible file cannot stall all the other cached results at startup.
     private func loadAnalysis() async {
         guard let cache, !loadingAnalysis else { return }
         loadingAnalysis = true
@@ -435,18 +770,18 @@ final class LibraryModel {
     }
 
     nonisolated private static func loadOne(_ id: String, _ url: URL, _ cache: AnalysisCache) -> Loaded {
-        guard let hash = try? cache.contentHash(of: url) else { return Loaded(id: id) }
-        guard let s = cache.summary(forHash: hash) else { return Loaded(id: id, hash: hash) }
+        guard let hash = cache.cachedContentHash(of: url) else { return Loaded(id: id, location: url) }
+        guard let s = cache.summary(forHash: hash) else { return Loaded(id: id, location: url, hash: hash) }
         let overview = Overview(s.overview, bins: AnalysisCache.Summary.overviewBins, cuesMs: s.cuesMs,
                                 durationMs: s.durationSeconds * 1000)
-        return Loaded(id: id, hash: hash, analysis: (s.bpm, s.key, s.energy, overview))
+        return Loaded(id: id, location: url, hash: hash, analysis: (s.bpm, s.key, s.energy, overview))
     }
 
     private func merge(_ batch: [Loaded]) {
         guard !batch.isEmpty else { return }
         var updated = rows
         for r in batch {
-            guard var row = updated[r.id] else { continue }
+            guard var row = updated[r.id], row.location == r.location else { continue }
             row.checked = true
             row.hash = r.hash
             row.analyzed = r.analysis != nil
@@ -467,7 +802,10 @@ final class LibraryModel {
     /// Runs `deckhand analyze` for the whole library, then reloads what it produced.
     func analyzeLibrary() {
         guard !job.running else { flash("Wait for \(job.title.lowercased()) to finish"); return }
-        job.run("Analyzing library", ["analyze"]) { [weak self] _ in
+        let args: [String]
+        do { args = try sourceArguments() } catch { flash(error.localizedDescription); return }
+        job.run("Analyzing library", ["analyze"] + args) { [weak self] _ in
+            self?.removeSnapshot(args)
             let cache = self?.cache
             Task {
                 await Task.detached { cache?.reloadFromDisk() }.value
@@ -501,11 +839,12 @@ final class LibraryModel {
 
     /// What a sync would change on the active drive; nil while it's being checked (and without a Deckhand drive).
     var driveStatus: DriveStatus? {
-        guard let s = shownStatus, s.driveId == activeDriveId, activeDrive?.manifest != nil else { return nil }
+        guard let s = shownStatus, s.driveId == activeDriveId, let drive = activeDrive,
+              drive.manifest != nil, canPreviewDrive(drive) else { return nil }
         return s
     }
     /// The active drive's status hasn't been evaluated yet ("Checking…").
-    var checkingStatus: Bool { activeDrive?.manifest != nil && driveStatus == nil }
+    var checkingStatus: Bool { activeDrive.map { canPreviewDrive($0) && driveStatus == nil } ?? false }
     /// A note about the last sync, shown above the track list until dismissed.
     var syncNotice: SyncNotice?
 
@@ -521,7 +860,7 @@ final class LibraryModel {
             evaluateAgain = true
             return
         }
-        guard let cache, let library, let drive = activeDrive, let manifest = drive.manifest, let probe = drive.probe else {
+        guard sourceAvailable, let cache, let library, let drive = activeDrive, canPreviewDrive(drive), var manifest = drive.manifest, let probe = drive.probe else {
             // Nothing to evaluate: don't leave a sync's verification holding back later results.
             if verifyNext, statusStore.awaitingVerification {
                 statusStore.reset()
@@ -531,6 +870,7 @@ final class LibraryModel {
             verifyNext = false
             return
         }
+        if !driveMatchesSource(drive) { manifest.sourceID = libraryID }
         let verifying = verifyNext
         verifyNext = false
         let request = verifying ? statusStore.beginVerification() : statusStore.begin()
@@ -603,11 +943,12 @@ final class LibraryModel {
     // MARK: Syncing
 
     /// Syncs a drive in the background (analyzing anything not yet analyzed), then reads everything again.
-    /// `requireLive`: stop if Music is running but can't be read live (the default); the app offers to sync anyway.
-    func sync(_ drive: Drive, requireLive: Bool = true) {
+    func sync(_ drive: Drive) {
         guard !job.running, !startingSync else { flash("Wait for \(job.title.lowercased()) to finish"); return }
+        guard pendingSourceEdits == 0 else { flash("Wait for playlist and rating changes to finish saving"); return }
+        guard driveMatchesSource(drive) else { flash(sourceAvailable ? SyncError.sourceMismatch.description : "Reconnect your library before syncing"); return }
         guard drive.canSync else {
-            flash("Add a playlist to \(drive.volume.name) first (hover it in the sidebar and click Add)")
+            flash("Check a playlist in the sidebar to include it on \(drive.volume.name)")
             return
         }
         syncNotice = nil
@@ -617,19 +958,24 @@ final class LibraryModel {
         startingSync = true
         Task {
             // Ratings still being written go first, so the sync reads them.
-            if bridge.hasQueuedRatings { status = "Saving ratings to Music…" }
-            await bridge.drain()
-            if status == "Saving ratings to Music…" { status = nil }
-            startingSync = false
+            defer { startingSync = false }
             guard !job.running else {
                 flash("Wait for \(job.title.lowercased()) to finish")
                 endSyncFlow()
                 return
             }
             var args = ["sync", drive.volume.url.path, "-y", "--analyze"]
-            if requireLive { args.append("--require-live") }
+            let sourceArgs: [String]
+            do {
+                try await reloadLibrary("before syncing")
+                sourceArgs = try sourceArguments()
+            } catch { flash("Couldn't read source: \(error.localizedDescription)"); endSyncFlow(); return }
+            args += sourceArgs
             syncingDriveId = drive.id
-            job.run("Syncing \(drive.volume.name)", args) { [weak self] ok in self?.syncFinished(drive, ok: ok) }
+            job.run("Syncing \(drive.volume.name)", args, kind: .sync(driveID: drive.id, driveName: drive.volume.name)) { [weak self] ok in
+                self?.removeSnapshot(sourceArgs)
+                self?.syncFinished(drive, ok: ok)
+            }
         }
     }
 
@@ -657,10 +1003,7 @@ final class LibraryModel {
     private func syncFinished(_ drive: Drive, ok: Bool) {
         syncingDriveId = nil
         let serial = syncSerial
-        // With `--require-live`, the CLI stops before writing when Music is running but can't be read.
-        let stale = job.liveWarning
-        if let stale { syncNotice = .staleLibrary(driveId: drive.id, drive: drive.volume.name, reason: stale.reason) }
-        let verifying = stale == nil && drive.id == activeDriveId
+        let verifying = drive.id == activeDriveId
         if verifying {
             statusStore.syncFinished(driveId: drive.id, report: job.report)
             publishStatus()
@@ -673,10 +1016,6 @@ final class LibraryModel {
         Task {
             if !edits.isEmpty { await write(edits, to: drive) }
             await Task.detached { cache?.reloadFromDisk() }.value
-            guard stale == nil else {
-                endSyncFlow()
-                return
-            }
             async let reloaded: Void? = try? reloadLibrary("after syncing")
             async let refreshed: Void = refreshDrive(drive.id)
             _ = await (reloaded, refreshed)
@@ -692,9 +1031,18 @@ final class LibraryModel {
 
     // MARK: Sidebar navigation
 
-    /// Sidebar items in the order shown: library items, then playlists (grouped by the active drive when there is one).
+    private(set) var trackFocusRequest = 0
+
+    func focusTrackList() { trackFocusRequest &+= 1 }
+
+    func openSidebarItem(_ item: SidebarItem) {
+        selection = item
+        focusTrackList()
+    }
+
+    /// Sidebar order stays the same regardless of USB selection or connection.
     var sidebarOrder: [SidebarItem] {
-        let entries = drivePlaylistGroups.map { $0.on + $0.off } ?? playlistEntries
+        let entries = playlistEntries
         var seen = Set<String>()
         return [.all, .needsAnalysis] + entries.filter { seen.insert($0.id).inserted }.map { .playlist($0.id) }
     }
@@ -710,27 +1058,18 @@ final class LibraryModel {
     // MARK: Drive selection
 
     /// Whether the active drive holds every song (not only those in its playlists).
-    var entireLibraryOnDrive: Bool { activeDrive?.manifest?.entireLibrary == true }
+    var entireLibraryOnDrive: Bool { activeDrive.map { canPreviewDrive($0) && $0.manifest?.entireLibrary == true } ?? false }
 
     /// Whether a playlist is on the active drive; a folder is when all the playlists in it are.
     func isOnDrive(_ p: SourcePlaylist) -> Bool {
-        guard let m = activeDrive?.manifest else { return false }
+        guard let drive = activeDrive, canPreviewDrive(drive), let m = drive.manifest else { return false }
         let leaves = leafPlaylistIds(of: p)
         return !leaves.isEmpty && Set(leaves).isSubset(of: m.selectedPlaylistIds)
     }
 
-    /// Sidebar playlists split by whether they're on the active drive. A folder shows in a group when any playlist
-    /// inside it does. Nil without a Deckhand drive.
-    var drivePlaylistGroups: (on: [PlaylistEntry], off: [PlaylistEntry])? {
-        guard let m = activeDrive?.manifest else { return nil }
-        var on: [PlaylistEntry] = [], off: [PlaylistEntry] = []
-        for e in playlistEntries {
-            let leaves = leafPlaylistIds(of: e.playlist)
-            let onCount = leaves.filter(m.selectedPlaylistIds.contains).count
-            if onCount > 0 { on.append(e) }
-            if onCount < leaves.count || (e.playlist.isFolder && leaves.isEmpty) { off.append(e) }
-        }
-        return (on, off)
+    func hasAnyPlaylistOnDrive(_ p: SourcePlaylist) -> Bool {
+        guard let drive = activeDrive, canPreviewDrive(drive), let m = drive.manifest else { return false }
+        return leafPlaylistIds(of: p).contains(where: m.selectedPlaylistIds.contains)
     }
 
     private func leafPlaylistIds(of p: SourcePlaylist) -> [String] {
@@ -757,13 +1096,52 @@ final class LibraryModel {
 
     typealias SelectionEdit = @Sendable (inout Manifest) -> Void
 
+    /// Choices for a USB from an earlier library stay on this computer until the user links it.
+    /// Keyed by this library and the USB's stable device identity, so a remount or restart keeps them.
+    private struct USBSelectionDraft: Codable, Sendable {
+        var owner: String?
+        var playlistIDs: [String]
+        var entireLibrary: Bool
+    }
+
+    private func selectionDraftKey(for drive: Drive) -> String? {
+        guard let libraryID, let manifest = drive.manifest else { return nil }
+        return "usbSelectionDraft:\(libraryID):\(manifest.deviceId)"
+    }
+
+    private func selectionDraft(for drive: Drive) -> USBSelectionDraft? {
+        guard let key = selectionDraftKey(for: drive), let data = defaults.data(forKey: key),
+              let draft = try? JSONDecoder().decode(USBSelectionDraft.self, from: data),
+              draft.owner == drive.manifest?.sourceID else { return nil }
+        return draft
+    }
+
     /// Selection edits made while the app's sync holds a drive, saved when it finishes.
     @ObservationIgnored private var queuedEdits: [String: [SelectionEdit]] = [:]
 
     /// Applies a selection edit: shown right away, saved to the drive's newest manifest with `Manifest.edit`, then the
     /// view takes what was saved. While this app syncs the drive the edit waits for the sync (the CLI holds its lock).
     private func updateSelection(_ change: @escaping SelectionEdit) {
+        guard !associatingUSB else { return }
         guard let drive = activeDrive, var m = drive.manifest else { return }
+        guard driveMatchesSource(drive) else {
+            guard canAdoptDrive(drive), let key = selectionDraftKey(for: drive) else { return }
+            change(&m)
+            let draft = USBSelectionDraft(owner: m.sourceID, playlistIDs: m.selectedPlaylistIds,
+                                          entireLibrary: m.entireLibrary == true)
+            guard let data = try? JSONEncoder().encode(draft) else { return }
+            defaults.set(data, forKey: key)
+            setManifest(m, for: drive.id)
+            noteEdit()
+            return
+        }
+        let sourceID = libraryID ?? "deckhand"
+        let originalChange = change
+        let change: SelectionEdit = { m in
+            m.sourceID = sourceID
+            m.format = Manifest.currentFormat
+            originalChange(&m)
+        }
         change(&m)
         setManifest(m, for: drive.id)
         noteEdit()
@@ -772,13 +1150,17 @@ final class LibraryModel {
             flash("Saved to \(drive.volume.name) when the sync finishes")
             return
         }
-        Task { await write([change], to: drive) }
+        Task { await write([change], to: drive, expectedSource: sourceID) }
     }
 
-    private func write(_ edits: [SelectionEdit], to drive: Drive) async {
+    private func write(_ edits: [SelectionEdit], to drive: Drive, expectedSource: String? = nil) async {
         let volume = drive.volume
+        let expectedSource = expectedSource ?? libraryID
         let result: Result<Manifest, Error> = await Task.detached {
-            Result { try Manifest.edit(on: volume) { m in edits.forEach { $0(&m) } } }
+            Result { try Manifest.edit(on: volume) { m in
+                guard m.acceptsSource(expectedSource) else { throw SyncError.sourceMismatch }
+                edits.forEach { $0(&m) }
+            } }
         }.value
         switch result {
         case .success(let m):
@@ -811,9 +1193,17 @@ final class LibraryModel {
         let token = driveReads.begin()
         Task {
             let start = Date()
-            let found = await Task.detached { Volume.removable().map(Drive.read) }.value
+            let reader = driveReader
+            // Publish mounted volumes first. A slow manifest or permission prompt on one USB
+            // mustn't hide every other drive; each detailed read applies independently.
+            let found = await Task.detached {
+                reader?() ?? Volume.removable().filter { !$0.isReadOnly }.map { Drive(volume: $0, isReading: true) }
+            }.value
             Log.info("drives", "Read \(found.count) drive(s) in \(Int(Date().timeIntervalSince(start) * 1000)) ms")
             setDrives(found, token: token)
+            if reader == nil {
+                for drive in found { Task { await self.refreshDrive(drive.id) } }
+            }
         }
     }
 
@@ -821,8 +1211,22 @@ final class LibraryModel {
     func refreshDrive(_ id: String) async {
         guard let volume = drives.first(where: { $0.id == id })?.volume else { return }
         let token = driveReads.begin()
-        let drive = await Task.detached { (try? Volume(url: volume.url)).map(Drive.read) }.value
-        guard let drive, let i = drives.firstIndex(where: { $0.id == id }), let d = merged(drive, onto: drives[i], token: token) else { return }
+        let reader = driveReader
+        let drive = await Task.detached {
+            if let reader { return reader().first { $0.id == id } }
+            return (try? Volume(url: volume.url)).map(Drive.read)
+        }.value
+        guard let drive else {
+            if let i = drives.firstIndex(where: { $0.id == id }), driveReads.accept(id, token) {
+                drives[i].isReading = false
+                drives[i].readError = "This USB is no longer available. Reconnect it and try again."
+                drives[i].manifest = nil
+                drives[i].probe = nil
+                evaluateStatus()
+            }
+            return
+        }
+        guard let i = drives.firstIndex(where: { $0.id == id }), let d = merged(drive, onto: drives[i], token: token) else { return }
         drives[i] = d
         if id == activeDriveId { evaluateStatus() }
     }
@@ -839,8 +1243,8 @@ final class LibraryModel {
         }
         drives = next
         if activeDrive == nil {
-            let saved = UserDefaults.standard.string(forKey: "activeDrive")
-            activeDriveId = (drives.first { $0.manifest != nil && $0.volume.name == saved } ?? drives.first { $0.manifest != nil })?.id
+            let saved = defaults.string(forKey: "activeDrive")
+            activeDriveId = (drives.first { $0.volume.name == saved } ?? drives.first { $0.manifest != nil } ?? drives.first)?.id
         }
         evaluateStatus()
     }
@@ -856,14 +1260,21 @@ final class LibraryModel {
             d.volume = read.volume
             d.probe = read.probe
         }
-        if manifest { d.manifest = withQueuedEdits(read).manifest }
+        if manifest, !read.isReading { d.manifest = withQueuedEdits(read).manifest }
+        if read.isReading, let current { d.manifest = current.manifest; d.probe = current.probe }
+        d.isReading = read.isReading && d.manifest == nil
+        if !read.isReading { d.readError = read.readError }
         return d
     }
 
     /// A drive as read, with selection edits still waiting for a sync to finish shown applied.
     private func withQueuedEdits(_ d: Drive) -> Drive {
-        guard var m = d.manifest, let edits = queuedEdits[d.id], !edits.isEmpty else { return d }
-        edits.forEach { $0(&m) }
+        guard var m = d.manifest else { return d }
+        if let draft = selectionDraft(for: d) {
+            m.selectedPlaylistIds = draft.playlistIDs
+            m.entireLibrary = draft.entireLibrary
+        }
+        queuedEdits[d.id]?.forEach { $0(&m) }
         var d = d
         d.manifest = m
         return d
@@ -881,20 +1292,6 @@ final class LibraryModel {
         }
     }
 
-    /// Music's agent posts this when it has applied edits from Music (what iTunesLibrary reads). Bursts are common,
-    /// so reloads are debounced.
-    private func observeMusic() {
-        DistributedNotificationCenter.default().addObserver(
-            forName: Notification.Name("com.apple.AMPLibraryAgent.libraryChanged"), object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.noteEdit()
-                self.scheduleReload("Music changed", after: 1)
-            }
-        }
-    }
-
     @ObservationIgnored private var scheduledReload: Task<Void, Never>?
 
     /// Reloads the library after `delay` seconds, replacing a reload already scheduled.
@@ -904,7 +1301,8 @@ final class LibraryModel {
         scheduledReload = Task { [weak self] in
             try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled else { return }
-            try? await self?.reloadLibrary(reason)
+            await self?.readLibrary()
+
         }
     }
 
@@ -942,13 +1340,136 @@ final class LibraryModel {
 
     // MARK: Playlists
 
+    private(set) var collapsedPlaylistFolders: Set<String> = []
+    private var folderExpansionKey: String { "collapsedPlaylistFolders:\(libraryDirectory.path)" }
+
+    func isFolderExpanded(_ id: String) -> Bool { !collapsedPlaylistFolders.contains(id) }
+
+    func togglePlaylistFolder(_ id: String) {
+        guard playlists.contains(where: { $0.id == id && $0.isFolder }) else { return }
+        if collapsedPlaylistFolders.remove(id) == nil {
+            collapsedPlaylistFolders.insert(id)
+            if case .playlist(let selected) = selection, isPlaylist(selected, inside: id) { selection = .playlist(id) }
+        }
+        defaults.set(collapsedPlaylistFolders.sorted(), forKey: folderExpansionKey)
+    }
+
+    private func isPlaylist(_ id: String, inside folderID: String) -> Bool {
+        var parent = playlists.first { $0.id == id }?.parentId
+        while let current = parent {
+            if current == folderID { return true }
+            parent = playlists.first { $0.id == current }?.parentId
+        }
+        return false
+    }
+
+    func canMovePlaylist(_ id: String, toFolder parentID: String?) -> Bool {
+        guard canEditLibrary, let playlist = playlists.first(where: { $0.id == id }), playlist.parentId != parentID else { return false }
+        guard let parentID else { return true }
+        return playlists.contains { $0.id == parentID && $0.isFolder }
+            && parentID != id && !isPlaylist(parentID, inside: id)
+    }
+
+    /// Only used for immediate hover feedback. A drop always reads and validates its actual payload.
+    var draggedItems: [String] = []
+
+    func playlistDrop(_ items: [String], into targetID: String?, at location: PlaylistDropLocation = .on) -> PlaylistDrop? {
+        guard canEditLibrary else { return nil }
+        let target = targetID.flatMap { id in playlists.first { $0.id == id } }
+        guard targetID == nil || target != nil else { return nil }
+        if location != .on, let target {
+            if location == .before { return playlistInsertion(items, parentID: target.parentId, before: target.id) }
+            if target.isFolder && isFolderExpanded(target.id) {
+                return playlistInsertion(items, parentID: target.id, before: playlists.first { $0.parentId == target.id }?.id)
+            }
+            let siblings = playlists.filter { $0.parentId == target.parentId }
+            let next = siblings.firstIndex(where: { $0.id == target.id }).flatMap { index in
+                index + 1 < siblings.count ? siblings[index + 1].id : nil
+            }
+            return playlistInsertion(items, parentID: target.parentId, before: next)
+        }
+        let sourceID = PlaylistDrag.decode(items)
+        var ids: [String]
+        if let sourceID {
+            guard let source = playlists.first(where: { $0.id == sourceID }), sourceID != targetID else { return nil }
+            if target == nil || target?.isFolder == true {
+                return canMovePlaylist(sourceID, toFolder: targetID) ? .move(sourceID, targetID) : nil
+            }
+            guard !source.isFolder else { return nil }
+            // Keep playlist members even when their audio is temporarily unavailable.
+            ids = source.trackIds
+        } else {
+            ids = TrackDrag.decode(items)
+        }
+        guard let target, !target.isFolder, !ids.isEmpty else { return nil }
+        ids = ids.filter { library?.tracks[$0] != nil }
+        guard !ids.isEmpty else { return nil }
+        var seen = Set(target.trackIds)
+        let additions = ids.filter { seen.insert($0).inserted }
+        return .copy(PlaylistCopy(targetID: target.id, sourceID: sourceID,
+                                  trackIDs: additions, skipped: ids.count - additions.count))
+    }
+
+    func applyPlaylistDrop(_ drop: PlaylistDrop) async {
+        switch drop {
+        case .move(let id, let folder): await movePlaylist(id, toFolder: folder)
+        case .position(let position):
+            guard playlistInsertion([PlaylistDrag.encode(position.playlistID)],
+                                    parentID: position.parentID, before: position.beforeID) != nil else { return }
+            pendingSourceEdits += 1
+            defer { pendingSourceEdits -= 1 }
+            if await editLocal({ try await $0.positionPlaylist(position.playlistID, toFolder: position.parentID, before: position.beforeID) }) {
+                revealPlaylistFolder(position.parentID)
+            }
+        case .copy(let copy):
+            guard !copy.trackIDs.isEmpty,
+                  let target = playlists.first(where: { $0.id == copy.targetID && !$0.isFolder }) else { return }
+            await add(copy.trackIDs, to: target)
+        }
+    }
+
+    func playlistInsertion(_ items: [String], parentID: String?, before anchorID: String?) -> PlaylistDrop? {
+        guard canEditLibrary, let id = PlaylistDrag.decode(items),
+              let source = playlists.first(where: { $0.id == id }), id != parentID,
+              parentID == nil || playlists.contains(where: { $0.id == parentID && $0.isFolder }),
+              parentID.map({ !isPlaylist($0, inside: id) }) ?? true else { return nil }
+        let siblings = playlists.filter { $0.parentId == parentID }.map(\.id)
+        guard anchorID == nil || (anchorID != id && siblings.contains(anchorID!)) else { return nil }
+        var proposed = siblings.filter { $0 != id }
+        let index = anchorID.flatMap { proposed.firstIndex(of: $0) } ?? proposed.endIndex
+        proposed.insert(id, at: index)
+        guard source.parentId != parentID || proposed != siblings else { return nil }
+        return .position(PlaylistPosition(playlistID: id, parentID: parentID, beforeID: anchorID))
+    }
+
+    func movePlaylist(_ id: String, toFolder parentID: String?) async {
+        guard canMovePlaylist(id, toFolder: parentID) else { return }
+        pendingSourceEdits += 1
+        defer { pendingSourceEdits -= 1 }
+        if await editLocal({ try await $0.movePlaylist(id, toFolder: parentID) }) {
+            revealPlaylistFolder(parentID)
+        }
+    }
+
+    private func revealPlaylistFolder(_ parentID: String?) {
+        if let parentID {
+            // Reveal the destination and its ancestors so a successful drop never hides the item.
+            var ancestor: String? = parentID
+            while let current = ancestor {
+                collapsedPlaylistFolders.remove(current)
+                ancestor = playlists.first { $0.id == current }?.parentId
+            }
+            defaults.set(collapsedPlaylistFolders.sorted(), forKey: folderExpansionKey)
+        }
+    }
+
     var playlistEntries: [PlaylistEntry] {
         let byParent = Dictionary(grouping: playlists, by: { $0.parentId ?? "" })
         var out: [PlaylistEntry] = []
         func walk(_ parent: String, _ depth: Int) {
             for p in byParent[parent] ?? [] {
                 out.append(PlaylistEntry(playlist: p, depth: depth))
-                if p.isFolder { walk(p.id, depth + 1) }
+                if p.isFolder, isFolderExpanded(p.id) { walk(p.id, depth + 1) }
             }
         }
         walk("", 0)
@@ -976,166 +1497,64 @@ final class LibraryModel {
         return playlists.filter { $0.parentId == p.id }.flatMap { trackIds(of: $0) }.filter { seen.insert($0).inserted }
     }
 
-    /// Changes a playlist in the rows and in the library sync status is evaluated from (names there stay real in
-    /// demo mode).
-    private func editPlaylist(_ id: String, _ change: (inout SourcePlaylist) -> Void) {
-        noteEdit()
-        if let i = playlists.firstIndex(where: { $0.id == id }) { change(&playlists[i]) }
-        if let i = library?.playlists.firstIndex(where: { $0.id == id }) {
-            let name = library!.playlists[i].name
-            change(&library!.playlists[i])
-            library!.playlists[i].name = name
-        }
-        evaluateStatus()
+    func createPlaylist(named name: String, isFolder: Bool = false) async {
+        guard canEditLibrary else { return }
+        pendingSourceEdits += 1
+        defer { pendingSourceEdits -= 1 }
+        let before = Set(playlists.map(\.id))
+        await editLocal { try await $0.createPlaylist(named: name, isFolder: isFolder) }
+        if let p = playlists.last(where: { !before.contains($0.id) }) { selection = .playlist(p.id) }
     }
 
-    func createPlaylist(named name: String) async {
-        do {
-            let id = try await bridge.run { _ in try AppleMusicWriter.createPlaylist(named: name, isFolder: false, inFolder: nil) }.value
-            let p = SourcePlaylist(id: id, name: name)
-            playlists.append(p)
-            library?.playlists.append(p)
-            selection = .playlist(id)
-            scheduleReload("after creating a playlist", after: 2)
-        } catch {
-            flash("Couldn't create playlist: \(error)")
-        }
-    }
-
-    /// Appends tracks to an Apple Music playlist, skipping ones it already has.
-    func add(_ trackIds: [String], to playlist: SourcePlaylist) async {
-        guard !playlist.isFolder, let index = playlists.firstIndex(where: { $0.id == playlist.id }) else { return }
+    func add(_ trackIDs: [String], to playlist: SourcePlaylist) async {
+        guard canEditLibrary else { return }
+        pendingSourceEdits += 1
+        defer { pendingSourceEdits -= 1 }
+        await editLocal { try await $0.add(trackIDs: trackIDs, to: playlist.id) }
         recentPlaylistIds = [playlist.id] + recentPlaylistIds.filter { $0 != playlist.id }.prefix(9)
-        UserDefaults.standard.set(recentPlaylistIds, forKey: "recentPlaylists")
-        var seen = Set(playlists[index].trackIds)
-        let fresh = trackIds.filter { seen.insert($0).inserted }
-        let already = trackIds.count - fresh.count
-        guard !fresh.isEmpty else {
-            flash("Already in \(playlist.name)")
-            return
-        }
-        do {
-            let missing = Set(try await bridge.run { _ in try AppleMusicWriter.add(trackIds: fresh, toPlaylist: playlist.id) }.value)
-            let added = fresh.filter { !missing.contains($0) }
-            editPlaylist(playlist.id) { $0.trackIds += added }
-            var text = "Added \(added.count) track\(added.count == 1 ? "" : "s") to \(playlist.name)"
-            if already > 0 { text += " · \(already) already there" }
-            if !missing.isEmpty { text += " · \(missing.count) not found in Music" }
-            flash(text)
-            scheduleReload("after adding to a playlist", after: 2)
-        } catch {
-            flash("Couldn't add to \(playlist.name): \(error)")
-        }
+        defaults.set(recentPlaylistIds, forKey: "recentPlaylists")
     }
 
-    /// The playlist tracks were last added to, offered first in "Add to Playlist" menus.
+    func deletePlaylist(_ id: String) async {
+        guard canEditLibrary, playlists.contains(where: { $0.id == id && !$0.isFolder }) else { return }
+        pendingSourceEdits += 1
+        defer { pendingSourceEdits -= 1 }
+        guard await editLocal({ try await $0.deletePlaylist(id) }) else { return }
+        if selection == .playlist(id) { selection = .all }
+        recentPlaylistIds.removeAll { $0 == id }
+        defaults.set(recentPlaylistIds, forKey: "recentPlaylists")
+    }
+
     var lastPlaylistId: String? { recentPlaylistIds.first }
+    private(set) var recentPlaylistIds: [String] = []
 
-    /// Playlists tracks were recently added to, most recent first; offered first by the ⇧P picker.
-    private(set) var recentPlaylistIds: [String] = UserDefaults.standard.stringArray(forKey: "recentPlaylists") ?? []
-
-    /// Sets star ratings in Apple Music (0 clears). The list and sync status show it right away; Music's answer
-    /// (read back after writing) replaces it, and an error is reported rather than ignored.
     func setRating(_ stars: Int, for ids: [String]) {
+        guard canEditLibrary else { return }
         let ids = ids.filter { rows[$0] != nil }
         guard !ids.isEmpty else { return }
-        let generation = ratings.begin(stars, ids: ids)
-        noteEdit()
-        showRating(stars, for: ids)
-        bridge.setRating(stars, ids: ids, generation: generation)
-    }
-
-    private func showRating(_ stars: Int, for ids: [String]) {
-        let value = stars == 0 ? nil : stars
-        var updated = rows
-        var changed = false
-        for id in ids where updated[id] != nil && updated[id]!.source.rating != value {
-            updated[id]!.source.rating = value
-            library?.tracks[id]?.rating = value
-            changed = true
-        }
-        guard changed else { return }
-        rows = updated
-        evaluateStatus()
-    }
-
-    private func ratingFinished(_ r: MusicBridge.RatingResult) {
-        // Apple Events never launch Music: open it in the background and write once more.
-        if r.error?.isNotRunning == true, ratings.entries[r.id]?.generation == r.generation,
-           relaunchRetries.insert("\(r.generation):\(r.id)").inserted {
-            Task {
-                await openMusic()
-                bridge.setRating(r.requested, ids: [r.id], generation: r.generation)
-            }
-            return
-        }
-        if let stars = ratings.finish(r) { showRating(stars, for: [r.id]) }
-        // Music's value is unknown: the next read must be applied even if the library looks unchanged.
-        if r.confirmed == nil { librarySignature = nil }
-        if let error = r.error {
-            Log.error("ratings", "Setting \(r.requested)★ on \(r.id) failed: \(error) (\(error.status))")
-            flash("Couldn't set the rating in Music: \(error)")
-        }
-        // Read Music again: right away if the write's outcome is unknown, else once the burst of ratings is over.
-        scheduleReload("after setting ratings", after: r.confirmed == nil ? 0 : 3)
-    }
-
-    @ObservationIgnored private var relaunchRetries = Set<String>()
-    @ObservationIgnored private var openingMusic: Task<Void, Never>?
-
-    /// Opens Music hidden in the background (once, however many writes are waiting) and waits until it's ready.
-    private func openMusic() async {
-        if openingMusic == nil {
-            openingMusic = Task {
-                flash("Opening Music to save the rating…")
-                if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Music") {
-                    let configuration = NSWorkspace.OpenConfiguration()
-                    configuration.activates = false
-                    configuration.hides = true
-                    _ = try? await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
-                }
-                for _ in 0..<40 {
-                    if NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music").contains(where: \.isFinishedLaunching) { break }
-                    try? await Task.sleep(for: .milliseconds(250))
-                }
-                // Finished launching isn't quite ready for events.
-                try? await Task.sleep(for: .seconds(1))
-                openingMusic = nil
-            }
-        }
-        await openingMusic?.value
-    }
-
-    /// Re-reads Apple Music (ratings, titles, playlists edited there) and the active drive when the app becomes active.
-    func refreshFromMusic() {
-        guard loadState == .loaded else { return }
-        scheduleReload("app became active", after: 0.3)
-        guard !job.running else { return }
-        let cache = cache
+        pendingSourceEdits += 1
         Task {
-            // A sync or analyze run in Terminal may have saved hashes and analysis failures.
+            defer { pendingSourceEdits -= 1 }
+            await editLocal { try await $0.setRating(stars, ids: ids) }
+        }
+    }
+
+    /// Foregrounding the app checks saved audio availability and USB state, without replacing imports.
+    func refreshFromMusic() {
+        guard loadState == .loaded, observesChanges else { return }
+        Task {
+            try? await reloadLibrary("app became active")
+            let cache = cache
             await Task.detached { cache?.reloadFromDisk() }.value
             if let id = activeDriveId { await refreshDrive(id) } else { evaluateStatus() }
         }
     }
 
-    @ObservationIgnored private var loadAttempt = UUID()
-
-    /// Removes tracks from an Apple Music playlist (never from the library). Updates the list right
-    /// away and puts them back if Music refuses.
     func remove(_ ids: [String], from playlist: SourcePlaylist) async {
-        guard !playlist.isFolder, let i = playlists.firstIndex(where: { $0.id == playlist.id }) else { return }
-        let before = playlists[i].trackIds
-        let drop = Set(ids)
-        editPlaylist(playlist.id) { $0.trackIds.removeAll { drop.contains($0) } }
-        do {
-            _ = try await bridge.run { _ in try AppleMusicWriter.remove(trackIds: ids, fromPlaylist: playlist.id) }
-            flash("Removed \(ids.count) track\(ids.count == 1 ? "" : "s") from \(playlist.name)")
-            scheduleReload("after removing from a playlist", after: 2)
-        } catch {
-            editPlaylist(playlist.id) { $0.trackIds = before }
-            flash("Couldn't remove from \(playlist.name): \(error)")
-        }
+        guard canEditLibrary else { return }
+        pendingSourceEdits += 1
+        defer { pendingSourceEdits -= 1 }
+        await editLocal { try await $0.remove(trackIDs: ids, from: playlist.id) }
     }
 
     /// Opens System Settings at Automation, where Deckhand's access to Music is switched on.
@@ -1163,33 +1582,51 @@ final class LibraryModel {
 
     /// Tracks skipped ("not now") in Quick Rate, with when they may be offered again. Kept by
     /// Deckhand only: nothing is written to Music.
-    @ObservationIgnored private var snoozes: [String: Double] =
-        UserDefaults.standard.dictionary(forKey: "reviewSnoozes") as? [String: Double] ?? [:]
+    @ObservationIgnored private var snoozes: [String: Double] = [:]
 
     func snoozedUntil(_ id: String) -> Date? { snoozes[id].map(Date.init(timeIntervalSince1970:)) }
 
     func snooze(_ id: String, days: Int) {
         snoozes[id] = Date().addingTimeInterval(Double(days) * 86_400).timeIntervalSince1970
-        UserDefaults.standard.set(snoozes, forKey: "reviewSnoozes")
+        defaults.set(snoozes, forKey: "reviewSnoozes")
     }
 
     func unsnooze(_ id: String) {
         snoozes[id] = nil
-        UserDefaults.standard.set(snoozes, forKey: "reviewSnoozes")
+        defaults.set(snoozes, forKey: "reviewSnoozes")
     }
 
-    /// Saves every star rating to Deckhand's backup folder (only when they've changed since the
-    /// last backup). Runs at launch and when a Quick Rate session ends.
-    func backUpRatings() {
-        let tracks = rows.values.map(\.source)
-        Task.detached {
-            do {
-                let backup = RatingsBackup(tracks: tracks)
-                if let url = try backup.save() { Log.info("ratings", "Backed up \(backup.entries.count) ratings to \(url.lastPathComponent)") }
-            } catch {
-                Log.error("ratings", "Couldn't back up ratings: \(error)")
-            }
-        }
+    @discardableResult
+    private func editLocal(_ work: (DeckhandLibraryStore) async throws -> DeckhandLibrarySnapshot) async -> Bool {
+        guard let localStore else { return false }
+        noteEdit()
+        do { applyLocal(try await work(localStore)); return true }
+        catch { flash("Couldn't save changes in Deckhand: \(error.localizedDescription)"); return false }
+    }
+
+    private func applyLocal(_ snapshot: DeckhandLibrarySnapshot) {
+        guard snapshot.revision >= appliedLibraryRevision else { return }
+        appliedLibraryRevision = snapshot.revision
+        let lib = snapshot.library
+        let built = Self.merge(lib, into: rows)
+        if built.changed { rows = built.rows }
+        if allIds != built.allIds { allIds = built.allIds }
+        if playlists != lib.playlists { playlists = lib.playlists }
+        artwork = lib.artwork
+        library = lib
+        libraryID = lib.sourceID
+        hasLibrary = snapshot.initialized
+        connections = snapshot.connections
+        recentSources = connections.map(\.connection)
+        source = connections.first(where: { $0.id == snapshot.selectedSourceID })?.connection
+        sourceError = connections.first(where: { $0.id == snapshot.selectedSourceID })?.error
+        sourceConflicts = snapshot.conflicts.count
+        unavailableAudioIssues = lib.tracks.values.filter { $0.unavailableReason != nil || $0.location == nil }
+            .map { UnavailableAudioIssue(track: $0) }
+            .sorted { $0.track.title.localizedStandardCompare($1.track.title) == .orderedAscending }
+        loadState = .loaded
+        evaluateStatus()
+        if rows.values.contains(where: { !$0.checked }), !loadingAnalysis { Task { await loadAnalysis() } }
     }
 
     /// A short-lived message shown at the bottom of the window.

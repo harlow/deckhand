@@ -1,0 +1,25 @@
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/18] Write sources
+[3/18] Write swift-version--58304C5D6DBC2206.txt
+[5/8] Emitting module DeckhandAppTests
+[6/8] Compiling DeckhandAppTests USBStatusProbeTests.swift
+[6/8] Write Objects.LinkFileList
+ld: warning: building for macOS-14.0, but linking with dylib '/opt/homebrew/opt/sqlcipher/lib/libsqlcipher.dylib' which was built for newer version 26.0
+[7/8] Linking DeckhandPackageTests
+Build complete! (1.10s)
+Test Suite 'Selected tests' started at 2026-10-11 09:31:39.852.
+Test Suite 'DeckhandPackageTests.xctest' started at 2026-10-11 09:31:39.853.
+Test Suite 'DeckhandPackageTests.xctest' passed at 2026-10-11 09:31:39.853.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-11 09:31:39.853.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+◇ Test run started.
+↳ Testing Library Version: 1743
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Test inspectCurrentUSBReadOnly() started.
+USB INSPECT: ownerMatches=false canAdopt=true
+USB INSPECT: pending=0 unknown=0 complete=true
+✔ Test inspectCurrentUSBReadOnly() passed after 0.196 seconds.
+✔ Test run with 1 test in 0 suites passed after 0.196 seconds.

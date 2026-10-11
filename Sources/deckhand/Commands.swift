@@ -1,17 +1,18 @@
 import ArgumentParser
 import DeckhandCore
+import DeckhandLibrary
 import Foundation
 import MusicSource
 import OneLibrary
 import Sync
 
 struct PlaylistsCommand: ParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "playlists", abstract: "List Apple Music playlists.")
+    static let configuration = CommandConfiguration(commandName: "playlists", abstract: "List saved Deckhand playlists (or Apple Music before importing a library).")
 
     @Flag(help: "Output JSON.") var json = false
 
     func run() throws {
-        let lib = try AppleMusicLibrary.load()
+        let lib = try DeckhandLibraryStore.savedLibrary() ?? AppleMusicLibrary.load()
         if json {
             try printJSON(lib.playlists.map {
                 ["id": $0.id, "name": $0.name, "parentId": $0.parentId ?? "", "folder": $0.isFolder ? "true" : "false",
@@ -136,15 +137,29 @@ struct AnalyzeCommand: ParsableCommand {
         discussion: "Results are stored in Deckhand's cache, not in your music files."
     )
 
-    @Option(name: .long, help: "Only these playlists (repeatable). Default: the whole Apple Music library.")
+    @Option(name: .long, help: "Only these playlists (repeatable). Default: the saved Deckhand library, or Apple Music before importing.")
     var playlist: [String] = []
     @Flag(help: "Try again on tracks the analyzer failed on before (otherwise skipped until Deckhand's analyzer changes).")
     var retryFailed = false
     @Flag(help: .hidden) var all = false
+    @Option(name: .long, help: "Use a normalized Deckhand library snapshot JSON.")
+    var sourceLibrary: String?
+    @Flag(help: "Analyze Apple Music directly instead of the saved Deckhand library.") var music = false
 
     func run() throws {
         var tracks: [SourceTrack] = []
-        if playlist.isEmpty {
+        let imported = try sourceLibrary.map { try LibrarySnapshot.load(at: URL(fileURLWithPath: $0)) }
+            ?? (music ? nil : DeckhandLibraryStore.savedLibrary())
+        if let lib = imported {
+            if playlist.isEmpty { tracks = (lib.allTrackIds ?? []).compactMap { lib.tracks[$0] } }
+            else {
+                var seen = Set<String>()
+                for name in playlist {
+                    guard let p = lib.playlist(named: name) else { throw SyncError.playlistNotFound(name) }
+                    tracks += p.trackIds.filter { seen.insert($0).inserted }.compactMap { lib.tracks[$0] }
+                }
+            }
+        } else if playlist.isEmpty {
             tracks = try AppleMusicLibrary.allSongs()
         } else {
             let lib = try AppleMusicLibrary.load()

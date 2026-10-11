@@ -96,16 +96,30 @@ enum FileOps {
 
     /// Size and modification time from one stat, as `size` and `modificationDate` report them; nil if missing.
     static func attributes(_ url: URL) -> (size: Int64, modified: Double)? {
-        guard let a = try? FileManager.default.attributesOfItem(atPath: url.path) else { return nil }
-        return ((a[.size] as? NSNumber)?.int64Value ?? 0, (a[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0)
+        // Foundation also reads extended attributes here. On protected music folders that can
+        // wait on a privacy prompt, even though we only need stat's size and modification time.
+        var info = stat()
+        guard url.withUnsafeFileSystemRepresentation({ path in
+            path.map { fstatat(AT_FDCWD, $0, &info, 0) == 0 } ?? false
+        }) else { return nil }
+        #if os(macOS)
+        let time = info.st_mtimespec
+        #else
+        let time = info.st_mtim
+        #endif
+        // Match Foundation Date's reference-date arithmetic exactly: rounding directly in the
+        // Unix epoch changes some values by a fraction of a microsecond and misses old cache keys.
+        let modified = Date(timeIntervalSinceReferenceDate:
+            Double(time.tv_sec) - Date.timeIntervalBetween1970AndReferenceDate + Double(time.tv_nsec) / 1_000_000_000)
+        return (Int64(info.st_size), modified.timeIntervalSince1970)
     }
 
     static func size(_ url: URL) -> Int64 {
-        ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.int64Value ?? 0
+        attributes(url)?.size ?? 0
     }
 
     static func modificationDate(_ url: URL) -> Date? {
-        (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
+        attributes(url).map { Date(timeIntervalSince1970: $0.modified) }
     }
 
     /// Deletes macOS AppleDouble (`._*`) files in one directory (not recursive). FAT drives get them when files

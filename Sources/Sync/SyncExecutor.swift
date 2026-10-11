@@ -66,6 +66,7 @@ public struct SyncExecutor {
     /// `forceDatabase` rewrites the database even if nothing in it changed.
     @discardableResult
     public func execute(_ changes: ChangeSet, on volume: Volume, forceDatabase: Bool = false) throws -> SyncResult {
+        guard changes.base.acceptsSource(changes.nextManifest.sourceID) else { throw SyncError.sourceMismatch }
         guard changes.isComplete else { throw SyncError.incompletePlan(max(1, changes.summary.unknown)) }
         var result = SyncResult()
         guard !changes.isClean || forceDatabase else {

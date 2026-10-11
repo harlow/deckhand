@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import DeckhandCore
 
 /// Deckhand's record of what it wrote to a drive, stored in `/.deckhand/`. Not read by DJ players. Written last on
 /// every sync.
@@ -8,7 +9,7 @@ import Foundation
 /// `update`, which refuses to overwrite a copy other than the one a change was based on.
 public struct Manifest: Codable, Sendable, Equatable {
     /// Bump only for changes older versions can't safely read and rewrite; they refuse to save newer formats.
-    public static let currentFormat = 1
+    public static let currentFormat = 2
     static let directory = ".deckhand"
     static let fileName = "manifest.json"
 
@@ -51,6 +52,27 @@ public struct Manifest: Codable, Sendable, Equatable {
     public var deviceId = UUID().uuidString
     public var createdAt = Date()
     public var lastSyncedAt: Date?
+    /// Nil means an original Apple Music drive, or an empty drive not yet bound to a source.
+    public var sourceID: String?
+
+    public func acceptsSource(_ id: String?) -> Bool {
+        if let sourceID { return sourceID == (id ?? "apple-music") }
+        return id == nil || id == "apple-music"
+            || (lastSyncedAt == nil && tracks.isEmpty && playlists.isEmpty && selectedPlaylistIds.isEmpty && entireLibrary != true)
+    }
+
+    /// Explicit adoption is safe only when every existing track, playlist and selection has survived import.
+    /// Switching sources alone never invokes this or changes a populated drive's owner.
+    public func canAdoptLibrary(_ library: SourceLibrary) -> Bool {
+        guard let id = library.sourceID, id.hasPrefix("deckhand:") else { return false }
+        // A previous Deckhand library UUID is not an import connection ID. Matching every saved record
+        // provides the continuity proof for an explicit reassociation after restoring/migrating a library.
+        let previousDeckhand = sourceID?.hasPrefix("deckhand:") == true && (!tracks.isEmpty || !self.playlists.isEmpty)
+        guard previousDeckhand || library.sourceAliases?.contains(sourceID ?? "apple-music") == true else { return false }
+        let playlists = Set(library.playlists.map(\.id))
+        return Set(tracks.keys).isSubset(of: Set(library.tracks.keys))
+            && Set(self.playlists.keys).union(selectedPlaylistIds).isSubset(of: playlists)
+    }
     /// Source playlist IDs the user selected for this drive.
     public var selectedPlaylistIds: [String] = []
     /// Put every song on the drive, not just those in the selected playlists. Optional for older manifests.
@@ -165,7 +187,7 @@ public struct Manifest: Codable, Sendable, Equatable {
     /// Applies `change` to the drive's newest manifest and saves it, retrying when another save lands in between.
     /// Refuses while a sync holds the drive (it would have to merge the change). For the app's selection edits.
     @discardableResult
-    public static func edit(on volume: Volume, _ change: (inout Manifest) -> Void) throws -> Manifest {
+    public static func edit(on volume: Volume, _ change: (inout Manifest) throws -> Void) throws -> Manifest {
         try editLock.withLock {
             if let held = SyncLock.current(on: volume) { throw SyncError.driveBusy(volume.name, held) }
             var attempts = 0

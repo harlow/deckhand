@@ -57,6 +57,7 @@ extension Notification.Name {
     static let focusSearch = Notification.Name("deckhand.focusSearch")
     /// Ask the track list to take keyboard focus (e.g. Escape from search).
     static let focusTracks = Notification.Name("deckhand.focusTracks")
+    static let focusSidebar = Notification.Name("deckhand.focusSidebar")
 }
 
 /// A context-menu entry built in SwiftUI land and turned into an NSMenuItem.
@@ -77,6 +78,8 @@ struct TrackTable: NSViewRepresentable {
     var rows: [TrackRow]
     /// Changes whenever `rows` does, so unrelated redraws skip diffing them.
     var version: Int
+    /// A new request focuses after the new playlist's rows and selection have been applied.
+    var focusRequest: Int = 0
     @Binding var selection: Set<String>
     @Binding var sort: TrackSort?
     var cell: (TrackColumn, TrackRow) -> AnyView
@@ -84,6 +87,8 @@ struct TrackTable: NSViewRepresentable {
     var onOpen: (TrackRow) -> Void
     /// A keyboard command, with the rows it applies to (the selection).
     var onCommand: (TrackCommand, [String]) -> Void
+    var onDragBegin: ([String]) -> Void = { _ in }
+    var onDragEnd: () -> Void = {}
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -118,6 +123,7 @@ struct TrackTable: NSViewRepresentable {
         table.target = context.coordinator
         table.doubleAction = #selector(Coordinator.doubleClicked(_:))
         table.setDraggingSourceOperationMask(.copy, forLocal: false)
+        table.setDraggingSourceOperationMask(.copy, forLocal: true)
         let menu = NSMenu()
         menu.delegate = context.coordinator
         table.menu = menu
@@ -169,6 +175,20 @@ struct TrackTable: NSViewRepresentable {
             c.applying = false
             if let first = selected.first { table.scrollRowToVisible(first) }
         }
+        if c.focusRequest != focusRequest {
+            c.focusRequest = focusRequest
+            if focusRequest != 0 {
+                let request = focusRequest
+                DispatchQueue.main.async { [weak c] in
+                    guard let c, c.focusRequest == request, let table = c.table, let window = table.window else { return }
+                    window.makeFirstResponder(table)
+                    if table.selectedRow < 0, table.numberOfRows > 0 {
+                        table.selectRowIndexes([0], byExtendingSelection: false)
+                    }
+                    if table.selectedRow >= 0 { table.scrollRowToVisible(table.selectedRow) }
+                }
+            }
+        }
     }
 
     final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate {
@@ -176,6 +196,7 @@ struct TrackTable: NSViewRepresentable {
         weak var table: NSTableView?
         var rows: [TrackRow] = []
         var version: Int?
+        var focusRequest: Int?
         var index: [String: Int] = [:]
         /// Set while pushing SwiftUI state into the table, so the delegate doesn't echo it back.
         var applying = false
@@ -198,7 +219,22 @@ struct TrackTable: NSViewRepresentable {
         }
 
         func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
-            row < rows.count ? TrackDrag.encode([rows[row].id]) as NSString : nil
+            guard row < rows.count else { return nil }
+            let item = NSPasteboardItem()
+            let payload = TrackDrag.encode([rows[row].id])
+            item.setString(payload, forType: .string)
+            item.setData(Data(payload.utf8), forType: NSPasteboard.PasteboardType(TrackDrag.type.identifier))
+            return item
+        }
+
+        func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession,
+                       willBeginAt screenPoint: NSPoint, forRowIndexes rowIndexes: IndexSet) {
+            parent?.onDragBegin(rowIndexes.compactMap { $0 < rows.count ? rows[$0].id : nil })
+        }
+
+        func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession,
+                       endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+            parent?.onDragEnd()
         }
 
         func tableViewSelectionDidChange(_ notification: Notification) {
@@ -265,8 +301,57 @@ struct TrackTable: NSViewRepresentable {
 ///   /                   search;  ⌘L  show playing track;  ?  this list;  Delete  remove from playlist
 final class KeyTableView: NSTableView {
     weak var coordinator: TrackTable.Coordinator?
+    private var navigationMonitor: Any?
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if let navigationMonitor { NSEvent.removeMonitor(navigationMonitor) }
+        navigationMonitor = nil
+        super.viewWillMove(toWindow: newWindow)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil else { return }
+        navigationMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.routeWorkspaceNavigation(event) == true ? nil : event
+        }
+    }
+
+    deinit {
+        if let navigationMonitor { NSEvent.removeMonitor(navigationMonitor) }
+    }
+
+    /// Only borrow j/k from this table's own workspace. Text editors, sheets, popovers and
+    /// other windows keep their keys; the table's normal keyDown handles already-focused input.
+    @discardableResult
+    func routeWorkspaceNavigation(_ event: NSEvent) -> Bool {
+        guard let window, event.window === window, window.isKeyWindow,
+              window.attachedSheet == nil, !window.isSheet, NSApp.modalWindow == nil,
+              !isHiddenOrHasHiddenAncestor, window.firstResponder !== self,
+              let delta = Self.navigationDelta(event) else { return false }
+        if let editor = window.firstResponder as? NSText, editor.isEditable { return false }
+        if let field = window.firstResponder as? NSTextField, field.isEditable { return false }
+        guard numberOfRows > 0 else { return false }
+        move(delta, extend: event.modifierFlags.contains(.shift))
+        window.makeFirstResponder(self)
+        return true
+    }
+
+    private static func navigationDelta(_ event: NSEvent) -> Int? {
+        guard event.type == .keyDown,
+              event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return nil }
+        switch event.charactersIgnoringModifiers?.lowercased() {
+        case "j": return 1
+        case "k": return -1
+        default: return nil
+        }
+    }
 
     override func keyDown(with event: NSEvent) {
+        if let delta = Self.navigationDelta(event) {
+            move(delta, extend: event.modifierFlags.contains(.shift))
+            return
+        }
         guard let c = coordinator, let parent = c.parent else { return super.keyDown(with: event) }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let shift = flags.contains(.shift)
@@ -287,14 +372,15 @@ final class KeyTableView: NSTableView {
             return
         }
         switch event.keyCode {
+        case 48 where shift:
+            NotificationCenter.default.post(name: .focusSidebar, object: nil)
+            return
         case 51, 117: return send(.delete)
         case 49: return send(.togglePlay)
         case 36, 76: return send(.play(fromMixIn: shift))
         default: break
         }
         switch ch {
-        case "j", "J": move(1, extend: shift)
-        case "k", "K": move(-1, extend: shift)
         case "1", "2", "3", "4", "5", "6", "7", "8": send(.hotCue(Int(ch)!))
         case ",": send(.beats(-4))
         case ".": send(.beats(4))

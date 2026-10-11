@@ -1,6 +1,6 @@
 import Foundation
 
-public enum SyncError: Error, CustomStringConvertible {
+public enum SyncError: Error, CustomStringConvertible, LocalizedError {
     case notAVolumeRoot(String)
     case unsafeVolume(String, String)
     case notInitialized(String)
@@ -16,6 +16,9 @@ public enum SyncError: Error, CustomStringConvertible {
     case driveBusy(String, SyncLock.Info)
     /// A plan with unknown facts (e.g. audio not hashed yet) can't be carried out.
     case incompletePlan(Int)
+    case sourceMismatch
+
+    public var errorDescription: String? { description }
 
     public var description: String {
         switch self {
@@ -29,7 +32,7 @@ public enum SyncError: Error, CustomStringConvertible {
             let f = ByteCountFormatter()
             return "Not enough free space: need \(f.string(fromByteCount: needed)), \(f.string(fromByteCount: available)) available."
         case .playlistNotFound(let n):
-            return "No Apple Music playlist named \"\(n)\". Run `deckhand playlists` to see available names."
+            return "No playlist named \"\(n)\" in this library."
         case .volumeDisappeared(let n):
             return "The drive \"\(n)\" was disconnected during sync. The previous library on it is still intact; reconnect and sync again."
         case .copyFailed(let p, let e):
@@ -42,6 +45,8 @@ public enum SyncError: Error, CustomStringConvertible {
             return "\"\(n)\" is being synced by another Deckhand process (pid \(held.pid), since \(held.startedAt.formatted())). Try again when it finishes."
         case .incompletePlan(let n):
             return "Some of the library couldn't be read (\(n) track(s) unknown, or Apple Music returned nothing); nothing was changed."
+        case .sourceMismatch:
+            return "This USB belongs to another library. Review it in Deckhand before syncing. Nothing was changed."
         }
     }
 }

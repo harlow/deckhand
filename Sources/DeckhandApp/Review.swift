@@ -169,6 +169,5 @@ extension LibraryModel {
     func endReview() {
         if let r = review { Log.info("review", "Quick Rate ended: \(r.history.count) reviewed, \(r.remaining) left") }
         review = nil
-        backUpRatings()
     }
 }

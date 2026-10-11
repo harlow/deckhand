@@ -1,0 +1,560 @@
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/17] Write sources
+[3/17] Write swift-version--58304C5D6DBC2206.txt
+[5/9] Emitting module DeckhandApp
+[6/9] Compiling DeckhandApp TrackListView.swift
+[6/11] Write Objects.LinkFileList
+ld: warning: building for macOS-14.0, but linking with dylib '/opt/homebrew/opt/sqlcipher/lib/libsqlcipher.dylib' which was built for newer version 26.0
+[7/11] Linking DeckhandApp
+[8/11] Applying DeckhandApp
+[10/12] Emitting module DeckhandAppTests
+[10/12] Write Objects.LinkFileList
+ld: warning: building for macOS-14.0, but linking with dylib '/opt/homebrew/opt/sqlcipher/lib/libsqlcipher.dylib' which was built for newer version 26.0
+[11/12] Linking DeckhandPackageTests
+Build complete! (5.59s)
+Test Suite 'All tests' started at 2026-10-10 17:51:50.324.
+Test Suite 'All tests' passed at 2026-10-10 17:51:50.325.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+◇ Test run started.
+↳ Testing Library Version: 1743
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite MusicBridgeTests started.
+◇ Suite MusicalKeyTests started.
+◇ Suite StatusStoreTests started.
+◇ Suite JobLineTests started.
+◇ Suite LibrarySourcesTests started.
+◇ Suite PhraseCodecTests started.
+◇ Suite AnlzCueTests started.
+◇ Suite OneLibraryDatabaseTests started.
+◇ Suite AnlzPathTests started.
+◇ Suite ReadLedgerTests started.
+◇ Suite NamedCueGapTests started.
+◇ Suite MusicExportTests started.
+◇ Suite DriveStatusTests started.
+◇ Suite RatingOverlayTests started.
+◇ Suite BeatGridTests started.
+◇ Suite DeckhandLibraryTests started.
+◇ Suite DedicatedLibraryModelTests started.
+◇ Suite KeyAnalyzerTests started.
+◇ Suite FileTagsTests started.
+◇ Suite TrackListingTests started.
+◇ Suite SKeyTests started.
+◇ Suite StructureAnalyzerTests started.
+◇ Suite DecimateTests started.
+◇ Suite SyncEngineTests started.
+◇ Suite LibrarySyncTests started.
+◇ Suite AppStatusTests started.
+◇ Suite CueAnalyzerTests started.
+◇ Suite AudioHashTests started.
+◇ Suite MusicLiveTests started.
+◇ Suite SyncPropertyTests started.
+◇ Suite CueBuilderTests started.
+◇ Suite AnalysisCacheTests started.
+◇ Suite ManifestTests started.
+◇ Suite SyncPlannerTests started.
+◇ Suite SyncConflictTests started.
+◇ Suite ManifestConcurrencyTests started.
+◇ Suite ManifestFileTests started.
+◇ Suite DriveProbeTests started.
+◇ Suite SyncScaleTests started.
+◇ Suite SyncRecoveryTests started.
+◇ Suite FileOpsTests started.
+◇ Test notation(tonic:mode:classic:camelot:) started.
+◇ Test readsKnowWhichWritesTheyInclude() started.
+◇ Test drainWaitsForARatingSetJustBeforeSync() started.
+◇ Test errorsAreReportedWithWhatMusicHasNow() started.
+◇ Suite RatingsBackupTests started.
+◇ Test writesRunInTheOrderAskedOneAtATime() started.
+◇ Suite SourceOwnershipTests started.
+◇ Test parsesTheLiveWarning() started.
+◇ Test folderReadsM3UOrderAndSkipsNonAudioFiles() started.
+◇ Test coalescesRatingsPerTrackLastOneWins() started.
+◇ Test parsesTheSyncResult() started.
+◇ Test folderPersistsPlaylistRatingAndIdentityAfterRename() started.
+◇ Test concurrentPlaylistAddsKeepBothEdits() started.
+◇ Test rekordboxPreservesHierarchyOrderMetadataAndLocalEdits() started.
+◇ Test invalidXMLAndDuplicateTrackIDsAreRejected() started.
+◇ Test aSyncThatDidntReportCleanShowsNothingOptimistic() started.
+◇ Test ignoresOtherLines() started.
+◇ Test syncFinishingWhileAnEvaluationIsInFlight() started.
+◇ Test switchingDrivesForgetsTheStatus() started.
+◇ Test untouchedRekordboxPlaylistRefreshes() started.
+◇ Test theNewestEvaluationWins() started.
+◇ Test readingLeavesNoSideFiles() started.
+◇ Test maskingIsAnInvolution() started.
+◇ Test refusesOverwrite() started.
+◇ Test xmlExportRoundTripKeepsCuesAndOriginalFile() started.
+◇ Test emptyFolderSucceedsAndOfflineFolderThrows() started.
+◇ Test roundTrip() started.
+◇ Test verificationReportsWhatsStillPending() started.
+◇ Test roundTrip() started.
+◇ Test matchesRekordboxUsbExport() started.
+◇ Test journalIsCheckpointed() started.
+◇ Test matchesRekordbox(path:expected:) started.
+◇ Test exportAfterSwitchingSourcesIncludesTheSelectedOldAndNewPlaylists() started.
+◇ Test folderTracksAreAddedOnlyWhenExplicitlyExportingAndRetryUsesDurableReceipts() started.
+◇ Test missingAudioFailsBeforeMutatingDestination() started.
+◇ Test matchesRekordboxLocalFiles() started.
+◇ Test buildDoesNotKnockOutMainDrop() started.
+◇ Test externallyEditedDestinationIsNotOverwritten() started.
+◇ Test aLocalChangeBeatsReadsBegunBeforeIt() started.
+◇ Test carriesPlayerHistoryAcrossRebuilds() started.
+◇ Test snapshotOnlyReadsKeepTheOverlay() started.
+◇ Test aStaleDriveProbeNeverOverwritesANewerOne() started.
+◇ Test hotCueMatchesRekordbox() started.
+◇ Test wontFitUsesTheSyncsOwnSpaceCheck() started.
+◇ Test writtenLastInExt() started.
+◇ Test musicsAnswerWinsOverWhatWasAskedFor() started.
+◇ Test sourceChangesPreserveAllPlaylistsRatingsAndIdentityAcrossRestart() started.
+◇ Test failedConnectionRemovalRollsBackDefaultAndRecords() started.
+◇ Test incompleteAllTracksOrderStillImportsEveryReferencedTrack() started.
+◇ Test folderAndRekordboxSameFileDeduplicateAndExportPreservesOriginalCueNodes() started.
+◇ Test concurrentEditsKeepBothMembershipChangesAndLatestRating() started.
+◇ Test failedSaveRollsBackDiskAndMemoryTogether() started.
+◇ Test clearingARatingShowsNoStars() started.
+◇ Test onlyTheNewestRatingOnATrackIsApplied() started.
+◇ Test memoryCueMatchesRekordbox() started.
+◇ Test failedInitialImportRollsBackInitializationConnectionsAndRecords() started.
+◇ Test secondWriterIsRejectedAndReadersSeeCommittedEdits() started.
+◇ Test unavailableAndInvalidSourcesDoNotClearTheLibrary() started.
+◇ Test untouchedImportsUpdateButExternalDeletionsKeepPlaylistsAndAvailableAudio() started.
+◇ Test ratingEditsDoNotRewriteLargeSourceIndexes() started.
+◇ Test usbSelectionAndReconnectKeepPlaylistAndKeyboardOrderAndLibraryOwnership() started.
+◇ Test corruptAndFutureDatabasesFailWithoutBeingReplaced() started.
+◇ Test aCleanSyncMarksPendingTracksSynced() started.
+◇ Test emptyLibraryThenFolderMusicAndSecondFolderKeepsMixedPlaylistAndRatingsAcrossRestart() started.
+◇ Test musicEditsAlwaysSaveLocallyAndRefreshKeepsThem() started.
+◇ Test removedImportRetainsXMLMappingsEditsAndAliasesAndReaddingDoesNotDuplicatePlaylists() started.
+◇ Test schemaMatchesGoldenExport() started.
+◇ Test legacyLocalPlaylistsAndClearedRatingsMigrateOnceWithoutReconnecting() started.
+◇ Test folderRenameKeepsIdentityRatingAndLocallySavedMembership() started.
+◇ Test addingAndUpdatingSecondaryImportKeepsDefaultAndChangingDefaultPersistsWithoutReadingSource() started.
+◇ Test correctsHalfTimeIntoRange() started.
+◇ Test sameNumericIDsInDifferentConnectionsDoNotCollide() started.
+◇ Test silenceHasNoKey() started.
+◇ Test downbeatIsFirstKickAfterSilence() started.
+◇ Test foldsFastTempoToHalfTime() started.
+◇ Test invalidImportedReferencesAreRejectedWithoutSavingAnything() started.
+◇ Test rotationEquivariant() started.
+◇ Test sineTriad() started.
+◇ Test resamplesNonIntegerRatios() started.
+◇ Test clickTrackEndToEnd() started.
+◇ Test tagHintSelectsOctave() started.
+◇ Test tracksAndPlaylistsComeFromTheEvaluation() started.
+◇ Test invalidFirstImportDoesNotInitializeOrReplaceAnEmptyLibrary() started.
+◇ Test ratingSetDuringALibraryReloadSurvivesTheReload() started.
+◇ Test failedImportKeepsLibraryEditableAndRestartsWithMissingAudio() started.
+◇ Test modelProducesADistribution() started.
+◇ Test clipsSpreadAcrossTrack() started.
+◇ Test removeReaddAndFailedSecondaryImportPreserveDefaultLocalEditsAndIdentities() started.
+◇ Test bpm() started.
+◇ Test outputOrderMapsToDeckhandKeys() started.
+◇ Test explicitExportCopiesPlaylistsPreservesDuplicatesAndAvoidsRepeatedImports() started.
+◇ Test cqtPeaksAtTheRightBin() started.
+◇ Test snapsNearIntegers() started.
+◇ Test passesLowFrequencies() started.
+◇ Test sortsNaturallyByTitle() started.
+◇ Test reusesPreviousOrderOnlyWhileItStillHolds() started.
+◇ Test windowsMatchWholeSignal() started.
+◇ Test emptyFilterKeepsEverything() started.
+◇ Test mixesWithPlayingUsesKeyAndTempo() started.
+◇ Test percentileMatchesNumpy() started.
+◇ Test keyAndEnergyComment() started.
+◇ Test phraseAnalysisForRekordbox() started.
+◇ Test shiftedGridKeepsBarPositions() started.
+◇ Test rhythmFeaturesSeeTheKick() started.
+◇ Test weakEvidenceSnapsToPhraseLines() started.
+◇ Test keys(text:expected:) started.
+◇ Test modelLoads() started.
+◇ Test pssiKindMapping() started.
+◇ Test namedCuesSkipMissingRoles() started.
+◇ Test analyzedAfterSyncAndRecordedFailures() started.
+◇ Test legacyManifestIsConvertedOnceWithoutRecopying() started.
+◇ Test immediateResyncWritesNothing() started.
+◇ Test entireLibraryWithUnsyncableSongs() started.
+◇ Test keepsTwoDecimalTempo() started.
+◇ Test namedCuesFollowTheArrangement() started.
+◇ Test filtersBySearchKeyAndRating() started.
+◇ Test changedSourceAudioMovesToANewPath() started.
+◇ Test overlappingPlaylistsAndDeletedPlaylist() started.
+◇ Test metadataEditsRewriteOnlyTheDatabase() started.
+◇ Test fitsIntegerTempo() started.
+◇ Test adoptsExistingAudio() started.
+◇ Test unavailableSourcesAreRetainedOrIneligible() started.
+◇ Test tagEditThatGrowsTheSourceKeepsTheDriveSize() started.
+◇ Test playlistReorderRenameFolderMoveAndSwap() started.
+◇ Test settingsAndRecipeChanges() started.
+◇ Test mixedLibrarySyncSurvivesSourceChangeDisconnectAndRestart() started.
+◇ Test case passing 4 arguments tonic → 0, mode → .major, classic → "C", camelot → "8B" to notation(tonic:mode:classic:camelot:) started.
+◇ Test strongEvidenceCanChangeOffPhrase() started.
+◇ Test case passing 4 arguments tonic → 4, mode → .minor, classic → "Em", camelot → "9A" to notation(tonic:mode:classic:camelot:) started.
+◇ Test legacyAdoptionRequiresKnownSourceAndEveryExistingID() started.
+◇ Test freshDrive() started.
+◇ Test case passing 4 arguments tonic → 7, mode → .major, classic → "G", camelot → "9B" to notation(tonic:mode:classic:camelot:) started.
+◇ Test recoversFromASyncCutShortAfterTheDatabaseSwap() started.
+◇ Test repairsMissingFiles() started.
+◇ Test case passing 4 arguments tonic → 9, mode → .minor, classic → "Am", camelot → "8A" to notation(tonic:mode:classic:camelot:) started.
+◇ Test tracksNotHashedYetAreUnknownNotPending() started.
+◇ Test musicBackFillingACommentAfterASyncStaysClean() started.
+◇ Test unknownFactsAreNeitherSyncedNorPending() started.
+◇ Test duplicates() started.
+◇ Test case passing 4 arguments tonic → 6, mode → .minor, classic → "F#m", camelot → "11A" to notation(tonic:mode:classic:camelot:) started.
+◇ Test artworkChangesAndUnchangedArt() started.
+◇ Test freeSpaceCheckUsesBytesToCopy() started.
+◇ Test case passing 4 arguments tonic → 11, mode → .minor, classic → "Bm", camelot → "10A" to notation(tonic:mode:classic:camelot:) started.
+◇ Test case passing 4 arguments tonic → 1, mode → .minor, classic → "C#m", camelot → "12A" to notation(tonic:mode:classic:camelot:) started.
+◇ Test case passing 4 arguments tonic → 10, mode → .major, classic → "Bb", camelot → "6B" to notation(tonic:mode:classic:camelot:) started.
+◇ Test agreesWithTheEngineAndASyncLeavesItClean() started.
+◇ Test cuesFollowPhraseRules() started.
+◇ Test mp3IgnoresLameHeaderFrame() started.
+◇ Test wavHashesOnlyData() started.
+◇ Test aRatingEditIsPendingUntilSynced() started.
+◇ Test case passing 4 arguments tonic → 3, mode → .major, classic → "Eb", camelot → "5B" to notation(tonic:mode:classic:camelot:) started.
+◇ Test treeEnsembleFollowsSplits() started.
+◇ Test flacSkipsMetadata() started.
+◇ Test unknownFormatHashesWholeFile() started.
+◇ Test mp3IgnoresTags() started.
+◇ Test percentileMatchesNumpy() started.
+◇ Test m4aHashesOnlyMdat() started.
+◇ Test modes() started.
+◇ Test evaluateAfterExecuteIsClean(seed:) started.
+◇ Test columnsThatDontLineUpAreRejected() started.
+◇ Test shippedModelsLoad() started.
+◇ Test readRetriesOnceWhenTheLibraryChangesMidRead() started.
+◇ Test missingValuesReadAsNil() started.
+◇ Test decodesAndNormalizesColumns() started.
+◇ Test errorsAreReported() started.
+◇ Test overlayIsANoOpWhenMusicAgrees() started.
+◇ Test tooShortTrackHasNoCues() started.
+◇ Test overlayTakesMusicsValuesButNeverDatesOrLocations() started.
+◇ Test indexFollowsRewrittenAndRemovedEntries() started.
+◇ Test overlayClearsWhatMusicCleared() started.
+◇ Test backfillsFromLegacyEntryAndPersistsIndex() started.
+◇ Test summaryMatchesFullAnalysis() started.
+◇ Test artworkFieldsRoundTrip() started.
+◇ Test entireLibraryWithoutAllSongsLoadedRemovesNothing() started.
+◇ Test olderManifestWithoutArtworkFieldsLoads() started.
+◇ Test sharedTrackIsNotRemovedWhileReferenced() started.
+◇ Test appEditDuringSyncIsKept() started.
+◇ Test avoidsAnalysisPathCollisions() started.
+◇ Test anotherSyncMeanwhileAbortsBeforeTheDatabaseIsTouched() started.
+◇ Test ineligibleTracksAreReported() started.
+◇ Test interleavedAppEditsBothSurvive() started.
+◇ Test updateWritesTheOtherFileAndChecksTheGeneration() started.
+◇ Test equalGenerationsPickTheSecondFileAndWriteTheFirst() started.
+◇ Test firstSaveOfALegacyFileKeepsIt() started.
+◇ Test tornNewestFileFallsBackAndIsOverwritten() started.
+◇ Test mergeKeepsAppEditsAndRejectsOtherSyncs() started.
+◇ Test lockIsExclusiveAndStaleLocksAreReplaced() started.
+◇ Test missingAndChangedFiles() started.
+◇ Test refusesNewerFormats() started.
+◇ Test matchesPathsTheWayFATDoes() started.
+◇ Test entireLibraryAddsEverySongButOnlySelectedPlaylists() started.
+◇ Test databaseIdChangesWithEveryWrite() started.
+◇ Test sanitizesFileNames() started.
+◇ Test analysisVersionChangeDoesNotRecopyAudio() started.
+◇ Test incompleteAnalysisFolders() started.
+◇ Test evaluatesTwentyThousandTracksQuickly() started.
+◇ Test incrementalReorderAddRemove() started.
+◇ Test case passing 2 arguments path → "/Contents/Daniela Cast/Jazzy - Daniela Cast.flac", expected → "/PIONEER/USBANLZ/P00A/0000CC9C" to matchesRekordbox(path:expected:) started.
+◇ Test case passing 2 arguments path → "/Contents/Leo Portela/Bon Vibrant - Leo Portela.flac", expected → "/PIONEER/USBANLZ/P00E/000281CE" to matchesRekordbox(path:expected:) started.
+◇ Test filesWrittenWithoutADatabaseWriteReachTheDriveBeforeTheManifest() started.
+◇ Test emptyLibraryReadChangesNothing() started.
+◇ Test retainedTrackKeepsItsAnalysisWhenTheCacheEntryIsGone() started.
+◇ Test contentIdsFromACutShortSyncAreNotReused() started.
+◇ Test unreadableFilesAreNotRecordedAsAnalyzerFailures() started.
+◇ Test analysisFilesRewrittenInPlaceAreCheckedAgainAfterACutShortSync() started.
+◇ Test syncWithoutAnalyzingKeepsAnalysisThatStoppedBeingCurrent() started.
+◇ Test duplicateWithOtherTagsSharesTheFileWithoutCopying() started.
+◇ Test savesAlternateFilesAndLoadsTheNewest() started.
+◇ Test loadsAnOlderSingleFileManifest() started.
+◇ Test digestsMatchFullAndDigestedFingerprints() started.
+◇ Test fallsBackWhenTheNewestIsCorrupt() started.
+◇ Test copyDataFailureLeavesNoTemporaryFile() started.
+◇ Test writeCreatesDirectoriesAndOverwrites() started.
+◇ Test copyDataReplacesExistingFile() started.
+◇ Test writeAtomicallyReplacesWithoutLeftovers() started.
+◇ Test case passing 2 arguments text → "8A", expected → MusicalKey(tonic: 9, mode: DeckhandCore.MusicalKey.Mode.minor) to keys(text:expected:) started.
+◇ Test case passing 2 arguments text → "03A", expected → MusicalKey(tonic: 10, mode: DeckhandCore.MusicalKey.Mode.minor) to keys(text:expected:) started.
+◇ Test case passing 2 arguments text → "12B", expected → MusicalKey(tonic: 4, mode: DeckhandCore.MusicalKey.Mode.major) to keys(text:expected:) started.
+◇ Test case passing 2 arguments text → "1m", expected → MusicalKey(tonic: 9, mode: DeckhandCore.MusicalKey.Mode.minor) to keys(text:expected:) started.
+◇ Test case passing 2 arguments text → "1d", expected → MusicalKey(tonic: 0, mode: DeckhandCore.MusicalKey.Mode.major) to keys(text:expected:) started.
+◇ Test case passing 2 arguments text → "F#m", expected → MusicalKey(tonic: 6, mode: DeckhandCore.MusicalKey.Mode.minor) to keys(text:expected:) started.
+◇ Test case passing 2 arguments text → "Bbmaj", expected → MusicalKey(tonic: 10, mode: DeckhandCore.MusicalKey.Mode.major) to keys(text:expected:) started.
+◇ Test case passing 2 arguments text → "A minor", expected → MusicalKey(tonic: 9, mode: DeckhandCore.MusicalKey.Mode.minor) to keys(text:expected:) started.
+◇ Test case passing 2 arguments text → "Amin", expected → MusicalKey(tonic: 9, mode: DeckhandCore.MusicalKey.Mode.minor) to keys(text:expected:) started.
+◇ Test case passing 2 arguments text → "Energy", expected → nil to keys(text:expected:) started.
+checked 1278 Rekordbox phrase sections
+◇ Test keepsNewerRatingsUnlessOverwriting() started.
+◇ Test restoresIntoRebuiltLibraryByPathThenName() started.
+◇ Test keepsOnlyRatedTracks() started.
+◇ Test savesOnlyWhenChangedAndNeverEmpty() started.
+✔ Test notation(tonic:mode:classic:camelot:) with 9 test cases passed after 3.503 seconds.
+◇ Test legacyDriveIDsRemainValidForMusic() started.
+◇ Test newDriveBindsToFolderAndThenRejectsMusic() started.
+◇ Test validEmptyFolderIsCompleteWhileEmptyMusicRemainsUnreadable() started.
+◇ Test folderPlaylistExecutesAndVerifiesOnADeviceLibrary() started.
+◇ Test sourceSwitchCannotRemoveExistingDriveContents() started.
+◇ Test case passing 1 argument seed → 1 to evaluateAfterExecuteIsClean(seed:) started.
+◇ Test case passing 1 argument seed → 2 to evaluateAfterExecuteIsClean(seed:) started.
+◇ Test case passing 1 argument seed → 3 to evaluateAfterExecuteIsClean(seed:) started.
+◇ Test case passing 1 argument seed → 4 to evaluateAfterExecuteIsClean(seed:) started.
+✔ Test parsesTheLiveWarning() passed after 6.425 seconds.
+◇ Test case passing 1 argument seed → 5 to evaluateAfterExecuteIsClean(seed:) started.
+◇ Test case passing 1 argument seed → 6 to evaluateAfterExecuteIsClean(seed:) started.
+✔ Test parsesTheSyncResult() passed after 7.369 seconds.
+✔ Test ignoresOtherLines() passed after 7.369 seconds.
+✔ Test switchingDrivesForgetsTheStatus() passed after 7.369 seconds.
+✔ Test aSyncThatDidntReportCleanShowsNothingOptimistic() passed after 7.369 seconds.
+✔ Test maskingIsAnInvolution() passed after 7.543 seconds.
+✔ Test refusesOverwrite() passed after 9.205 seconds.
+✔ Test theNewestEvaluationWins() passed after 9.216 seconds.
+✔ Test syncFinishingWhileAnEvaluationIsInFlight() passed after 9.220 seconds.
+✔ Test emptyFolderSucceedsAndOfflineFolderThrows() passed after 9.258 seconds.
+✔ Test invalidXMLAndDuplicateTrackIDsAreRejected() passed after 9.269 seconds.
+✔ Test roundTrip() passed after 9.412 seconds.
+✔ Test xmlExportRoundTripKeepsCuesAndOriginalFile() passed after 9.506 seconds.
+✔ Test verificationReportsWhatsStillPending() passed after 9.506 seconds.
+✔ Test untouchedRekordboxPlaylistRefreshes() passed after 10.661 seconds.
+✔ Test rekordboxPreservesHierarchyOrderMetadataAndLocalEdits() passed after 10.662 seconds.
+✔ Test matchesRekordbox(path:expected:) with 2 test cases passed after 10.661 seconds.
+✔ Test aLocalChangeBeatsReadsBegunBeforeIt() passed after 10.661 seconds.
+✔ Test missingAudioFailsBeforeMutatingDestination() passed after 10.662 seconds.
+✔ Test buildDoesNotKnockOutMainDrop() passed after 10.662 seconds.
+✔ Test snapshotOnlyReadsKeepTheOverlay() passed after 10.662 seconds.
+✔ Test wontFitUsesTheSyncsOwnSpaceCheck() passed after 10.662 seconds.
+✔ Test aStaleDriveProbeNeverOverwritesANewerOne() passed after 10.662 seconds.
+✔ Test musicsAnswerWinsOverWhatWasAskedFor() passed after 10.662 seconds.
+✔ Test writtenLastInExt() passed after 10.662 seconds.
+✔ Test externallyEditedDestinationIsNotOverwritten() passed after 10.663 seconds.
+✔ Test hotCueMatchesRekordbox() passed after 10.663 seconds.
+✔ Test incompleteAllTracksOrderStillImportsEveryReferencedTrack() passed after 10.663 seconds.
+✔ Test clearingARatingShowsNoStars() passed after 10.663 seconds.
+✔ Test onlyTheNewestRatingOnATrackIsApplied() passed after 10.663 seconds.
+✔ Test failedConnectionRemovalRollsBackDefaultAndRecords() passed after 10.663 seconds.
+✔ Test memoryCueMatchesRekordbox() passed after 10.663 seconds.
+✔ Test secondWriterIsRejectedAndReadersSeeCommittedEdits() passed after 10.663 seconds.
+✔ Test failedInitialImportRollsBackInitializationConnectionsAndRecords() passed after 10.663 seconds.
+✔ Test aCleanSyncMarksPendingTracksSynced() passed after 10.663 seconds.
+✔ Test untouchedImportsUpdateButExternalDeletionsKeepPlaylistsAndAvailableAudio() passed after 10.664 seconds.
+✔ Test corruptAndFutureDatabasesFailWithoutBeingReplaced() passed after 10.664 seconds.
+✔ Test musicEditsAlwaysSaveLocallyAndRefreshKeepsThem() passed after 10.664 seconds.
+✔ Test correctsHalfTimeIntoRange() passed after 10.664 seconds.
+✔ Test removedImportRetainsXMLMappingsEditsAndAliasesAndReaddingDoesNotDuplicatePlaylists() passed after 11.532 seconds.
+✔ Test silenceHasNoKey() passed after 11.533 seconds.
+✔ Test downbeatIsFirstKickAfterSilence() passed after 11.533 seconds.
+✔ Test foldsFastTempoToHalfTime() passed after 11.689 seconds.
+evaluate 20k tracks: first 1.380 s, clean 0.741 s
+✔ Test sameNumericIDsInDifferentConnectionsDoNotCollide() passed after 12.123 seconds.
+✔ Test journalIsCheckpointed() passed after 12.484 seconds.
+✔ Test matchesRekordboxUsbExport() passed after 12.484 seconds.
+✔ Test rotationEquivariant() passed after 14.635 seconds.
+✔ Test invalidImportedReferencesAreRejectedWithoutSavingAnything() passed after 14.635 seconds.
+✔ Test tagHintSelectsOctave() passed after 14.635 seconds.
+✔ Test tracksAndPlaylistsComeFromTheEvaluation() passed after 14.635 seconds.
+✔ Test ratingSetDuringALibraryReloadSurvivesTheReload() passed after 14.635 seconds.
+✔ Test resamplesNonIntegerRatios() passed after 14.635 seconds.
+✔ Test clipsSpreadAcrossTrack() passed after 14.635 seconds.
+✔ Test bpm() passed after 14.635 seconds.
+✔ Test outputOrderMapsToDeckhandKeys() passed after 14.635 seconds.
+✔ Test readingLeavesNoSideFiles() passed after 14.636 seconds.
+✔ Test explicitExportCopiesPlaylistsPreservesDuplicatesAndAvoidsRepeatedImports() passed after 14.636 seconds.
+✔ Test snapsNearIntegers() passed after 14.636 seconds.
+✔ Test roundTrip() passed after 14.639 seconds.
+✔ Test sortsNaturallyByTitle() passed after 14.639 seconds.
+✔ Test reusesPreviousOrderOnlyWhileItStillHolds() passed after 14.639 seconds.
+✔ Test emptyFilterKeepsEverything() passed after 14.639 seconds.
+✔ Test mixesWithPlayingUsesKeyAndTempo() passed after 14.641 seconds.
+✔ Test passesLowFrequencies() passed after 14.641 seconds.
+✔ Test percentileMatchesNumpy() passed after 14.641 seconds.
+✔ Test keyAndEnergyComment() passed after 14.641 seconds.
+✔ Test phraseAnalysisForRekordbox() passed after 14.641 seconds.
+✔ Test weakEvidenceSnapsToPhraseLines() passed after 14.641 seconds.
+✔ Test shiftedGridKeepsBarPositions() passed after 14.641 seconds.
+✔ Test rhythmFeaturesSeeTheKick() passed after 14.648 seconds.
+✔ Test modelLoads() passed after 14.648 seconds.
+✔ Test pssiKindMapping() passed after 14.648 seconds.
+✔ Test keys(text:expected:) with 10 test cases passed after 14.648 seconds.
+✔ Test namedCuesSkipMissingRoles() passed after 14.648 seconds.
+✔ Test windowsMatchWholeSignal() passed after 14.648 seconds.
+✔ Test schemaMatchesGoldenExport() passed after 14.649 seconds.
+✔ Test sineTriad() passed after 14.649 seconds.
+✔ Test carriesPlayerHistoryAcrossRebuilds() passed after 14.649 seconds.
+✔ Test keepsTwoDecimalTempo() passed after 14.649 seconds.
+✔ Test namedCuesFollowTheArrangement() passed after 14.649 seconds.
+✔ Test filtersBySearchKeyAndRating() passed after 14.649 seconds.
+✔ Test cqtPeaksAtTheRightBin() passed after 14.649 seconds.
+✔ Test clickTrackEndToEnd() passed after 14.649 seconds.
+✔ Test fitsIntegerTempo() passed after 14.649 seconds.
+✔ Test matchesRekordboxLocalFiles() passed after 14.650 seconds.
+✔ Test modelProducesADistribution() passed after 14.649 seconds.
+✔ Test immediateResyncWritesNothing() passed after 14.649 seconds.
+✔ Test legacyManifestIsConvertedOnceWithoutRecopying() passed after 14.649 seconds.
+✔ Test adoptsExistingAudio() passed after 14.649 seconds.
+✔ Test ratingEditsDoNotRewriteLargeSourceIndexes() passed after 14.650 seconds.
+✔ Test strongEvidenceCanChangeOffPhrase() passed after 14.650 seconds.
+✔ Test legacyAdoptionRequiresKnownSourceAndEveryExistingID() passed after 14.650 seconds.
+✔ Test changedSourceAudioMovesToANewPath() passed after 14.650 seconds.
+✔ Test writesRunInTheOrderAskedOneAtATime() passed after 14.651 seconds.
+✔ Test analyzedAfterSyncAndRecordedFailures() passed after 14.650 seconds.
+✔ Test metadataEditsRewriteOnlyTheDatabase() passed after 14.650 seconds.
+✔ Test freshDrive() passed after 14.650 seconds.
+✔ Test tagEditThatGrowsTheSourceKeepsTheDriveSize() passed after 14.655 seconds.
+✔ Test overlappingPlaylistsAndDeletedPlaylist() passed after 14.656 seconds.
+✔ Test tracksNotHashedYetAreUnknownNotPending() passed after 14.655 seconds.
+✔ Test entireLibraryWithUnsyncableSongs() passed after 14.656 seconds.
+✔ Test musicBackFillingACommentAfterASyncStaysClean() passed after 14.661 seconds.
+✔ Test unavailableSourcesAreRetainedOrIneligible() passed after 15.685 seconds.
+✔ Test cuesFollowPhraseRules() passed after 15.685 seconds.
+✔ Test mp3IgnoresLameHeaderFrame() passed after 15.685 seconds.
+✔ Test wavHashesOnlyData() passed after 15.685 seconds.
+✔ Test unknownFactsAreNeitherSyncedNorPending() passed after 15.685 seconds.
+✔ Test treeEnsembleFollowsSplits() passed after 15.685 seconds.
+✔ Test flacSkipsMetadata() passed after 15.685 seconds.
+✔ Test unknownFormatHashesWholeFile() passed after 15.685 seconds.
+✔ Test percentileMatchesNumpy() passed after 15.685 seconds.
+✔ Test mp3IgnoresTags() passed after 15.685 seconds.
+✔ Test m4aHashesOnlyMdat() passed after 15.685 seconds.
+✔ Test modes() passed after 15.685 seconds.
+✔ Test freeSpaceCheckUsesBytesToCopy() passed after 15.685 seconds.
+✔ Test agreesWithTheEngineAndASyncLeavesItClean() passed after 15.685 seconds.
+✔ Test recoversFromASyncCutShortAfterTheDatabaseSwap() passed after 15.686 seconds.
+✔ Test aRatingEditIsPendingUntilSynced() passed after 15.686 seconds.
+✔ Test duplicates() passed after 15.686 seconds.
+✔ Test playlistReorderRenameFolderMoveAndSwap() passed after 15.686 seconds.
+✔ Test shippedModelsLoad() passed after 15.685 seconds.
+✔ Test columnsThatDontLineUpAreRejected() passed after 15.686 seconds.
+✔ Test readRetriesOnceWhenTheLibraryChangesMidRead() passed after 15.686 seconds.
+✔ Test missingValuesReadAsNil() passed after 15.686 seconds.
+✔ Test decodesAndNormalizesColumns() passed after 15.686 seconds.
+✔ Test errorsAreReported() passed after 15.686 seconds.
+✔ Test overlayIsANoOpWhenMusicAgrees() passed after 15.686 seconds.
+✔ Test overlayTakesMusicsValuesButNeverDatesOrLocations() passed after 15.686 seconds.
+✔ Test tooShortTrackHasNoCues() passed after 15.686 seconds.
+✔ Test indexFollowsRewrittenAndRemovedEntries() passed after 15.686 seconds.
+✔ Test overlayClearsWhatMusicCleared() passed after 15.686 seconds.
+✔ Test backfillsFromLegacyEntryAndPersistsIndex() passed after 15.686 seconds.
+✔ Test summaryMatchesFullAnalysis() passed after 15.686 seconds.
+✔ Test artworkFieldsRoundTrip() passed after 15.684 seconds.
+✔ Test settingsAndRecipeChanges() passed after 15.687 seconds.
+✔ Test olderManifestWithoutArtworkFieldsLoads() passed after 15.684 seconds.
+✔ Test entireLibraryWithoutAllSongsLoadedRemovesNothing() passed after 15.684 seconds.
+✔ Test artworkChangesAndUnchangedArt() passed after 15.687 seconds.
+✔ Test avoidsAnalysisPathCollisions() passed after 15.684 seconds.
+✔ Test sharedTrackIsNotRemovedWhileReferenced() passed after 15.684 seconds.
+✔ Test ineligibleTracksAreReported() passed after 15.684 seconds.
+✔ Test interleavedAppEditsBothSurvive() passed after 15.684 seconds.
+✔ Test updateWritesTheOtherFileAndChecksTheGeneration() passed after 15.684 seconds.
+✔ Test equalGenerationsPickTheSecondFileAndWriteTheFirst() passed after 15.684 seconds.
+✔ Test firstSaveOfALegacyFileKeepsIt() passed after 15.684 seconds.
+✔ Test tornNewestFileFallsBackAndIsOverwritten() passed after 15.684 seconds.
+✔ Test mergeKeepsAppEditsAndRejectsOtherSyncs() passed after 15.684 seconds.
+✔ Test lockIsExclusiveAndStaleLocksAreReplaced() passed after 15.684 seconds.
+✔ Test repairsMissingFiles() passed after 15.688 seconds.
+✔ Test refusesNewerFormats() passed after 15.684 seconds.
+✔ Test matchesPathsTheWayFATDoes() passed after 15.684 seconds.
+✔ Test entireLibraryAddsEverySongButOnlySelectedPlaylists() passed after 15.680 seconds.
+✔ Test databaseIdChangesWithEveryWrite() passed after 15.680 seconds.
+✔ Test sanitizesFileNames() passed after 15.680 seconds.
+✔ Test appEditDuringSyncIsKept() passed after 15.685 seconds.
+✔ Test incompleteAnalysisFolders() passed after 15.680 seconds.
+✔ Test analysisVersionChangeDoesNotRecopyAudio() passed after 15.680 seconds.
+✔ Test anotherSyncMeanwhileAbortsBeforeTheDatabaseIsTouched() passed after 15.685 seconds.
+✔ Test missingAndChangedFiles() passed after 15.686 seconds.
+✔ Test emptyLibraryReadChangesNothing() passed after 15.620 seconds.
+✔ Test incrementalReorderAddRemove() passed after 15.681 seconds.
+✔ Test evaluatesTwentyThousandTracksQuickly() passed after 15.681 seconds.
+✔ Test unreadableFilesAreNotRecordedAsAnalyzerFailures() passed after 15.609 seconds.
+✔ Test filesWrittenWithoutADatabaseWriteReachTheDriveBeforeTheManifest() passed after 15.620 seconds.
+✔ Test contentIdsFromACutShortSyncAreNotReused() passed after 15.609 seconds.
+✔ Test analysisFilesRewrittenInPlaceAreCheckedAgainAfterACutShortSync() passed after 15.609 seconds.
+✔ Test savesAlternateFilesAndLoadsTheNewest() passed after 15.524 seconds.
+✔ Test loadsAnOlderSingleFileManifest() passed after 15.517 seconds.
+✔ Test digestsMatchFullAndDigestedFingerprints() passed after 15.517 seconds.
+✔ Test fallsBackWhenTheNewestIsCorrupt() passed after 15.517 seconds.
+✔ Test copyDataFailureLeavesNoTemporaryFile() passed after 15.515 seconds.
+✔ Test writeCreatesDirectoriesAndOverwrites() passed after 15.515 seconds.
+✔ Test copyDataReplacesExistingFile() passed after 15.515 seconds.
+✔ Test writeAtomicallyReplacesWithoutLeftovers() passed after 15.515 seconds.
+✔ Test keepsNewerRatingsUnlessOverwriting() passed after 13.914 seconds.
+✔ Test restoresIntoRebuiltLibraryByPathThenName() passed after 13.773 seconds.
+✔ Test errorsAreReportedWithWhatMusicHasNow() passed after 15.693 seconds.
+✔ Test keepsOnlyRatedTracks() passed after 13.129 seconds.
+✔ Test savesOnlyWhenChangedAndNeverEmpty() passed after 13.082 seconds.
+✔ Suite MusicalKeyTests passed after 15.694 seconds.
+✔ Test legacyDriveIDsRemainValidForMusic() passed after 11.803 seconds.
+✔ Test newDriveBindsToFolderAndThenRejectsMusic() passed after 11.803 seconds.
+✔ Test validEmptyFolderIsCompleteWhileEmptyMusicRemainsUnreadable() passed after 11.214 seconds.
+✔ Test syncWithoutAnalyzingKeepsAnalysisThatStoppedBeingCurrent() passed after 15.595 seconds.
+✔ Test retainedTrackKeepsItsAnalysisWhenTheCacheEntryIsGone() passed after 15.612 seconds.
+✔ Suite JobLineTests passed after 15.694 seconds.
+✔ Suite StatusStoreTests passed after 15.694 seconds.
+✔ Suite PhraseCodecTests passed after 15.694 seconds.
+✔ Suite OneLibraryDatabaseTests passed after 15.694 seconds.
+✔ Suite AnlzPathTests passed after 15.694 seconds.
+✔ Suite ReadLedgerTests passed after 15.695 seconds.
+✔ Suite NamedCueGapTests passed after 15.695 seconds.
+✔ Suite RatingOverlayTests passed after 15.695 seconds.
+✔ Suite DriveStatusTests passed after 15.715 seconds.
+✔ Suite AnlzCueTests passed after 15.717 seconds.
+✔ Suite BeatGridTests passed after 15.742 seconds.
+✔ Suite KeyAnalyzerTests passed after 15.745 seconds.
+✔ Suite SKeyTests passed after 15.747 seconds.
+✔ Suite FileTagsTests passed after 15.747 seconds.
+✔ Suite TrackListingTests passed after 15.747 seconds.
+✔ Suite DecimateTests passed after 15.747 seconds.
+✔ Suite StructureAnalyzerTests passed after 15.748 seconds.
+✔ Suite SyncEngineTests passed after 15.751 seconds.
+✔ Suite AppStatusTests passed after 15.787 seconds.
+✔ Suite CueAnalyzerTests passed after 15.787 seconds.
+✔ Suite AudioHashTests passed after 15.787 seconds.
+✔ Suite CueBuilderTests passed after 15.787 seconds.
+✔ Suite MusicLiveTests passed after 15.787 seconds.
+✔ Suite AnalysisCacheTests passed after 15.787 seconds.
+✔ Suite ManifestTests passed after 15.787 seconds.
+✔ Suite SyncPlannerTests passed after 15.787 seconds.
+✔ Suite ManifestConcurrencyTests passed after 15.787 seconds.
+✔ Suite DriveProbeTests passed after 15.787 seconds.
+✔ Suite SyncConflictTests passed after 15.788 seconds.
+✔ Test folderPersistsPlaylistRatingAndIdentityAfterRename() passed after 15.787 seconds.
+✔ Test folderTracksAreAddedOnlyWhenExplicitlyExportingAndRetryUsesDurableReceipts() passed after 15.787 seconds.
+✔ Test folderAndRekordboxSameFileDeduplicateAndExportPreservesOriginalCueNodes() passed after 15.787 seconds.
+✔ Test failedSaveRollsBackDiskAndMemoryTogether() passed after 15.787 seconds.
+✔ Test unavailableAndInvalidSourcesDoNotClearTheLibrary() passed after 15.787 seconds.
+✔ Test legacyLocalPlaylistsAndClearedRatingsMigrateOnceWithoutReconnecting() passed after 15.787 seconds.
+✔ Test folderRenameKeepsIdentityRatingAndLocallySavedMembership() passed after 15.787 seconds.
+✔ Suite SyncScaleTests passed after 15.788 seconds.
+✔ Suite ManifestFileTests passed after 15.789 seconds.
+✔ Suite FileOpsTests passed after 15.789 seconds.
+✔ Suite RatingsBackupTests passed after 15.789 seconds.
+✔ Test sourceSwitchCannotRemoveExistingDriveContents() passed after 11.311 seconds.
+✔ Test readsKnowWhichWritesTheyInclude() passed after 15.790 seconds.
+✔ Test folderReadsM3UOrderAndSkipsNonAudioFiles() passed after 15.816 seconds.
+✔ Test exportAfterSwitchingSourcesIncludesTheSelectedOldAndNewPlaylists() passed after 15.815 seconds.
+✔ Test sourceChangesPreserveAllPlaylistsRatingsAndIdentityAcrossRestart() passed after 15.815 seconds.
+✔ Test concurrentPlaylistAddsKeepBothEdits() passed after 15.830 seconds.
+✔ Test invalidFirstImportDoesNotInitializeOrReplaceAnEmptyLibrary() passed after 15.829 seconds.
+✔ Suite MusicExportTests passed after 15.831 seconds.
+✔ Test concurrentEditsKeepBothMembershipChangesAndLatestRating() passed after 15.830 seconds.
+✔ Suite LibrarySourcesTests passed after 15.833 seconds.
+✔ Suite DeckhandLibraryTests passed after 15.834 seconds.
+✔ Test coalescesRatingsPerTrackLastOneWins() passed after 15.838 seconds.
+✔ Test failedImportKeepsLibraryEditableAndRestartsWithMissingAudio() passed after 15.841 seconds.
+✔ Test addingAndUpdatingSecondaryImportKeepsDefaultAndChangingDefaultPersistsWithoutReadingSource() passed after 15.852 seconds.
+✔ Test removeReaddAndFailedSecondaryImportPreserveDefaultLocalEditsAndIdentities() passed after 15.857 seconds.
+✔ Test usbSelectionAndReconnectKeepPlaylistAndKeyboardOrderAndLibraryOwnership() passed after 15.862 seconds.
+✔ Test emptyLibraryThenFolderMusicAndSecondFolderKeepsMixedPlaylistAndRatingsAcrossRestart() passed after 15.863 seconds.
+✔ Suite DedicatedLibraryModelTests passed after 15.864 seconds.
+✔ Test drainWaitsForARatingSetJustBeforeSync() passed after 15.891 seconds.
+✔ Suite MusicBridgeTests passed after 15.892 seconds.
+✔ Test folderPlaylistExecutesAndVerifiesOnADeviceLibrary() passed after 11.480 seconds.
+✔ Suite SourceOwnershipTests passed after 15.959 seconds.
+✔ Test duplicateWithOtherTagsSharesTheFileWithoutCopying() passed after 15.878 seconds.
+✔ Suite SyncRecoveryTests passed after 15.977 seconds.
+✔ Test mixedLibrarySyncSurvivesSourceChangeDisconnectAndRestart() passed after 16.870 seconds.
+✔ Suite LibrarySyncTests passed after 16.872 seconds.
+✔ Test evaluateAfterExecuteIsClean(seed:) with 6 test cases passed after 25.245 seconds.
+✔ Suite SyncPropertyTests passed after 25.247 seconds.
+✔ Test run with 211 tests in 43 suites passed after 25.248 seconds.

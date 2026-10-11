@@ -1,0 +1,32 @@
+Deckhand — DH_UI_QA
+
+PLAYLISTS
++ Friday  (3)
+
+TRACKS
++ 2 new
+~ 0 to copy again (audio changed or missing from the drive)
+- 0 to remove
+@ 2 analysis files to check
+* 2 cover art to check
+= 0 unchanged
+
+ANALYSIS
+0 tracks to analyze
+
+COPY
+1.1 MB
+
+DRIVE
+the drive has no library database
+selection changed
+Copying: 1/2 (50%)
+Copying: 2/2 (100%)
+Analysis files: 1/2 (50%)
+Analysis files: 2/2 (100%)
+  writing library database
+  committing
+
+Done. 2 tracks in 1 playlist on DH_UI_QA.
+Run `deckhand eject /Volumes/DH_UI_QA` before unplugging.
+@result {"analysisFailed":0,"analyzed":0,"clean":true,"copied":2,"generation":2,"pending":0,"removed":0,"summary":{"analysisFiles":0,"artwork":0,"bytesToCopy":0,"clean":2,"drive":[],"failed":0,"ineligible":0,"pending":0,"playlistsToCreate":0,"playlistsToRemove":0,"playlistsToUpdate":0,"playlistsUnknown":0,"records":0,"retained":0,"toAdopt":0,"toAnalyze":0,"toCopy":0,"toRemove":0,"total":0,"tracks":2,"unknown":0},"tracks":2,"wroteDatabase":true}

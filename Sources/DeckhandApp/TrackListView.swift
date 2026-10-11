@@ -12,6 +12,7 @@ struct TrackListView: View {
     @State private var showKeys = false
     /// Tracks waiting in the ⇧P "Add to playlist" picker.
     @State private var picking: [String] = []
+    @State private var reviewUnavailableAudio = false
 
     var body: some View {
         // Memoized in the model: cheap unless rows, selection, filter or sort changed.
@@ -21,7 +22,14 @@ struct TrackListView: View {
             header(listing)
             FilterBar(shown: rows.count, total: listing.base.count, genres: listing.genres)
             SyncNoticeBanner(library: library)
-            LiveDataBanner(library: library)
+            if library.unavailableTracks > 0, library.selection == .all {
+                HStack {
+                    Text(UnavailableAudioIssue.summary(library.unavailableAudioIssues))
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Review") { reviewUnavailableAudio = true }.font(.caption)
+                }.padding(.horizontal, 16).padding(.bottom, 8)
+            }
             AnalysisBanner(library: library)
             Divider()
             if library.loadState == .loaded {
@@ -30,6 +38,7 @@ struct TrackListView: View {
                 LibraryLoading(library: library)
             }
         }
+        .sheet(isPresented: $reviewUnavailableAudio) { UnavailableAudioView(library: library) }
         .toolbar { driveToolbar }
         // When Up Next moves on (next button, ⌘→, or a track ending), select the new track and scroll
         // it into view if it's in this list.
@@ -51,9 +60,8 @@ struct TrackListView: View {
         }
     }
 
-    /// One row: title, summary, then search on the right.
+    /// The title and summary stay above the filtering tools.
     private func header(_ listing: TrackListing) -> some View {
-        @Bindable var library = library
         return HStack(spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(library.title).font(.title3.bold()).lineLimit(1)
@@ -62,11 +70,6 @@ struct TrackListView: View {
                 }
             }
             Spacer(minLength: 12)
-            Button { library.startReview(player: player) } label: {
-                Label("Quick Rate", systemImage: "star.leadinghalf.filled")
-            }
-            .help("Rate this list's unrated tracks one by one (r)")
-            SearchField(text: $library.filter.search)
         }
         .padding(.horizontal, 16)
         .padding(.top, 10)
@@ -82,7 +85,7 @@ struct TrackListView: View {
     private func summary(_ listing: TrackListing) -> String {
         let minutes = listing.minutes
         var s = "\(listing.base.count.formatted()) tracks · \(minutes / 60) h \(minutes % 60) min"
-        if let drive = library.activeDrive, drive.manifest != nil {
+        if let drive = library.activeDrive, library.canPreviewDrive(drive) {
             s += " · \(library.onDriveCount(listing).formatted()) on \(drive.volume.name)"
             // For a playlist, what's waiting (the drive box on the right covers the whole drive).
             if let p = library.selectedPlaylist, case .pending(let n)? = library.playlistSync(p) {
@@ -98,12 +101,15 @@ struct TrackListView: View {
         return TrackTable(
             rows: rows,
             version: listing.version,
+            focusRequest: library.trackFocusRequest,
             selection: $selection,
             sort: $library.sort,
             cell: { column, r in cell(column, r) },
             menu: { ids in menu(ids, rows: rows) },
             onOpen: { player.play($0, artwork: library.artwork) },
-            onCommand: { command, ids in perform(command, ids, rows: rows) }
+            onCommand: { command, ids in perform(command, ids, rows: rows) },
+            onDragBegin: { library.draggedItems = [TrackDrag.encode($0)] },
+            onDragEnd: { library.draggedItems = [] }
         )
         // The Track menu's rating shortcuts work wherever focus is (the sidebar, the search field).
         .focusedSceneValue(\.rateSelection, selection.isEmpty ? nil : RateSelection { [selection] stars in
@@ -215,72 +221,84 @@ struct TrackListView: View {
 /// Drive status and Sync. Its own view so job progress (up to 10 Hz) redraws only this, not the list.
 private struct DriveControls: View {
     var library: LibraryModel
+    @State private var showJob = false
 
     var body: some View {
-        if let drive = library.activeDrive {
-            let job = library.job
-            Color.clear.frame(width: 4)
-            Menu {
-                Picker("Drive", selection: Binding(get: { library.activeDriveId },
-                                                   set: { library.activeDriveId = $0; library.refreshDrives() })) {
-                    ForEach(library.drives) { d in
-                        Text(d.manifest == nil ? "\(d.volume.name) (not a Deckhand drive)" : d.volume.name)
-                            .tag(Optional(d.id))
-                    }
+        let job = library.job
+        Group {
+        if case .sync(_, let name) = job.kind, job.running {
+            USBProgressLabel(driveName: name, phase: job.phase, done: job.done, total: job.total, detail: job.detail)
+                .padding(.trailing, 8)
+            Button { showJob = true } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "externaldrive")
+                    Text(name).lineLimit(1)
                 }
-                .pickerStyle(.inline)
-                .labelsHidden()
-                Divider()
-                Button("Eject \(drive.volume.name)") { library.eject(drive) }
-                    .disabled(job.running || library.ejecting.contains(drive.id))
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "mediastick")
-                    Text(drive.volume.name).fontWeight(.semibold)
-                    if job.running, let total = job.total, total > 0 {
-                        Text("\(job.phase) \(Int(Double(job.done) / Double(total) * 100))%")
-                            .monospacedDigit().foregroundStyle(.secondary)
-                    } else if job.running {
-                        Text(job.phase).foregroundStyle(.secondary).lineLimit(1)
-                    } else if library.checkingStatus {
-                        Text("Checking…").foregroundStyle(.secondary)
-                    } else if library.pendingChanges > 0 {
-                        let size = library.pendingBytes > 0 ? " · \(LibraryModel.bytes(library.pendingBytes))" : ""
-                        Text("\(library.pendingChanges.formatted()) to sync\(size)\(library.pendingWontFit ? " · won't fit" : "")")
-                            .foregroundStyle(library.pendingWontFit ? Color.red : Color.pending)
-                    } else if let n = library.driveStatus?.summary.unknown, n > 0 {
-                        Text("\(n.formatted()) not checked").foregroundStyle(.secondary)
-                    }
-                    Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-                }
+                .font(.callout).padding(.horizontal, 10).frame(height: 28)
+                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
             }
-            .menuStyle(.button)
             .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .padding(.horizontal, 10)
-            .frame(height: 28)
-            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.white.opacity(0.12)))
-            .help("Changes waiting for \(drive.volume.name). Click to switch drives.")
-            // Blue only when there's something to sync; with nothing pending it stays a quiet button you can still press.
-            let prominent = job.running || library.pendingChanges > 0
-            Button { library.sync(drive) } label: {
+            .help("Show sync progress and details")
+            .popover(isPresented: $showJob, arrowEdge: .bottom) { jobDetails }
+            Button("Cancel") { job.cancel() }
+                .buttonStyle(.borderless)
+                .help("Cancel syncing \(name)")
+        } else if let drive = library.activeDrive {
+            let issue = syncIssue(for: drive.id)
+            Color.clear.frame(width: 4)
+            Button {
+                if issue != nil { showJob = true }
+                else if library.canPreviewDrive(drive) { library.showingUSBChanges = true }
+                else { library.showingUSBConnection = true }
+            } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "externaldrive")
+                    Text(drive.volume.name)
+                    if let status = issue ?? library.usbToolbarStatusText {
+                        Text(status).foregroundStyle(issue != nil || library.usbToolbarNeedsAction ? Color.pending : Color.secondary)
+                    }
+                }
+                .font(.callout).padding(.horizontal, 10).frame(height: 28)
+                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+            }
+            .buttonStyle(.plain)
+            .help(issue != nil ? "Show the last sync's details" : "Review selected playlists and changes for \(drive.volume.name)")
+            .popover(isPresented: $showJob, arrowEdge: .bottom) { jobDetails }
+            // Drive switching, capacity and Eject live together in the sidebar footer.
+            // A completed sync needs no extra toolbar label; the disabled button conveys that state.
+            let checking = drive.isReading || library.checkingStatus
+            let enabled = library.usbSyncEnabled
+            let prominent = enabled
+            Button { library.requestSync() } label: {
                 HStack(spacing: 6) {
-                    if job.running { ProgressView().controlSize(.mini).tint(.white) }
-                    Text(job.running ? "Syncing" : "Sync").fontWeight(.semibold)
+                    if checking { ProgressView().controlSize(.mini) }
+                    Text(library.usbPrimaryActionTitle).fontWeight(.semibold)
                 }
                 .foregroundStyle(prominent ? Color.white : Color.secondary)
                 .padding(.horizontal, 14)
                 .frame(height: 28)
-                .background(prominent ? Color.accentColor.opacity(job.running ? 0.5 : 1) : Color.white.opacity(0.06),
+                .background(prominent ? Color.accentColor : Color.white.opacity(0.06),
                             in: RoundedRectangle(cornerRadius: 6))
                 .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.white.opacity(prominent ? 0 : 0.12)))
                 .contentShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
-            .disabled(job.running)
-            .help("Sync \(drive.volume.name)")
+            .disabled(!enabled)
+            .help(checking ? "Checking \(drive.volume.name)" : library.usbIsUpToDate ? "\(drive.volume.name) is up to date" : library.usbPrimaryActionTitle == "Setup" ? "Set up \(drive.volume.name) for this library" : "Sync \(drive.volume.name)")
+        }
+        }
+    }
+
+    private var jobDetails: some View {
+        JobCard(onDismiss: { showJob = false }).environment(library).padding(12).frame(width: 340)
+    }
+
+    private func syncIssue(for driveID: String) -> String? {
+        guard case .sync(let id, _) = library.job.kind, id == driveID else { return nil }
+        switch library.job.state {
+        case .failed: return "Sync failed"
+        case .cancelled: return "Sync cancelled"
+        default: return nil
         }
     }
 }
@@ -292,7 +310,7 @@ private struct AnalysisBanner: View {
         if library.unanalyzedCount > 0 && !library.job.running {
             HStack(spacing: 10) {
                 Image(systemName: "waveform").foregroundStyle(Color.pending)
-                Text("\(library.unanalyzedCount.formatted()) tracks need analysis for key, tempo, energy and waveforms (about 9 min per 1,000).")
+                Text("\(library.unanalyzedCount.formatted()) \(library.unanalyzedCount == 1 ? "track in your library needs" : "tracks in your library need") analysis for key, tempo, energy and waveforms.")
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("Analyze Library") { library.analyzeLibrary() }
@@ -323,13 +341,7 @@ private struct SyncNoticeBanner: View {
                     Button("Details") { showDetails = true }
                         .popover(isPresented: $showDetails, arrowEdge: .bottom) { NoticeDetails(lines: details) }
                     Button("Sync Again") { if let d = library.drives.first(where: { $0.id == id }) { library.sync(d) } }
-                case .staleLibrary(let id, let drive, let reason):
-                    Text("Didn't sync \(drive): couldn't read Music's current data (\(reason)), and the library snapshot can trail recent edits.")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Sync Anyway (May Be Stale)") {
-                        if let d = library.drives.first(where: { $0.id == id }) { library.sync(d, requireLive: false) }
-                    }
+
                 }
                 Button { library.syncNotice = nil } label: { Image(systemName: "xmark") }
                     .buttonStyle(.borderless)
@@ -356,31 +368,6 @@ private struct NoticeDetails: View {
             .padding(12)
         }
         .frame(width: 460, height: min(320, CGFloat(lines.count) * 22 + 24))
-    }
-}
-
-/// Shown when Music is running but can't be read live: rows and sync status come from iTunesLibrary's snapshot,
-/// which can trail recent edits.
-private struct LiveDataBanner: View {
-    var library: LibraryModel
-
-    var body: some View {
-        if case .unavailable(let failure) = library.live {
-            HStack(spacing: 10) {
-                Image(systemName: "exclamationmark.arrow.triangle.2.circlepath").foregroundStyle(Color.pending)
-                Text("Can't read Apple Music's current data: \(failure.description). Edits made in Music may take a while to show here and in sync status.")
-                    .foregroundStyle(.secondary)
-                Spacer()
-                if failure.status == MusicEvents.Failure.notPermitted {
-                    Button("Open Settings") { library.openAutomationSettings() }
-                }
-                Button("Try Again") { library.scheduleReload("trying Music again", after: 0) }
-            }
-            .font(.callout)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(Color.pending.opacity(0.08))
-        }
     }
 }
 
@@ -422,7 +409,28 @@ struct FilterBar: View {
 
     var body: some View {
         @Bindable var library = library
-        HStack(spacing: 6) {
+        TrackToolsLayout {
+            filters
+            HStack(spacing: 10) {
+                if shown != total {
+                    Text("\(shown.formatted()) of \(total.formatted())")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Button { library.startReview(player: player) } label: {
+                    Label("Quick Rate", systemImage: "star.leadinghalf.filled")
+                }
+                .fixedSize()
+                .help("Rate this list's unrated tracks one by one (r)")
+                SearchField(text: $library.filter.search)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+    }
+
+    private var filters: some View {
+        @Bindable var library = library
+        return HStack(spacing: 6) {
             chip("Key", value: keySummary, on: !library.filter.keys.isEmpty) { showKeys.toggle() }
                 .popover(isPresented: $showKeys, arrowEdge: .bottom) { KeyWheel().padding().environment(library).environment(player) }
             chip("BPM", value: bpmSummary, on: library.filter.bpmMin != nil || library.filter.bpmMax != nil) { showBpm.toggle() }
@@ -468,14 +476,7 @@ struct FilterBar: View {
             if !library.filter.isEmpty {
                 Button("Clear") { library.filter = TrackFilter() }.buttonStyle(.link)
             }
-            Spacer()
-            if shown != total {
-                Text("\(shown.formatted()) of \(total.formatted())")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
     }
 
     private var keySummary: String {
@@ -656,8 +657,10 @@ private struct KeyboardHelp: View {
 
     private let groups: [(String, [(String, String)])] = [
         ("Moving around", [
-            ("j  k   ↓  ↑", "Next / previous track"),
+            ("j  k", "Next / previous track (anywhere, except while typing)"),
+            ("↓  ↑", "Next / previous track (in the list)"),
             ("⌘⇧]  ⌘⇧[", "Next / previous playlist"),
+            ("Tab / ⇧Tab", "Into tracks / back to playlists"),
             ("J  K", "Extend the selection"),
             ("⌘↑  ⌘↓", "Top / bottom of the list"),
             ("/", "Search (Escape or Return goes back to the list)"),
@@ -753,7 +756,7 @@ private struct PlayingTitle: View {
     }
 }
 
-/// Shown in place of the track list until the Apple Music library has been read.
+/// Shown in place of the track list until the saved Deckhand library has been read.
 private struct LibraryLoading: View {
     var library: LibraryModel
 
@@ -762,19 +765,15 @@ private struct LibraryLoading: View {
             switch library.loadState {
             case .failed(let error):
                 Image(systemName: "exclamationmark.triangle").font(.system(size: 30)).foregroundStyle(Color.pending)
-                Text("Couldn't read your Apple Music library").font(.title3.bold())
+                Text("Couldn't open your Deckhand library").font(.title3.bold())
                 Text(error).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 460)
-                Button("Try Again") { Task { await library.readLibrary() } }
+                Button("Try Again") { Task { await library.retryLoad() } }
                     .keyboardShortcut(.defaultAction)
             default:
                 PlatterMark().frame(width: 56, height: 56)
                     .opacity(0.9)
                 ProgressView().controlSize(.small)
-                Text("Reading your Apple Music library…").font(.title3.weight(.semibold))
-                if library.loadState == .slow {
-                    Text("This is taking longer than usual. If macOS is asking whether Deckhand may access Apple Music, click Allow; the prompt can be hidden behind other windows.")
-                        .foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 460)
-                }
+                Text("Opening your Deckhand library…").font(.title3.weight(.semibold))
             }
         }
         .padding(40)

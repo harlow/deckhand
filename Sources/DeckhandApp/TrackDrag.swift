@@ -1,7 +1,9 @@
 import Foundation
+import UniformTypeIdentifiers
 
-/// Drag payload for tracks: their Apple Music IDs as tagged plain text, so drops from other apps are ignored.
+/// Local track IDs. The plain-text representation also supports dropping into the queue.
 enum TrackDrag {
+    static let type = UTType(exportedAs: "rocks.deckhand.tracks", conformingTo: .data)
     private static let prefix = "deckhand-tracks:"
 
     static func encode(_ ids: [String]) -> String {

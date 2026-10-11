@@ -1,0 +1,26 @@
+Deckhand — DH_LIB_QA
+
+PLAYLISTS
+= Friday  (3)
+= My Mixed Set  (3)
+= Peak Set  (2)
+= RB Set  (2)
+
+TRACKS
++ 0 new
+~ 0 to copy again (audio changed or missing from the drive)
+- 0 to remove
+= 2 unchanged
+
+ANALYSIS
+0 tracks to analyze
+
+COPY
+Zero KB
+
+2 track(s) kept on the drive although their source can't be read right now:
+  Warmup: Audio file is missing or unreadable
+  Closer: Audio file is missing or unreadable
+
+Already up to date.
+@result {"analysisFailed":0,"analyzed":0,"clean":true,"copied":0,"generation":3,"pending":0,"removed":0,"summary":{"analysisFiles":0,"artwork":0,"bytesToCopy":0,"clean":2,"drive":[],"failed":0,"ineligible":0,"pending":0,"playlistsToCreate":0,"playlistsToRemove":0,"playlistsToUpdate":0,"playlistsUnknown":0,"records":0,"retained":2,"toAdopt":0,"toAnalyze":0,"toCopy":0,"toRemove":0,"total":0,"tracks":4,"unknown":0},"tracks":4,"wroteDatabase":false}

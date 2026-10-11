@@ -22,9 +22,24 @@ App icon: the "Platter" mark, drawn by `Scripts/make-icon.swift` at build time. 
 
 ## What works
 
-- **Sidebar:** All Tracks and Needs Analysis; Apple Music playlists (folders indented) with sync badges
-  for the chosen drive; new playlist (created in Music); and mounted drives with space and last sync
-  (click to choose, eject). The chosen drive and playlist are remembered.
+- **Music imports:** choose Music / iTunes, Rekordbox XML, a folder, or Start Empty on first launch.
+  Later launches open the same **Deckhand Library**. Add Music in **Library Settings** (or ⌥⌘L)
+  brings tracks and playlists into it.
+  **Library Settings** contains import history and an optional **Re-import** action for each input.
+  The workspace has no import status row, update command, or update-default preference.
+  Saved-library reads never pull external changes; imports preserve local playlists and ratings.
+  See [library-sources.md](plans/library-sources.md).
+- **Sidebar:** All Tracks combines imports; saved playlists and folders appear with sync badges for the
+  chosen drive, without rearranging the list when a USB connects. New playlists always belong to Deckhand.
+  Drive and playlist selections are remembered.
+- **USB sync:** check the playlists you want on the connected USB. The drive/status button shows
+  pending changes and opens a preview of selected playlists and the diff. Sync applies it.
+  A USB from an earlier library offers the same blue **Sync** button, with a one-time confirmation
+  that verifies its music and keeps its selection before syncing. Unchecking the last playlist opens
+  a removal confirmation on sync.
+- **Delete a playlist:** right-click it in the sidebar and choose **Delete Playlist…**, then confirm.
+  Tracks, ratings and analysis stay in Deckhand. Re-import keeps the playlist deleted; other apps are
+  unchanged, and a connected USB is updated only when you sync.
 - **Track table:** sortable columns: sync dot, title/artist, three-band waveform overview (click to preview
   from that point), BPM, Camelot key chip, energy bar, genre, time. Search covers title, artist, genre or a
   key like `8A`.
@@ -32,32 +47,42 @@ App icon: the "Platter" mark, drawn by `Scripts/make-icon.swift` at build time. 
   minimum energy, minimum rating, genres, and "Mixes with now playing".
 - **Playback:** a player bar with a detailed waveform, phrase strip and hot cues A–H (click to seek or jump),
   and an Up Next queue showing transition notes and "Mixes well next" suggestions.
-- **Context menu:** Play, Play Next, Add to Up Next, Add to Playlist (via Music), Rating, Show in Finder,
+- **Context menu:** Play, Play Next, Add to Up Next, Add to Playlist (in Deckhand), Rating, Show in Finder,
   Remove from Playlist.
-- **Star ratings:** shared with Apple Music in both directions. Click stars in the list (or use the Rating
-  submenu, or ⌥0–⌥5) to set them in Music. The list and the sync dot change at once; Music's answer, read
-  back after the write, replaces it, and an error (no Automation access, Music not answering, track not
-  found) is shown rather than ignored; if Music isn't running it's opened in the background. Sync writes ratings to the drive, and a rating or title change alone is
-  enough to rewrite the drive's database.
-- **Drag and drop:** drag tracks (or the whole selection) onto a sidebar playlist to add them in Apple Music,
-  skipping tracks it already has; or onto Up Next to queue them.
-- **Analysis banner:** when tracks aren't analyzed, Analyze Library runs `deckhand analyze` and reloads
-  the results when it finishes.
-- **Sync:** the toolbar shows the chosen drive's pending changes and a Sync button (blue only when something
-  is pending), which runs `deckhand sync <drive> -y --analyze --require-live` in the background once any
-  ratings still being written have reached Music. Progress (and Cancel) appears at the top of the right-hand
-  pane. Afterwards the drive shows up to date at once if the sync said so; the app then reads Music and the
-  drive again, and if anything is still pending a note above the track list says what (with Sync Again).
-  See [Sync status](#sync-status) below.
+- **Local playlists and ratings:** every source saves edits in Deckhand's SQLite database. Untouched
+  imports follow refreshes; edited memberships and ratings remain local. External deletions retain saved
+  playlists and track references. An offline import leaves the library editable and shows unavailable audio.
+- **Export Playlists:** a secondary action in the Library menu. Music gets selected playlist copies
+  in a Deckhand folder; updating Music ratings is a separate opt-in. Rekordbox gets a separate XML export containing all saved
+  playlists. Local edits never automatically write back.
+- **Drag and drop:** drag tracks (or the whole selection) onto a sidebar playlist to add them in Deckhand,
+  skipping tracks it already has; or onto Up Next to queue them. Dropping a playlist onto another playlist
+  previews the new-track count and asks before copying; duplicates are skipped. Drop onto a folder to
+  move inside it, or at the insertion line between rows to reorder at the top level or within a folder.
+  Playlist order saves locally and survives re-import.
+- **Analysis:** opening the library loads cached results without opening audio files. Needs Analysis
+  offers Analyze Library; the Library menu also contains this action. Results reload when it finishes.
+- **Sync USB (⇧⌘S):** the toolbar and keyboard command sync the selected drive directly. The bundled CLI uses a temporary snapshot
+  of the saved Deckhand library after local writes finish. Progress and Cancel appear in the right pane.
+  The engine verifies its result, then the app checks the saved library and drive again. Source changes
+  preserve the shared library's identity. Older source-bound drives can be explicitly adopted only when
+  their IDs and saved selections survive import. Sync then applies the reviewed changes. The toolbar
+  offers Set Up USB for an unprepared drive, or USB Help if a drive cannot be safely matched;
+  drive switching and Eject live in the sidebar footer. A mismatch no longer adds a banner to the workspace.
 
 ![Deckhand keyboard shortcuts](images/keyboard-shortcuts.png)
 
 ### Keyboard (track list)
 
+Clicking a sidebar playlist (including the already-open one) focuses its tracks. Playlist shortcuts
+also put focus in the track list; sidebar arrow navigation stays in the sidebar until Tab. Search
+keeps ordinary text entry, including j/k.
+
 | Keys | Action |
 |---|---|
 | j / k or ↓ / ↑ | Move (J / K extend the selection) |
 | ⌘⇧] / ⌘⇧[ | Next / previous playlist in the sidebar (works anywhere in the window) |
+| Tab / ⇧Tab | From sidebar into tracks / from tracks back to sidebar |
 | ⌘↑ / ⌘↓ | Top / bottom |
 | Return / ⇧Return | Play / play from Mix In |
 | l (or p) | Preview from just before the first drop |
@@ -101,14 +126,9 @@ highly, and membership of playlists full of tracks you like (`Suggestions.swift`
 
 ### Ratings backup
 
-Apple Music keeps star ratings only in its library database, not in the audio files. Deckhand saves them
-all to `~/Library/Application Support/Deckhand/Ratings/` (`ratings-latest.json` plus one dated copy per
-day, kept 60 days) at launch and after each Quick Rate session, only when they've changed.
-
-- `deckhand ratings backup` saves them by hand.
-- `deckhand ratings restore [file] [--dry-run] [--overwrite]` puts them back, matching by library ID,
-  then file path, then title + artist + length (so it works on a rebuilt library). By default it only
-  fills in unrated tracks; `--overwrite` also replaces ratings that differ.
+App ratings save immediately in the dedicated library database and survive restart and source changes.
+The separate Music commands `deckhand ratings backup` and `deckhand ratings restore` still back up and
+restore Music's own ratings. The app no longer runs Music rating backups automatically.
 
 ### Performance and diagnostics
 
@@ -140,30 +160,20 @@ saved settings. `DeckhandAppCore` holds the parts that don't need a UI, and its 
   the newer file scan).
 - **After a sync.** The CLI's last line, `@result {...}`, says whether its own self-check was clean. If so the app
   shows the drive clean at once; evaluations begun before the sync ended are dropped (so a rating set in that
-  second shows its pending dot once the verification lands). Then it reads Music and the
+  second shows its pending dot once the verification lands). Then it reads the saved library and the
   drive again and evaluates ("verification"); that replaces the optimistic status, and if anything is still
   pending (and nothing was edited during the sync) a note above the track list lists it. The same lines go to the
   Console.
-- **Music's live data.** iTunesLibrary reads a copy of the library that Music's agent updates in batches; it
-  trails edits by seconds, and some records stay stale indefinitely (Music back-fills comments and genres from
-  file tags without passing them on). So every field the drive's database takes from Music (title, artist,
-  album, album artist, genre, track/disc number, year, rating, comment) is read live with raw Apple Events
-  (~250 ms for 2,000 tracks) and laid over the snapshot, normalized like iTunesLibrary's values so an unchanged
-  track compares equal. Dates and file locations always come from the snapshot (Apple Events report some dates
-  an hour off, and paths in another Unicode form). `deckhand sync` and `status` read the library the same way,
-  so the app and the CLI see the same data. `deckhand debug music-live` lists where the snapshot and Music differ.
-- **Ratings.** Set in the app, a rating shows at once (`RatingOverlay`). `MusicBridge` writes it — coalesced per
-  track, the last one wins — then reads it back; the row takes Music's value. A library read that ran before the
-  write can't put the old rating back (reads and writes carry the bridge's sequence numbers), and Sync waits for
-  queued ratings first.
-- **Reloads.** The library is read again when Music's agent posts `com.apple.AMPLibraryAgent.libraryChanged`
-  (debounced), a few seconds after the app's own writes, after every sync, and when the app becomes active.
-- **Access.** At launch the app checks whether it may control Music (`AEDeterminePermissionToAutomateTarget`)
-  and asks once if it hasn't. If Music is running but can't be read (access refused, no answer), a banner says
-  the list and status may trail recent edits, with Open Settings for Automation. If Music isn't running, the
-  snapshot is current (nothing is waiting to reach it) and no banner shows. The app's Sync passes
-  `--require-live`: if Music can't be read then, the CLI stops before writing and prints `@live {...}`, and the
-  app offers **Sync Anyway (May Be Stale)**, which syncs from the snapshot.
+- **Imports.** Music's framework snapshot is overlaid with live fields when available during an explicit
+  import. Folder and XML adapters normalize to the same source model. Imports merge transactionally;
+  a failed read cannot become an empty replacement.
+- **Local saves.** Membership and rating writes serialize in the library actor. The UI applies committed
+  snapshots with monotonic revisions so a late result cannot restore an older edit. Sync waits for saves.
+- **Reloads.** Foreground activation and post-sync verification check local audio availability and the drive.
+  External changes arrive only through Add Music or Re-import in Library Settings.
+- **Access.** Music import/export may require Media & Apple Music or Automation permissions. USB sync uses
+  the saved Deckhand snapshot and does not require live Music access. Music export failures leave local
+  playlists intact and are shown in the destination sheet.
 - **Selection edits** (adding or removing playlists, All Tracks) show at once and are saved with `Manifest.edit`;
   the view then takes what was saved. During the app's own sync they wait and are saved when it finishes; if
   another Deckhand is syncing the drive, the edit is undone with an explanation.
@@ -172,8 +182,8 @@ saved settings. `DeckhandAppCore` holds the parts that don't need a UI, and its 
 
 - Editing analysis (BPM/key/grid/cues), smart crates, play history, set planner, library health.
 - Genre families in the filter and an optional family-on-drive setting; see [genres.md](genres.md).
-- In-app drive setup: a drive whose playlists were never chosen needs one `deckhand sync <drive>` in
-  Terminal first.
+- In-app drive initialization: run `deckhand init <drive>` in Terminal first, then choose playlists
+  or All Tracks in the app. This works for Music, folder and XML sources.
 
 ## Design: screens
 
@@ -234,17 +244,18 @@ In rough priority order:
 5. **Library health.** Duplicates, missing files, DRM tracks that can't sync, and failed analyses.
 6. **Auto-sync on plug-in** (opt-in, per drive), with a notification when it's done.
 
-Deferred: importing grids, cues and keys from an existing Rekordbox library, so Rekordbox users keep cues
-they placed by hand. It needs a reader for Rekordbox's `master.db` or `rekordbox.xml`.
+Deferred: using imported Rekordbox grids, cues and keys for playback/USB analysis. XML export preserves
+these entries from the input XML, but Deckhand currently analyzes the audio itself.
 
 ## Architecture
 
-- **Apple Music stays the source of truth** for files, playlists, ratings and play counts.
-  - **Reading:** the iTunesLibrary framework (`AppleMusicLibrary`), with Music's live values laid over it
-    (`MusicLive`, below). iTunesLibrary is read-only and only returns data to a code-signed app.
-  - **Writing:** ratings as raw Apple Events (`MusicEvents`); playlists and adding and removing tracks with
-    Music's AppleScript (`AppleMusicWriter`, also used by `import-playlists`), slow for bulk edits but fine for
-    one-off changes. In the app all of it, reads included, goes through `MusicBridge`'s one serial queue.
+- **Deckhand owns tracks and playlists.** `DeckhandLibraryStore` persists normalized records, provenance,
+  source mappings, edit flags, cached XML and export receipts in one SQLite database. `LocalLibraryStore`
+  remains a migration reader for the first per-source implementation.
+- **Imports:** `LibrarySourceAdapter` reads folders/XML; `AppleMusicLibrary` and `MusicBridge` read Music.
+  All feed the dedicated store. Audio remains in place; imports sharing a resolved path share one track.
+- **Explicit Music export:** `MusicExport` checks destination copies and checkpoints receipts. Its serial
+  `AppleMusicDestination` writes via `AppleMusicWriter` and `MusicEvents`. Tests substitute a stateful fake.
 - **Deckhand's cache** holds everything Music can't: key, energy, beat grid, cues, sections/phrases and
   waveforms (peak/RMS and three bands). The app reads what `deckhand analyze` produces.
 - **Stack:** a SwiftUI app target in this package, built on the `Sync` library (and through it

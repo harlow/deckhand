@@ -1,0 +1,106 @@
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/19] Write sources
+[4/19] Write swift-version--58304C5D6DBC2206.txt
+[6/34] Compiling SyncTests SyncRecoveryTests.swift
+[7/35] Compiling DeckhandAppTests TrackListingTests.swift
+[8/35] Compiling SyncTests SyncPropertyTests.swift
+[9/35] Compiling SyncTests AudioHashTests.swift
+[10/35] Compiling SyncTests CueBuilderTests.swift
+[11/35] Compiling DeckhandLibraryTests MusicExportTests.swift
+[12/35] Compiling DeckhandLibraryTests LibrarySyncTests.swift
+[13/35] Compiling DeckhandLibraryTests LibraryFixture.swift
+[14/35] Compiling SyncTests SyncScaleTests.swift
+[15/35] Compiling DeckhandAppCoreTests JobLineTests.swift
+[16/35] Compiling DeckhandAppCoreTests MusicBridgeTests.swift
+[17/35] Emitting module DeckhandAppCoreTests
+[18/35] Compiling DeckhandAppCoreTests StatusStoreTests.swift
+[19/35] Compiling SyncTests SyncPlannerTests.swift
+[20/35] Compiling SyncTests AnalysisCacheTests.swift
+[21/35] Compiling SyncTests AppStatusTests.swift
+[22/35] Compiling SyncTests ManifestConcurrencyTests.swift
+[23/35] Compiling SyncTests ManifestTests.swift
+[24/35] Compiling SyncTests DriveProbeTests.swift
+[25/35] Compiling SyncTests FileOpsTests.swift
+[26/35] Compiling SyncTests SyncHarness.swift
+[27/35] Emitting module SyncTests
+[28/35] Compiling SyncTests SourceOwnershipTests.swift
+/Users/harlow/Code/deckhand/Tests/SyncTests/SyncEngineTests.swift:475:29: warning: no calls to throwing functions occur within 'try' expression
+473 |     @Test func recoversFromASyncCutShortAfterTheDatabaseSwap() throws {
+474 |         let h = try synced(["A"])
+475 |         let manifestFiles = try Manifest.urls(root: h.drive).map { try? Data(contentsOf: $0) }
+    |                             `- warning: no calls to throwing functions occur within 'try' expression
+476 |         for id in ["B", "C"] { try h.addTrack(id); try h.analyze(id) }
+477 |         h.setPlaylist("P1", "One", ["A", "B", "C"])
+[29/35] Compiling SyncTests SyncEngineTests.swift
+/Users/harlow/Code/deckhand/Tests/SyncTests/SyncEngineTests.swift:475:29: warning: no calls to throwing functions occur within 'try' expression
+473 |     @Test func recoversFromASyncCutShortAfterTheDatabaseSwap() throws {
+474 |         let h = try synced(["A"])
+475 |         let manifestFiles = try Manifest.urls(root: h.drive).map { try? Data(contentsOf: $0) }
+    |                             `- warning: no calls to throwing functions occur within 'try' expression
+476 |         for id in ["B", "C"] { try h.addTrack(id); try h.analyze(id) }
+477 |         h.setPlaylist("P1", "One", ["A", "B", "C"])
+[30/35] Emitting module DeckhandLibraryTests
+[31/35] Compiling DeckhandLibraryTests DeckhandLibraryTests.swift
+[32/35] Emitting module DeckhandAppTests
+[33/35] Compiling DeckhandAppTests DedicatedLibraryModelTests.swift
+[33/35] Write Objects.LinkFileList
+ld: warning: building for macOS-14.0, but linking with dylib '/opt/homebrew/opt/sqlcipher/lib/libsqlcipher.dylib' which was built for newer version 26.0
+[34/35] Linking DeckhandPackageTests
+Build complete! (12.42s)
+Test Suite 'Selected tests' started at 2026-10-11 08:35:51.766.
+Test Suite 'DeckhandPackageTests.xctest' started at 2026-10-11 08:35:51.770.
+Test Suite 'DeckhandPackageTests.xctest' passed at 2026-10-11 08:35:51.770.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-11 08:35:51.770.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.003) seconds
+◇ Test run started.
+↳ Testing Library Version: 1743
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite DedicatedLibraryModelTests started.
+◇ Test savedEmptyAndPopulatedLibrariesNeverStartInChooser(populated:) started.
+◇ Test musicExportKeepsRatingsUnlessExplicitlySelected() started.
+◇ Test emptyLibraryThenFolderMusicAndSecondFolderKeepsMixedPlaylistAndRatingsAcrossRestart() started.
+◇ Test previousDeckhandUSBPreviewsWithoutWritingAndExplicitAssociationKeepsSelection() started.
+◇ Test unreadableExistingUSBDoesNotBecomeAnEmptySetupTarget() started.
+◇ Test savedLibraryReadsNeverImportAndExplicitReimportKeepsLocalWork() started.
+◇ Test deletePlaylistClearsSelectedAndRecentPlaylistButKeepsTracksAcrossRestart() started.
+◇ Test collapsedFoldersPersistSkipKeyboardRowsAndKeepTracks() started.
+◇ Test startupReadFailureShowsErrorAndRetryRechecksSavedLibrary() started.
+◇ Test usbSelectionAndReconnectKeepPlaylistAndKeyboardOrderAndLibraryOwnership() started.
+◇ Test invalidFirstImportDoesNotInitializeOrReplaceAnEmptyLibrary() started.
+◇ Test movingIntoCollapsedNestedFolderRevealsDestinationAndKeepsUSBPlaylistIdentity() started.
+◇ Test addingAndUpdatingSecondaryImportKeepsDefaultAndChangingDefaultPersistsWithoutReadingSource() started.
+◇ Test removeReaddAndFailedSecondaryImportPreserveDefaultLocalEditsAndIdentities() started.
+◇ Test failedImportKeepsLibraryEditableAndRestartsWithMissingAudio() started.
+◇ Test case passing 1 argument populated → false to savedEmptyAndPopulatedLibrariesNeverStartInChooser(populated:) started.
+◇ Test firstLaunchWaitsForSavedLibraryCheckBeforeShowingChooser() started.
+◇ Test newAndMismatchedUSBsOfferSetupWithoutWritingOrChangingTheLibrary() started.
+◇ Test associationRejectsChangedAudioConcurrentManifestAndBusyDrive() started.
+◇ Test case passing 1 argument populated → true to savedEmptyAndPopulatedLibrariesNeverStartInChooser(populated:) started.
+◇ Test playlistAndTrackDragPayloadsDoNotOverlap() started.
+◇ Test startupChecksCacheWithoutHashingUnseenAudio() started.
+✔ Test playlistAndTrackDragPayloadsDoNotOverlap() passed after 0.128 seconds.
+✔ Test startupReadFailureShowsErrorAndRetryRechecksSavedLibrary() passed after 0.135 seconds.
+✔ Test firstLaunchWaitsForSavedLibraryCheckBeforeShowingChooser() passed after 0.136 seconds.
+✔ Test invalidFirstImportDoesNotInitializeOrReplaceAnEmptyLibrary() passed after 0.141 seconds.
+✔ Test unreadableExistingUSBDoesNotBecomeAnEmptySetupTarget() passed after 0.144 seconds.
+✔ Test savedEmptyAndPopulatedLibrariesNeverStartInChooser(populated:) with 2 test cases passed after 0.155 seconds.
+✔ Test startupChecksCacheWithoutHashingUnseenAudio() passed after 0.162 seconds.
+✔ Test newAndMismatchedUSBsOfferSetupWithoutWritingOrChangingTheLibrary() passed after 0.163 seconds.
+✔ Test collapsedFoldersPersistSkipKeyboardRowsAndKeepTracks() passed after 0.169 seconds.
+✔ Test musicExportKeepsRatingsUnlessExplicitlySelected() passed after 0.210 seconds.
+✔ Test addingAndUpdatingSecondaryImportKeepsDefaultAndChangingDefaultPersistsWithoutReadingSource() passed after 0.211 seconds.
+✔ Test failedImportKeepsLibraryEditableAndRestartsWithMissingAudio() passed after 0.212 seconds.
+✔ Test deletePlaylistClearsSelectedAndRecentPlaylistButKeepsTracksAcrossRestart() passed after 0.213 seconds.
+✔ Test previousDeckhandUSBPreviewsWithoutWritingAndExplicitAssociationKeepsSelection() passed after 0.215 seconds.
+✔ Test movingIntoCollapsedNestedFolderRevealsDestinationAndKeepsUSBPlaylistIdentity() passed after 0.218 seconds.
+✔ Test usbSelectionAndReconnectKeepPlaylistAndKeyboardOrderAndLibraryOwnership() passed after 0.222 seconds.
+✔ Test emptyLibraryThenFolderMusicAndSecondFolderKeepsMixedPlaylistAndRatingsAcrossRestart() passed after 0.225 seconds.
+✔ Test removeReaddAndFailedSecondaryImportPreserveDefaultLocalEditsAndIdentities() passed after 0.225 seconds.
+✔ Test associationRejectsChangedAudioConcurrentManifestAndBusyDrive() passed after 0.226 seconds.
+✔ Test savedLibraryReadsNeverImportAndExplicitReimportKeepsLocalWork() passed after 0.231 seconds.
+✔ Suite DedicatedLibraryModelTests passed after 0.231 seconds.
+✔ Test run with 20 tests in 1 suite passed after 0.231 seconds.

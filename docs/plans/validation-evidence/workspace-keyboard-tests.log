@@ -1,0 +1,33 @@
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/17] Write sources
+[3/17] Write swift-version--58304C5D6DBC2206.txt
+[5/7] Emitting module DeckhandAppTests
+[6/7] Compiling DeckhandAppTests TrackKeyboardTests.swift
+[6/8] Write Objects.LinkFileList
+ld: warning: building for macOS-14.0, but linking with dylib '/opt/homebrew/opt/sqlcipher/lib/libsqlcipher.dylib' which was built for newer version 26.0
+[7/8] Linking DeckhandPackageTests
+Build complete! (1.34s)
+Test Suite 'Selected tests' started at 2026-10-11 10:10:35.839.
+Test Suite 'DeckhandPackageTests.xctest' started at 2026-10-11 10:10:35.840.
+Test Suite 'DeckhandPackageTests.xctest' passed at 2026-10-11 10:10:35.840.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-11 10:10:35.840.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+◇ Test run started.
+↳ Testing Library Version: 1743
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite TrackKeyboardTests started.
+◇ Test navigatesFromOtherControlsAndDoesNotDispatchTwice() started.
+✔ Test navigatesFromOtherControlsAndDoesNotDispatchTwice() passed after 0.093 seconds.
+◇ Test shiftExtendsAndNavigationStopsAtListEdges() started.
+✔ Test shiftExtendsAndNavigationStopsAtListEdges() passed after 0.005 seconds.
+◇ Test leavesSearchAndNameEditorsAlone() started.
+✔ Test leavesSearchAndNameEditorsAlone() passed after 0.032 seconds.
+◇ Test ignoresModifiedKeysOtherWindowsAndHiddenLists() started.
+✔ Test ignoresModifiedKeysOtherWindowsAndHiddenLists() passed after 0.014 seconds.
+◇ Test leavesSheetsAlone() started.
+✔ Test leavesSheetsAlone() passed after 0.563 seconds.
+✔ Suite TrackKeyboardTests passed after 0.710 seconds.
+✔ Test run with 5 tests in 1 suite passed after 0.710 seconds.

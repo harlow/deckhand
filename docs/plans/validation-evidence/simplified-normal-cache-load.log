@@ -1,0 +1,3 @@
+Timestamp               Ty Process[PID:TID]
+2026-10-10 21:38:00.431 I  swiftpm-testing-helper[43656:42b4202] [rocks.deckhand.app:app] [analysis] Loaded cached analysis in 0.0 s; 1 tracks not analyzed
+2026-10-10 21:38:58.452 I  DeckhandApp[44125:42b489a] [rocks.deckhand.app:app] [analysis] Loaded cached analysis in 0.8 s; 0 tracks not analyzed

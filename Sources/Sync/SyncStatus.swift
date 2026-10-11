@@ -334,7 +334,7 @@ public enum SyncStatus {
         var seen = Set<String>()
         var ids = selection.playlistIds.filter { seen.insert($0).inserted }
         // An empty library is more likely a failed read than every playlist deleted.
-        let unreadable = library.playlists.isEmpty && library.tracks.isEmpty
+        let unreadable = library.sourceID == nil && library.playlists.isEmpty && library.tracks.isEmpty
         if !library.playlists.isEmpty {
             let known = Set(library.playlists.map(\.id))
             ids = ids.filter(known.contains)
@@ -364,7 +364,12 @@ public enum SyncStatus {
                                 profile: OutputProfile, selection: Selection? = nil,
                                 adoptable: [String: String] = [:]) -> ChangeSet {
         let selection = selection ?? Selection(manifest)
-        let scope = scope(library: library, selection: selection)
+        var scope = scope(library: library, selection: selection)
+        if !manifest.acceptsSource(library.sourceID) {
+            // A different source must never schedule the original library for removal.
+            scope = Scope(playlistIds: manifest.selectedPlaylistIds, playlists: [], trackIds: [], firstPlaylist: [:],
+                          incomplete: true, unreadable: true)
+        }
         var adoptable = adoptable
         var tracks: [ChangeSet.Track] = []
         tracks.reserveCapacity(scope.trackIds.count)
@@ -588,6 +593,10 @@ public enum SyncStatus {
 
         // 6. The manifest after the sync.
         var next = manifest
+        if !scope.unreadable {
+            next.format = Manifest.currentFormat
+            next.sourceID = library.sourceID ?? "apple-music"
+        }
         next.selectedPlaylistIds = scope.playlistIds
         if selection.entireLibrary != (manifest.entireLibrary == true) { next.entireLibrary = selection.entireLibrary }
         next.settings = profile.settings.dictionary

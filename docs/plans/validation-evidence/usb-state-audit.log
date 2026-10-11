@@ -1,0 +1,42 @@
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/18] Write sources
+[3/18] Write swift-version--58304C5D6DBC2206.txt
+[5/8] Compiling DeckhandAppTests USBStateAuditTests.swift
+[6/8] Emitting module DeckhandAppTests
+[6/8] Write Objects.LinkFileList
+ld: warning: building for macOS-14.0, but linking with dylib '/opt/homebrew/opt/sqlcipher/lib/libsqlcipher.dylib' which was built for newer version 26.0
+[7/8] Linking DeckhandPackageTests
+Build complete! (2.26s)
+Test Suite 'Selected tests' started at 2026-10-11 09:44:32.212.
+Test Suite 'DeckhandPackageTests.xctest' started at 2026-10-11 09:44:32.213.
+Test Suite 'DeckhandPackageTests.xctest' passed at 2026-10-11 09:44:32.213.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-11 09:44:32.213.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+◇ Test run started.
+↳ Testing Library Version: 1743
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Test inspectUSBStatesReadOnly() started.
+AUDIT regular library aliases: ["E53F1C46-E1F8-4681-9D5B-8E75AEF3B970", "CB91868A-4F42-4E70-BA1C-5086DEE71356", "apple-music", "D332D286-EB94-41E0-A63A-154B4A12B538"]
+AUDIT DJTEST: matches=false, canLink=true, format=1, generation=0
+AUDIT DJTEST: 13 changes, 0 unknown, complete=true
+AUDIT DJTEST: Bontan — Shake It (Extended Mix): analysis files, database row (title, rating, comment, BPM, …), cover art
+AUDIT DJTEST: Ann Nesby — So Much Joy (Lorenzo Spano Extended Remix): analysis files, database row (title, rating, comment, BPM, …), cover art
+AUDIT DJTEST: Platinum Doug — Cream (Radio Mix): analysis files, database row (title, rating, comment, BPM, …), cover art
+AUDIT DJTEST: Lee Cabrera, Kevin McKay, Bleech — Gimme Gimme (feat. Bleech) (Extended Club Mix): analysis files, database row (title, rating, comment, BPM, …), cover art
+AUDIT DJTEST: FISHER (OZ) — Just Feels Tight (Extended Mix): analysis files, database row (title, rating, comment, BPM, …), cover art
+AUDIT DJTEST: Mr. Belt & Wezol — Boogie Wonderland (Extended Mix): analysis files, database row (title, rating, comment, BPM, …), cover art
+AUDIT DJTEST: Mr. Belt & Wezol, Jack wins — One Thing (Extended Mix): analysis files, database row (title, rating, comment, BPM, …), cover art
+AUDIT DJTEST: Mr. Belt & Wezol — Not Dancing (Extended Mix): analysis files, database row (title, rating, comment, BPM, …), cover art
+AUDIT DJTEST: Limited Life, Mr. Belt & Wezol, BENDAH — I Feel Love (Extended Mix): analysis files, database row (title, rating, comment, BPM, …), cover art
+AUDIT DJTEST: Basement Jaxx — Red Alert (Mr. Belt & Wezol Remix): analysis files, database row (title, rating, comment, BPM, …), cover art
+AUDIT DJTEST: Mr. Belt & Wezol, Millean., Betty Bloom — Fool (feat. Betty Bloom) (Extended Mix): analysis files, database row (title, rating, comment, BPM, …), cover art
+AUDIT DJTEST: The drive's library database was replaced since Deckhand wrote it
+AUDIT DJTEST: Manifest from an older Deckhand to update
+AUDIT DECKHAND: matches=true, canLink=true, format=2, generation=40
+AUDIT DECKHAND: 0 changes, 0 unknown, complete=true
+✔ Test inspectUSBStatesReadOnly() passed after 0.276 seconds.
+✔ Test run with 1 test in 0 suites passed after 0.276 seconds.

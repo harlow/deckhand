@@ -1,0 +1,26 @@
+Deckhand — DH_LIB_QA
+
+PLAYLISTS
+= Friday  (3)
+= My Mixed Set  (3)
+= Peak Set  (2)
+= RB Set  (2)
+
+TRACKS
++ 0 new
+~ 0 to copy again (audio changed or missing from the drive)
+- 0 to remove
+@ 4 analysis files to check
+= 0 unchanged
+
+ANALYSIS
+0 tracks to analyze
+
+COPY
+Zero KB
+@progress	Analysis files	1	4	Warmup
+@progress	Analysis files	4	4	Warmup Copy
+
+Done. 4 tracks in 4 playlists on DH_LIB_QA.
+Run `deckhand eject /Volumes/DH_LIB_QA` before unplugging.
+@result {"analysisFailed":0,"analyzed":0,"clean":true,"copied":0,"generation":3,"pending":0,"removed":0,"summary":{"analysisFiles":0,"artwork":0,"bytesToCopy":0,"clean":4,"drive":[],"failed":0,"ineligible":0,"pending":0,"playlistsToCreate":0,"playlistsToRemove":0,"playlistsToUpdate":0,"playlistsUnknown":0,"records":0,"retained":0,"toAdopt":0,"toAnalyze":0,"toCopy":0,"toRemove":0,"total":0,"tracks":4,"unknown":0},"tracks":4,"wroteDatabase":false}

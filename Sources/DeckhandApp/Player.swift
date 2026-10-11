@@ -210,6 +210,18 @@ final class Player: NSObject, AVAudioPlayerDelegate {
         time = 0
     }
 
+    func reset() {
+        stop()
+        current = nil
+        detail = nil
+        artwork = nil
+        queue = []
+        history = []
+        duration = 0
+        pendingStart = nil
+        error = nil
+    }
+
     private func tick() {
         guard let audio else { return }
         time = audio.currentTime

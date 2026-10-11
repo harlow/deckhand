@@ -1,0 +1,52 @@
+Cancel before real engine: manifest checksum unchanged.
+Native toolbar and popover inspected; minimum width 1080 points.
+QA wrapper emits visual sample then pauses output for screenshots.
+
+[timing] open drive 0.01s
+[timing] load library 0.00s
+[timing] open cache 0.00s
+[timing] plan 0.01s
+Deckhand — DH_SYNC
+
+PLAYLISTS
+= Friday  (3)
+= RB Set  (2)
+- Saturday
+
+TRACKS
++ 0 new
+~ 0 to copy again (audio changed or missing from the drive)
+- 0 to remove
+# 1 with database changes
+@ 2 analysis files to check
+= 0 unchanged
+
+ANALYSIS
+0 tracks to analyze
+
+COPY
+Zero KB
+[timing] copy 0.00s
+@progress	Analysis files	1	2	Warmup
+@progress	Analysis files	2	2	Closer
+[timing] anlz files 0.00s
+[timing] artwork 0.00s
+  writing library database
+[timing] db build 0.10s
+[timing] db validate 0.06s
+[timing] database 0.01s
+  committing
+[timing] commit flush 0.06s
+[timing] commit swap 0.01s
+[timing] commit manifest 0.00s
+[timing] cleanup 0.05s
+[timing] sync 0.30s
+  checking USB
+[timing] verify 0.01s
+
+Done. 2 tracks in 2 playlists on DH_SYNC.
+Run `deckhand eject /Volumes/DH_SYNC` before unplugging.
+@result {"analysisFailed":0,"analyzed":0,"clean":true,"copied":0,"generation":17,"pending":0,"removed":0,"summary":{"analysisFiles":0,"artwork":0,"bytesToCopy":0,"clean":2,"drive":[],"failed":0,"ineligible":0,"pending":0,"playlistsToCreate":0,"playlistsToRemove":0,"playlistsToUpdate":0,"playlistsUnknown":0,"records":0,"retained":0,"toAdopt":0,"toAnalyze":0,"toCopy":0,"toRemove":0,"total":0,"tracks":2,"unknown":0},"tracks":2,"wroteDatabase":true}
+
+Independent validation:
+OK — no problems found on DH_SYNC.

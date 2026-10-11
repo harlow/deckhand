@@ -68,7 +68,7 @@ struct QueueView: View {
         .listStyle(.inset)
         // Pinned to the bottom so a running job doesn't push Up Next around.
         .safeAreaInset(edge: .bottom) {
-            if library.job.state != .idle {
+            if library.job.state != .idle, !library.job.isUSBSync {
                 JobCard().padding(12)
             }
         }

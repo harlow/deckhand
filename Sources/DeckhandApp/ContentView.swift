@@ -10,7 +10,7 @@ struct ContentView: View {
         if #available(macOS 15, *) {
             HStack(spacing: 7) {
                 PlatterMark(mono: true).frame(width: 18, height: 18)
-                Text("Deckhand").font(.headline)
+                Text(DeckhandApp.displayName).font(.headline)
             }
             .padding(.leading, 4)
         } else {
@@ -39,6 +39,43 @@ struct ContentView: View {
     }
 
     var body: some View {
+        @Bindable var library = library
+        Group {
+            switch library.startupScreen {
+            case .loading:
+                VStack(spacing: 14) {
+                    PlatterMark().frame(width: 56, height: 56)
+                    ProgressView().controlSize(.small)
+                    Text("Opening your library…").foregroundStyle(.secondary)
+                }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .sourceChooser:
+                SourceChooserView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .workspace:
+                workspace
+            case .failed(let error):
+                VStack(spacing: 14) {
+                    Image(systemName: "exclamationmark.triangle").font(.largeTitle).foregroundStyle(Color.pending)
+                    Text("Couldn't open your Deckhand library").font(.title3.bold())
+                    Text(error).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 460)
+                    Button("Try Again") { Task { await library.retryLoad() } }
+                }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .sheet(isPresented: $library.showingDestinations) {
+            LibraryDestinationsView().frame(width: 680)
+        }
+        .sheet(isPresented: $library.choosingSource) {
+            SourceChooserView().frame(width: 600).fixedSize(horizontal: false, vertical: true)
+        }
+        .sheet(isPresented: $library.showingUSBConnection) {
+            USBConnectionView()
+        }
+        .sheet(isPresented: $library.showingUSBChanges) {
+            USBChangesView()
+        }
+    }
+
+    @ViewBuilder private var workspace: some View {
         @Bindable var library = library
         NavigationSplitView {
             SidebarView()
@@ -73,16 +110,6 @@ struct ContentView: View {
         .onAppear {
             // Start with the track list focused (not the search box) so the keyboard shortcuts work.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { NotificationCenter.default.post(name: .focusTracks, object: nil) }
-        }
-        .overlay(alignment: .bottomLeading) {
-            if let status = library.notice ?? library.status ?? player.error {
-                Text(status)
-                    .font(.caption)
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(.regularMaterial, in: Capsule())
-                    .padding(12)
-                    .padding(.bottom, 84)
-            }
         }
     }
 }

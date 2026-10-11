@@ -1,0 +1,10 @@
+Timestamp               Ty Process[PID:TID]
+2026-10-11 09:50:52.219 I  DeckhandApp[78668:4398211] [rocks.deckhand.app:app] [ui] Selected Playlist
+2026-10-11 09:50:52.352 I  DeckhandApp[78668:4398211] [rocks.deckhand.app:app] [app] Launched
+2026-10-11 09:50:52.493 I  DeckhandApp[78668:4398211] [rocks.deckhand.app:app] [drives] Read 3 drive(s) in 3 ms
+2026-10-11 09:50:54.361 I  DeckhandApp[78668:4398211] [rocks.deckhand.app:app] [analysis] Loaded cached analysis in 1.4 s; 8 tracks not analyzed
+2026-10-11 09:51:55.967 I  DeckhandApp[78668:4398211] [rocks.deckhand.app:app] [status] Evaluated DECKHAND in 34 ms: 0 pending, 0 unknown
+2026-10-11 09:51:55.979 I  DeckhandApp[78668:4398211] [rocks.deckhand.app:app] [status] Evaluated DECKHAND in 1 ms: 0 pending, 0 unknown
+2026-10-11 09:52:10.620 I  DeckhandApp[78668:4398211] [rocks.deckhand.app:app] [status] Evaluated DECKHAND in 1 ms: 0 pending, 0 unknown
+2026-10-11 09:52:10.700 I  DeckhandApp[78668:4398211] [rocks.deckhand.app:app] [status] Evaluated DECKHAND in 18 ms: 0 pending, 0 unknown
+2026-10-11 09:52:14.005 I  DeckhandApp[78668:4398211] [rocks.deckhand.app:app] [status] Evaluated DECKHAND in 2 ms: 2 pending, 0 unknown

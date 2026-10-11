@@ -1,0 +1,923 @@
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/37] Write sources
+[2/37] Write deckhand-grid-eval-entitlement.plist
+[2/37] Write deckhand-cue-eval-entitlement.plist
+[2/37] Write sources
+[2/37] Write deckhand-structure-eval-entitlement.plist
+[2/37] Write sources
+[2/37] Write deckhand-eval-entitlement.plist
+[2/37] Write sources
+[2/37] /Users/harlow/Code/deckhand/.build-app/arm64-apple-macosx/debug/DeckhandPackageTests.derived/runner.swift
+[2/37] Write sources
+[22/41] Write swift-version--58304C5D6DBC2206.txt
+[24/92] Compiling EvalSupport MixedInKeyLibrary.swift
+[25/92] Compiling EvalSupport FileTags.swift
+[26/92] Emitting module EvalSupport
+[27/98] Compiling deckhand_structure_eval main.swift
+[28/98] Emitting module deckhand_structure_eval
+[29/100] Emitting module deckhand_eval
+/Users/harlow/Code/deckhand/Sources/deckhand-eval/main.swift:70:32: warning: main actor-isolated var 'truths' can not be referenced from a nonisolated context
+ 59 |     exit(2)
+ 60 | }
+ 61 | var truths = try JSONDecoder().decode([Truth].self, from: Data(contentsOf: URL(fileURLWithPath: args[1])))
+    |     `- note: var declared here
+ 62 | if args.count >= 3, let n = Int(args[2]) { truths = Array(truths.prefix(n)) }
+ 63 |
+    :
+ 68 | let workers = 6
+ 69 | DispatchQueue.concurrentPerform(iterations: workers) { w in
+ 70 |   for i in stride(from: w, to: truths.count, by: workers) {
+    |                                `- warning: main actor-isolated var 'truths' can not be referenced from a nonisolated context
+ 71 |     let t = truths[i]
+ 72 |     let start = Date()
+
+/Users/harlow/Code/deckhand/Sources/deckhand-eval/main.swift:71:13: warning: main actor-isolated var 'truths' can not be referenced from a nonisolated context
+ 59 |     exit(2)
+ 60 | }
+ 61 | var truths = try JSONDecoder().decode([Truth].self, from: Data(contentsOf: URL(fileURLWithPath: args[1])))
+    |     `- note: var declared here
+ 62 | if args.count >= 3, let n = Int(args[2]) { truths = Array(truths.prefix(n)) }
+ 63 |
+    :
+ 69 | DispatchQueue.concurrentPerform(iterations: workers) { w in
+ 70 |   for i in stride(from: w, to: truths.count, by: workers) {
+ 71 |     let t = truths[i]
+    |             `- warning: main actor-isolated var 'truths' can not be referenced from a nonisolated context
+ 72 |     let start = Date()
+ 73 |     var outcome: Outcome
+
+/Users/harlow/Code/deckhand/Sources/deckhand-eval/main.swift:101:18: warning: main actor-isolated var 'outcomes' can not be mutated from a nonisolated context
+ 65 | let useHints = ProcessInfo.processInfo.environment["EVAL_HINTS"] != nil
+ 66 | let lock = NSLock()
+ 67 | var outcomes = [Outcome?](repeating: nil, count: truths.count)
+    |     `- note: mutation of this var is only permitted within the actor
+ 68 | let workers = 6
+ 69 | DispatchQueue.concurrentPerform(iterations: workers) { w in
+    :
+ 99 |         print("FAILED: \(error)")
+100 |     }
+101 |     lock.lock(); outcomes[i] = outcome; lock.unlock()
+    |                  `- warning: main actor-isolated var 'outcomes' can not be mutated from a nonisolated context
+102 |   }
+103 | }
+
+/Users/harlow/Code/deckhand/Sources/deckhand-eval/KeyFeatures.swift:28:38: warning: reference to captured var 'files' in concurrently-executing code [#SendableClosureCaptures]
+ 26 |     let workers = max(2, ProcessInfo.processInfo.activeProcessorCount - 1)
+ 27 |     DispatchQueue.concurrentPerform(iterations: workers) { w in
+ 28 |         for i in stride(from: w, to: files.count, by: workers) {
+    |                                      `- warning: reference to captured var 'files' in concurrently-executing code [#SendableClosureCaptures]
+ 29 |             let path = files[i]
+ 30 |             guard let tag = FileTagReader.read(URL(fileURLWithPath: path)).key else { continue }
+
+/Users/harlow/Code/deckhand/Sources/deckhand-eval/KeyFeatures.swift:29:24: warning: reference to captured var 'files' in concurrently-executing code [#SendableClosureCaptures]
+ 27 |     DispatchQueue.concurrentPerform(iterations: workers) { w in
+ 28 |         for i in stride(from: w, to: files.count, by: workers) {
+ 29 |             let path = files[i]
+    |                        `- warning: reference to captured var 'files' in concurrently-executing code [#SendableClosureCaptures]
+ 30 |             guard let tag = FileTagReader.read(URL(fileURLWithPath: path)).key else { continue }
+ 31 |             guard let decoded = try? AudioDecoder.decodeMono(URL(fileURLWithPath: path)) else { continue }
+
+/Users/harlow/Code/deckhand/Sources/deckhand-eval/KeyReview.swift:36:38: warning: reference to captured var 'tracks' in concurrently-executing code [#SendableClosureCaptures]
+ 34 |     let workers = max(2, ProcessInfo.processInfo.activeProcessorCount - 1)
+ 35 |     DispatchQueue.concurrentPerform(iterations: workers) { w in
+ 36 |         for i in stride(from: w, to: tracks.count, by: workers) {
+    |                                      `- warning: reference to captured var 'tracks' in concurrently-executing code [#SendableClosureCaptures]
+ 37 |             let (path, t) = tracks[i]
+ 38 |             guard let decoded = try? AudioDecoder.decodeMono(URL(fileURLWithPath: path)),
+
+/Users/harlow/Code/deckhand/Sources/deckhand-eval/KeyReview.swift:37:29: warning: reference to captured var 'tracks' in concurrently-executing code [#SendableClosureCaptures]
+ 35 |     DispatchQueue.concurrentPerform(iterations: workers) { w in
+ 36 |         for i in stride(from: w, to: tracks.count, by: workers) {
+ 37 |             let (path, t) = tracks[i]
+    |                             `- warning: reference to captured var 'tracks' in concurrently-executing code [#SendableClosureCaptures]
+ 38 |             guard let decoded = try? AudioDecoder.decodeMono(URL(fileURLWithPath: path)),
+ 39 |                   let best = KeyAnalyzer.candidates(decoded).first else { continue }
+
+[#SendableClosureCaptures]: <https://docs.swift.org/compiler/documentation/diagnostics/sendable-closure-captures>
+[30/100] Compiling deckhand_eval KeyFeatures.swift
+/Users/harlow/Code/deckhand/Sources/deckhand-eval/KeyFeatures.swift:28:38: warning: reference to captured var 'files' in concurrently-executing code [#SendableClosureCaptures]
+ 26 |     let workers = max(2, ProcessInfo.processInfo.activeProcessorCount - 1)
+ 27 |     DispatchQueue.concurrentPerform(iterations: workers) { w in
+ 28 |         for i in stride(from: w, to: files.count, by: workers) {
+    |                                      `- warning: reference to captured var 'files' in concurrently-executing code [#SendableClosureCaptures]
+ 29 |             let path = files[i]
+ 30 |             guard let tag = FileTagReader.read(URL(fileURLWithPath: path)).key else { continue }
+
+/Users/harlow/Code/deckhand/Sources/deckhand-eval/KeyFeatures.swift:29:24: warning: reference to captured var 'files' in concurrently-executing code [#SendableClosureCaptures]
+ 27 |     DispatchQueue.concurrentPerform(iterations: workers) { w in
+ 28 |         for i in stride(from: w, to: files.count, by: workers) {
+ 29 |             let path = files[i]
+    |                        `- warning: reference to captured var 'files' in concurrently-executing code [#SendableClosureCaptures]
+ 30 |             guard let tag = FileTagReader.read(URL(fileURLWithPath: path)).key else { continue }
+ 31 |             guard let decoded = try? AudioDecoder.decodeMono(URL(fileURLWithPath: path)) else { continue }
+
+/Users/harlow/Code/deckhand/Sources/deckhand-eval/KeyFeatures.swift:159:31: warning: capture of 'label(for:)' with non-Sendable type '(String) -> MusicalKey?' in a '@Sendable' closure [#SendableClosureCaptures]
+157 |     DispatchQueue.concurrentPerform(iterations: workers) { w in
+158 |         for i in stride(from: w, to: files.count, by: workers) {
+159 |             guard let truth = label(for: files[i]),
+    |                               |- warning: capture of 'label(for:)' with non-Sendable type '(String) -> MusicalKey?' in a '@Sendable' closure [#SendableClosureCaptures]
+    |                               `- note: a function type must be marked '@Sendable' to conform to 'Sendable'
+160 |                   let decoded = try? AudioDecoder.decodeMono(URL(fileURLWithPath: (audioDir as NSString).appendingPathComponent(files[i]))) else { continue }
+161 |             let start = Date()
+
+/Users/harlow/Code/deckhand/Sources/deckhand-eval/KeyFeatures.swift:140:10: warning: concurrently-executed local function 'label(for:)' must be marked as '@Sendable'
+138 |     let files = try fm.contentsOfDirectory(atPath: audioDir).filter { !$0.hasPrefix("._") && $0.lowercased().hasSuffix(".mp3") }.sorted()
+139 |     let labelFiles = try fm.contentsOfDirectory(atPath: labelsDir)
+140 |     func label(for name: String) -> MusicalKey? {
+    |          `- warning: concurrently-executed local function 'label(for:)' must be marked as '@Sendable'
+141 |         let base = (name as NSString).deletingPathExtension
+142 |         let id = base.split(separator: " ").first.map(String.init) ?? base
+
+[#SendableClosureCaptures]: <https://docs.swift.org/compiler/documentation/diagnostics/sendable-closure-captures>
+[31/100] Compiling deckhand_eval main.swift
+/Users/harlow/Code/deckhand/Sources/deckhand-eval/main.swift:70:32: warning: main actor-isolated var 'truths' can not be referenced from a nonisolated context
+ 59 |     exit(2)
+ 60 | }
+ 61 | var truths = try JSONDecoder().decode([Truth].self, from: Data(contentsOf: URL(fileURLWithPath: args[1])))
+    |     `- note: var declared here
+ 62 | if args.count >= 3, let n = Int(args[2]) { truths = Array(truths.prefix(n)) }
+ 63 |
+    :
+ 68 | let workers = 6
+ 69 | DispatchQueue.concurrentPerform(iterations: workers) { w in
+ 70 |   for i in stride(from: w, to: truths.count, by: workers) {
+    |                                `- warning: main actor-isolated var 'truths' can not be referenced from a nonisolated context
+ 71 |     let t = truths[i]
+ 72 |     let start = Date()
+
+/Users/harlow/Code/deckhand/Sources/deckhand-eval/main.swift:71:13: warning: main actor-isolated var 'truths' can not be referenced from a nonisolated context
+ 59 |     exit(2)
+ 60 | }
+ 61 | var truths = try JSONDecoder().decode([Truth].self, from: Data(contentsOf: URL(fileURLWithPath: args[1])))
+    |     `- note: var declared here
+ 62 | if args.count >= 3, let n = Int(args[2]) { truths = Array(truths.prefix(n)) }
+ 63 |
+    :
+ 69 | DispatchQueue.concurrentPerform(iterations: workers) { w in
+ 70 |   for i in stride(from: w, to: truths.count, by: workers) {
+ 71 |     let t = truths[i]
+    |             `- warning: main actor-isolated var 'truths' can not be referenced from a nonisolated context
+ 72 |     let start = Date()
+ 73 |     var outcome: Outcome
+
+/Users/harlow/Code/deckhand/Sources/deckhand-eval/main.swift:101:18: warning: main actor-isolated var 'outcomes' can not be mutated from a nonisolated context
+ 65 | let useHints = ProcessInfo.processInfo.environment["EVAL_HINTS"] != nil
+ 66 | let lock = NSLock()
+ 67 | var outcomes = [Outcome?](repeating: nil, count: truths.count)
+    |     `- note: mutation of this var is only permitted within the actor
+ 68 | let workers = 6
+ 69 | DispatchQueue.concurrentPerform(iterations: workers) { w in
+    :
+ 99 |         print("FAILED: \(error)")
+100 |     }
+101 |     lock.lock(); outcomes[i] = outcome; lock.unlock()
+    |                  `- warning: main actor-isolated var 'outcomes' can not be mutated from a nonisolated context
+102 |   }
+103 | }
+[32/100] Compiling deckhand_eval KeyReview.swift
+/Users/harlow/Code/deckhand/Sources/deckhand-eval/KeyReview.swift:36:38: warning: reference to captured var 'tracks' in concurrently-executing code [#SendableClosureCaptures]
+ 34 |     let workers = max(2, ProcessInfo.processInfo.activeProcessorCount - 1)
+ 35 |     DispatchQueue.concurrentPerform(iterations: workers) { w in
+ 36 |         for i in stride(from: w, to: tracks.count, by: workers) {
+    |                                      `- warning: reference to captured var 'tracks' in concurrently-executing code [#SendableClosureCaptures]
+ 37 |             let (path, t) = tracks[i]
+ 38 |             guard let decoded = try? AudioDecoder.decodeMono(URL(fileURLWithPath: path)),
+
+/Users/harlow/Code/deckhand/Sources/deckhand-eval/KeyReview.swift:37:29: warning: reference to captured var 'tracks' in concurrently-executing code [#SendableClosureCaptures]
+ 35 |     DispatchQueue.concurrentPerform(iterations: workers) { w in
+ 36 |         for i in stride(from: w, to: tracks.count, by: workers) {
+ 37 |             let (path, t) = tracks[i]
+    |                             `- warning: reference to captured var 'tracks' in concurrently-executing code [#SendableClosureCaptures]
+ 38 |             guard let decoded = try? AudioDecoder.decodeMono(URL(fileURLWithPath: path)),
+ 39 |                   let best = KeyAnalyzer.candidates(decoded).first else { continue }
+
+[#SendableClosureCaptures]: <https://docs.swift.org/compiler/documentation/diagnostics/sendable-closure-captures>
+[33/102] Emitting module deckhand_grid_eval
+/Users/harlow/Code/deckhand/Sources/deckhand-grid-eval/main.swift:138:34: warning: main actor-isolated var 'grids' can not be referenced from a nonisolated context
+123 |     ?? NSHomeDirectory() + "/Library/Application Support/Mixedinkey/Collection11.mikdb"
+124 | let mik = loadMIK(mikPath)
+125 | var grids = try JSONDecoder().decode([RekordboxGrid].self, from: Data(contentsOf: URL(fileURLWithPath: rbPath)))
+    |     `- note: var declared here
+126 |     .filter { mik[$0.path] != nil }
+127 |     .filter { g in
+    :
+136 | nonisolated(unsafe) var results = [Result?](repeating: nil, count: grids.count)
+137 | DispatchQueue.concurrentPerform(iterations: 8) { w in
+138 |     for i in stride(from: w, to: grids.count, by: 8) {
+    |                                  `- warning: main actor-isolated var 'grids' can not be referenced from a nonisolated context
+139 |         let rb = grids[i]
+140 |         let m = mik[rb.path]!
+
+/Users/harlow/Code/deckhand/Sources/deckhand-grid-eval/main.swift:139:18: warning: main actor-isolated var 'grids' can not be referenced from a nonisolated context
+123 |     ?? NSHomeDirectory() + "/Library/Application Support/Mixedinkey/Collection11.mikdb"
+124 | let mik = loadMIK(mikPath)
+125 | var grids = try JSONDecoder().decode([RekordboxGrid].self, from: Data(contentsOf: URL(fileURLWithPath: rbPath)))
+    |     `- note: var declared here
+126 |     .filter { mik[$0.path] != nil }
+127 |     .filter { g in
+    :
+137 | DispatchQueue.concurrentPerform(iterations: 8) { w in
+138 |     for i in stride(from: w, to: grids.count, by: 8) {
+139 |         let rb = grids[i]
+    |                  `- warning: main actor-isolated var 'grids' can not be referenced from a nonisolated context
+140 |         let m = mik[rb.path]!
+141 |         let start = Date()
+[34/102] Compiling deckhand_grid_eval main.swift
+/Users/harlow/Code/deckhand/Sources/deckhand-grid-eval/main.swift:138:34: warning: main actor-isolated var 'grids' can not be referenced from a nonisolated context
+123 |     ?? NSHomeDirectory() + "/Library/Application Support/Mixedinkey/Collection11.mikdb"
+124 | let mik = loadMIK(mikPath)
+125 | var grids = try JSONDecoder().decode([RekordboxGrid].self, from: Data(contentsOf: URL(fileURLWithPath: rbPath)))
+    |     `- note: var declared here
+126 |     .filter { mik[$0.path] != nil }
+127 |     .filter { g in
+    :
+136 | nonisolated(unsafe) var results = [Result?](repeating: nil, count: grids.count)
+137 | DispatchQueue.concurrentPerform(iterations: 8) { w in
+138 |     for i in stride(from: w, to: grids.count, by: 8) {
+    |                                  `- warning: main actor-isolated var 'grids' can not be referenced from a nonisolated context
+139 |         let rb = grids[i]
+140 |         let m = mik[rb.path]!
+
+/Users/harlow/Code/deckhand/Sources/deckhand-grid-eval/main.swift:139:18: warning: main actor-isolated var 'grids' can not be referenced from a nonisolated context
+123 |     ?? NSHomeDirectory() + "/Library/Application Support/Mixedinkey/Collection11.mikdb"
+124 | let mik = loadMIK(mikPath)
+125 | var grids = try JSONDecoder().decode([RekordboxGrid].self, from: Data(contentsOf: URL(fileURLWithPath: rbPath)))
+    |     `- note: var declared here
+126 |     .filter { mik[$0.path] != nil }
+127 |     .filter { g in
+    :
+137 | DispatchQueue.concurrentPerform(iterations: 8) { w in
+138 |     for i in stride(from: w, to: grids.count, by: 8) {
+139 |         let rb = grids[i]
+    |                  `- warning: main actor-isolated var 'grids' can not be referenced from a nonisolated context
+140 |         let m = mik[rb.path]!
+141 |         let start = Date()
+[34/102] Write Objects.LinkFileList
+[37/102] Emitting module deckhand_cue_eval
+[38/102] Compiling deckhand_cue_eval main.swift
+[39/102] Compiling EvalSupportTests FileTagsTests.swift
+[40/102] Emitting module EvalSupportTests
+[40/102] Write Objects.LinkFileList
+ld: warning: building for macOS-14.0, but linking with dylib '/opt/homebrew/opt/sqlcipher/lib/libsqlcipher.dylib' which was built for newer version 26.0
+[42/102] Linking deckhand-structure-eval
+[43/102] Linking deckhand-grid-eval
+[44/102] Applying deckhand-structure-eval
+[46/102] Compiling OneLibraryTests AnlzPathTests.swift
+[46/102] Applying deckhand-grid-eval
+[48/102] Compiling OneLibraryTests MusicalKeyTests.swift
+ld: warning: building for macOS-14.0, but linking with dylib '/opt/homebrew/opt/sqlcipher/lib/libsqlcipher.dylib' which was built for newer version 26.0
+[48/102] Linking deckhand-eval
+[49/102] Applying deckhand-eval
+ld: warning: building for macOS-14.0, but linking with dylib '/opt/homebrew/opt/sqlcipher/lib/libsqlcipher.dylib' which was built for newer version 26.0
+[50/102] Linking deckhand-cue-eval
+[51/102] Applying deckhand-cue-eval
+[53/102] Emitting module AnalysisTests
+[54/102] Compiling AnalysisTests KeyAnalyzerTests.swift
+[55/102] Compiling OneLibraryTests AnlzCueTests.swift
+[56/102] Emitting module OneLibraryTests
+[57/102] Compiling AnalysisTests DecimateTests.swift
+[58/102] Compiling DeckhandLibraryTests LibrarySyncTests.swift
+[59/102] Compiling AnalysisTests CueAnalyzerTests.swift
+[60/102] Compiling DeckhandAppCoreTests RatingOverlayTests.swift
+[61/102] Compiling OneLibraryTests OneLibraryDatabaseTests.swift
+[62/102] Compiling OneLibraryTests PhraseCodecTests.swift
+[63/102] Emitting module SyncTests
+[64/103] Compiling SyncTests SyncRecoveryTests.swift
+[65/103] Compiling AnalysisTests BeatGridTests.swift
+[66/103] Compiling SyncTests SyncPropertyTests.swift
+[67/103] Compiling SyncTests AudioHashTests.swift
+[68/103] Compiling SyncTests CueBuilderTests.swift
+[69/103] Compiling DeckhandAppCoreTests MusicLiveTests.swift
+[70/103] Compiling DeckhandLibraryTests MusicExportTests.swift
+[71/103] Compiling DeckhandLibraryTests LibraryFixture.swift
+[72/103] Compiling SyncTests SyncScaleTests.swift
+[73/103] Compiling AnalysisTests StructureAnalyzerTests.swift
+[74/103] Compiling DeckhandAppCoreTests MusicBridgeTests.swift
+[75/103] Compiling DeckhandAppCoreTests StatusStoreTests.swift
+[76/103] Compiling DeckhandAppCoreTests JobLineTests.swift
+[77/103] Emitting module DeckhandAppCoreTests
+[78/103] Compiling SyncTests DriveProbeTests.swift
+[79/103] Compiling SyncTests FileOpsTests.swift
+[80/103] Compiling SyncTests ManifestConcurrencyTests.swift
+[81/103] Compiling SyncTests ManifestTests.swift
+[82/103] Compiling SyncTests SyncPlannerTests.swift
+[83/103] Compiling MusicSourceTests LibrarySourcesTests.swift
+[84/103] Emitting module MusicSourceTests
+[85/103] Compiling SyncTests AnalysisCacheTests.swift
+[86/103] Compiling SyncTests AppStatusTests.swift
+[87/103] Compiling AnalysisTests SKeyTests.swift
+[88/103] Compiling DeckhandLibraryTests DeckhandLibraryTests.swift
+[89/103] Emitting module DeckhandLibraryTests
+[90/103] Compiling DeckhandApp TrackListView.swift
+[91/103] Compiling DeckhandApp DeckhandApp.swift
+[92/103] Compiling DeckhandApp MusicImportsView.swift
+[93/103] Emitting module DeckhandApp
+[94/103] Compiling DeckhandApp LibraryModel.swift
+[95/103] Compiling DeckhandApp SourceChooserView.swift
+[96/112] Compiling SyncTests RatingsBackupTests.swift
+[97/112] Compiling SyncTests SourceOwnershipTests.swift
+[98/112] Compiling SyncTests SyncEngineTests.swift
+/Users/harlow/Code/deckhand/Tests/SyncTests/SyncEngineTests.swift:475:29: warning: no calls to throwing functions occur within 'try' expression
+473 |     @Test func recoversFromASyncCutShortAfterTheDatabaseSwap() throws {
+474 |         let h = try synced(["A"])
+475 |         let manifestFiles = try Manifest.urls(root: h.drive).map { try? Data(contentsOf: $0) }
+    |                             `- warning: no calls to throwing functions occur within 'try' expression
+476 |         for id in ["B", "C"] { try h.addTrack(id); try h.analyze(id) }
+477 |         h.setPlaylist("P1", "One", ["A", "B", "C"])
+[99/112] Compiling SyncTests SyncHarness.swift
+/Users/harlow/Code/deckhand/Tests/SyncTests/SyncEngineTests.swift:475:29: warning: no calls to throwing functions occur within 'try' expression
+473 |     @Test func recoversFromASyncCutShortAfterTheDatabaseSwap() throws {
+474 |         let h = try synced(["A"])
+475 |         let manifestFiles = try Manifest.urls(root: h.drive).map { try? Data(contentsOf: $0) }
+    |                             `- warning: no calls to throwing functions occur within 'try' expression
+476 |         for id in ["B", "C"] { try h.addTrack(id); try h.analyze(id) }
+477 |         h.setPlaylist("P1", "One", ["A", "B", "C"])
+[100/112] Compiling DeckhandApp ReviewView.swift
+[101/112] Compiling DeckhandApp LibraryDestinationsView.swift
+[102/112] Compiling DeckhandApp JobCard.swift
+[103/112] Compiling DeckhandApp Review.swift
+[104/112] Compiling DeckhandApp PlaylistPicker.swift
+[105/112] Compiling DeckhandApp SidebarView.swift
+[106/112] Compiling DeckhandApp ContentView.swift
+[107/112] Compiling DeckhandApp QueueView.swift
+[108/112] Compiling DeckhandApp PlayerBar.swift
+[108/113] Write Objects.LinkFileList
+ld: warning: building for macOS-14.0, but linking with dylib '/opt/homebrew/opt/sqlcipher/lib/libsqlcipher.dylib' which was built for newer version 26.0
+[109/113] Linking DeckhandApp
+[110/113] Applying DeckhandApp
+[112/116] Compiling DeckhandAppTests DedicatedLibraryModelTests.swift
+[113/116] Compiling DeckhandAppTests TrackListingTests.swift
+[114/116] Emitting module DeckhandAppTests
+[115/118] Emitting module DeckhandPackageTests
+[116/118] Compiling DeckhandPackageTests runner.swift
+[116/118] Write Objects.LinkFileList
+ld: warning: building for macOS-14.0, but linking with dylib '/opt/homebrew/opt/sqlcipher/lib/libsqlcipher.dylib' which was built for newer version 26.0
+[117/118] Linking DeckhandPackageTests
+Build complete! (15.22s)
+Test Suite 'All tests' started at 2026-10-10 21:09:31.687.
+Test Suite 'All tests' passed at 2026-10-10 21:09:31.688.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+◇ Test run started.
+↳ Testing Library Version: 1743
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite AudioHashTests started.
+◇ Suite AppStatusTests started.
+◇ Suite StructureAnalyzerTests started.
+◇ Suite BeatGridTests started.
+◇ Suite DecimateTests started.
+◇ Suite SyncPlannerTests started.
+◇ Suite AnalysisCacheTests started.
+◇ Suite NamedCueGapTests started.
+◇ Suite KeyAnalyzerTests started.
+◇ Suite FileTagsTests started.
+◇ Suite CueAnalyzerTests started.
+◇ Suite SKeyTests started.
+◇ Suite ManifestConcurrencyTests started.
+◇ Suite DedicatedLibraryModelTests started.
+◇ Suite JobLineTests started.
+◇ Suite DriveStatusTests started.
+◇ Suite SyncScaleTests started.
+◇ Suite SyncConflictTests started.
+◇ Suite ReadLedgerTests started.
+◇ Suite RatingsBackupTests started.
+◇ Suite MusicLiveTests started.
+◇ Suite ManifestFileTests started.
+◇ Suite DriveProbeTests started.
+◇ Suite SourceOwnershipTests started.
+◇ Suite StatusStoreTests started.
+◇ Suite SyncRecoveryTests started.
+◇ Suite TrackListingTests started.
+◇ Suite OneLibraryDatabaseTests started.
+◇ Suite RatingOverlayTests started.
+◇ Suite SyncPropertyTests started.
+◇ Suite MusicBridgeTests started.
+◇ Suite AnlzPathTests started.
+◇ Suite CueBuilderTests started.
+◇ Suite SyncEngineTests started.
+◇ Suite PhraseCodecTests started.
+◇ Suite AnlzCueTests started.
+◇ Suite ManifestTests started.
+◇ Suite MusicalKeyTests started.
+◇ Suite LibrarySourcesTests started.
+◇ Suite FileOpsTests started.
+◇ Suite LibrarySyncTests started.
+◇ Suite DeckhandLibraryTests started.
+◇ Suite MusicExportTests started.
+◇ Test mp3IgnoresLameHeaderFrame() started.
+◇ Test flacSkipsMetadata() started.
+◇ Test wavHashesOnlyData() started.
+◇ Test modelLoads() started.
+◇ Test unknownFormatHashesWholeFile() started.
+◇ Test m4aHashesOnlyMdat() started.
+◇ Test musicBackFillingACommentAfterASyncStaysClean() started.
+◇ Test tracksNotHashedYetAreUnknownNotPending() started.
+◇ Test strongEvidenceCanChangeOffPhrase() started.
+◇ Test namedCuesSkipMissingRoles() started.
+◇ Test aRatingEditIsPendingUntilSynced() started.
+◇ Test mp3IgnoresTags() started.
+◇ Test passesLowFrequencies() started.
+◇ Test fitsIntegerTempo() started.
+◇ Test agreesWithTheEngineAndASyncLeavesItClean() started.
+◇ Test rhythmFeaturesSeeTheKick() started.
+◇ Test rotationEquivariant() started.
+◇ Test percentileMatchesNumpy() started.
+◇ Test snapsNearIntegers() started.
+◇ Test foldsFastTempoToHalfTime() started.
+◇ Test downbeatIsFirstKickAfterSilence() started.
+◇ Test buildDoesNotKnockOutMainDrop() started.
+◇ Test correctsHalfTimeIntoRange() started.
+◇ Test keepsTwoDecimalTempo() started.
+◇ Test sineTriad() started.
+◇ Test windowsMatchWholeSignal() started.
+◇ Test silenceHasNoKey() started.
+◇ Test clickTrackEndToEnd() started.
+◇ Test keys(text:expected:) started.
+◇ Test pssiKindMapping() started.
+◇ Test phraseAnalysisForRekordbox() started.
+◇ Test tagHintSelectsOctave() started.
+◇ Test incrementalReorderAddRemove() started.
+◇ Test analysisVersionChangeDoesNotRecopyAudio() started.
+◇ Test shiftedGridKeepsBarPositions() started.
+◇ Test namedCuesFollowTheArrangement() started.
+◇ Test avoidsAnalysisPathCollisions() started.
+◇ Test sharedTrackIsNotRemovedWhileReferenced() started.
+◇ Test keyAndEnergyComment() started.
+◇ Test backfillsFromLegacyEntryAndPersistsIndex() started.
+◇ Test indexFollowsRewrittenAndRemovedEntries() started.
+◇ Test entireLibraryAddsEverySongButOnlySelectedPlaylists() started.
+◇ Test sanitizesFileNames() started.
+◇ Test missingAndChangedFiles() started.
+◇ Test entireLibraryWithoutAllSongsLoadedRemovesNothing() started.
+◇ Test clipsSpreadAcrossTrack() started.
+◇ Test summaryMatchesFullAnalysis() started.
+◇ Test resamplesNonIntegerRatios() started.
+◇ Test bpm() started.
+◇ Test tooShortTrackHasNoCues() started.
+◇ Test modelProducesADistribution() started.
+◇ Test weakEvidenceSnapsToPhraseLines() started.
+◇ Test updateWritesTheOtherFileAndChecksTheGeneration() started.
+◇ Test outputOrderMapsToDeckhandKeys() started.
+◇ Test lockIsExclusiveAndStaleLocksAreReplaced() started.
+◇ Test tornNewestFileFallsBackAndIsOverwritten() started.
+◇ Test collapsedFoldersPersistSkipKeyboardRowsAndKeepTracks() started.
+◇ Test firstSaveOfALegacyFileKeepsIt() started.
+◇ Test firstLaunchWaitsForSavedLibraryCheckBeforeShowingChooser() started.
+◇ Test addingAndUpdatingSecondaryImportKeepsDefaultAndChangingDefaultPersistsWithoutReadingSource() started.
+◇ Test ignoresOtherLines() started.
+◇ Test ineligibleTracksAreReported() started.
+◇ Test savedEmptyAndPopulatedLibrariesNeverStartInChooser(populated:) started.
+◇ Test cqtPeaksAtTheRightBin() started.
+◇ Test movingIntoCollapsedNestedFolderRevealsDestinationAndKeepsUSBPlaylistIdentity() started.
+◇ Test parsesTheLiveWarning() started.
+◇ Test equalGenerationsPickTheSecondFileAndWriteTheFirst() started.
+◇ Test emptyLibraryThenFolderMusicAndSecondFolderKeepsMixedPlaylistAndRatingsAcrossRestart() started.
+◇ Test refusesNewerFormats() started.
+◇ Test percentileMatchesNumpy() started.
+◇ Test parsesTheSyncResult() started.
+◇ Test shippedModelsLoad() started.
+◇ Test interleavedAppEditsBothSurvive() started.
+◇ Test mergeKeepsAppEditsAndRejectsOtherSyncs() started.
+◇ Test failedImportKeepsLibraryEditableAndRestartsWithMissingAudio() started.
+◇ Test treeEnsembleFollowsSplits() started.
+◇ Test usbSelectionAndReconnectKeepPlaylistAndKeyboardOrderAndLibraryOwnership() started.
+◇ Test removeReaddAndFailedSecondaryImportPreserveDefaultLocalEditsAndIdentities() started.
+◇ Test playlistAndTrackDragPayloadsDoNotOverlap() started.
+◇ Test wontFitUsesTheSyncsOwnSpaceCheck() started.
+◇ Test tracksAndPlaylistsComeFromTheEvaluation() started.
+◇ Test invalidFirstImportDoesNotInitializeOrReplaceAnEmptyLibrary() started.
+◇ Test savedLibraryReadsNeverImportAndExplicitReimportKeepsLocalWork() started.
+◇ Test aCleanSyncMarksPendingTracksSynced() started.
+◇ Test aLocalChangeBeatsReadsBegunBeforeIt() started.
+◇ Test startupReadFailureShowsErrorAndRetryRechecksSavedLibrary() started.
+◇ Test decodesAndNormalizesColumns() started.
+◇ Test cuesFollowPhraseRules() started.
+◇ Test aStaleDriveProbeNeverOverwritesANewerOne() started.
+◇ Test appEditDuringSyncIsKept() started.
+◇ Test overlayClearsWhatMusicCleared() started.
+◇ Test missingValuesReadAsNil() started.
+◇ Test keepsOnlyRatedTracks() started.
+◇ Test readRetriesOnceWhenTheLibraryChangesMidRead() started.
+◇ Test evaluatesTwentyThousandTracksQuickly() started.
+◇ Test savesOnlyWhenChangedAndNeverEmpty() started.
+◇ Test overlayTakesMusicsValuesButNeverDatesOrLocations() started.
+◇ Test keepsNewerRatingsUnlessOverwriting() started.
+◇ Test theNewestEvaluationWins() started.
+◇ Test errorsAreReported() started.
+◇ Test overlayIsANoOpWhenMusicAgrees() started.
+◇ Test columnsThatDontLineUpAreRejected() started.
+◇ Test incompleteAnalysisFolders() started.
+◇ Test anotherSyncMeanwhileAbortsBeforeTheDatabaseIsTouched() started.
+◇ Test sourceSwitchCannotRemoveExistingDriveContents() started.
+◇ Test databaseIdChangesWithEveryWrite() started.
+◇ Test filtersBySearchKeyAndRating() started.
+◇ Test newDriveBindsToFolderAndThenRejectsMusic() started.
+◇ Test legacyDriveIDsRemainValidForMusic() started.
+◇ Test emptyFilterKeepsEverything() started.
+◇ Test restoresIntoRebuiltLibraryByPathThenName() started.
+◇ Test validEmptyFolderIsCompleteWhileEmptyMusicRemainsUnreadable() started.
+◇ Test matchesPathsTheWayFATDoes() started.
+◇ Test folderPlaylistExecutesAndVerifiesOnADeviceLibrary() started.
+◇ Test filesWrittenWithoutADatabaseWriteReachTheDriveBeforeTheManifest() started.
+◇ Test verificationReportsWhatsStillPending() started.
+◇ Test loadsAnOlderSingleFileManifest() started.
+◇ Test mixesWithPlayingUsesKeyAndTempo() started.
+◇ Test digestsMatchFullAndDigestedFingerprints() started.
+◇ Test fallsBackWhenTheNewestIsCorrupt() started.
+◇ Test savesAlternateFilesAndLoadsTheNewest() started.
+◇ Test syncFinishingWhileAnEvaluationIsInFlight() started.
+◇ Test emptyLibraryReadChangesNothing() started.
+◇ Test retainedTrackKeepsItsAnalysisWhenTheCacheEntryIsGone() started.
+◇ Test syncWithoutAnalyzingKeepsAnalysisThatStoppedBeingCurrent() started.
+◇ Test sortsNaturallyByTitle() started.
+◇ Test switchingDrivesForgetsTheStatus() started.
+◇ Test matchesRekordbox(path:expected:) started.
+◇ Test aSyncThatDidntReportCleanShowsNothingOptimistic() started.
+◇ Test readingLeavesNoSideFiles() started.
+◇ Test journalIsCheckpointed() started.
+◇ Test reusesPreviousOrderOnlyWhileItStillHolds() started.
+◇ Test unreadableFilesAreNotRecordedAsAnalyzerFailures() started.
+◇ Test duplicateWithOtherTagsSharesTheFileWithoutCopying() started.
+◇ Test refusesOverwrite() started.
+◇ Test contentIdsFromACutShortSyncAreNotReused() started.
+◇ Test modes() started.
+◇ Test snapshotOnlyReadsKeepTheOverlay() started.
+◇ Test onlyTheNewestRatingOnATrackIsApplied() started.
+◇ Test schemaMatchesGoldenExport() started.
+◇ Test ratingSetDuringALibraryReloadSurvivesTheReload() started.
+◇ Test roundTrip() started.
+◇ Test writtenLastInExt() started.
+◇ Test roundTrip() started.
+◇ Test unknownFactsAreNeitherSyncedNorPending() started.
+◇ Test errorsAreReportedWithWhatMusicHasNow() started.
+◇ Test evaluateAfterExecuteIsClean(seed:) started.
+◇ Test clearingARatingShowsNoStars() started.
+◇ Test carriesPlayerHistoryAcrossRebuilds() started.
+◇ Test analysisFilesRewrittenInPlaceAreCheckedAgainAfterACutShortSync() started.
+◇ Test matchesRekordboxUsbExport() started.
+◇ Test writesRunInTheOrderAskedOneAtATime() started.
+◇ Test coalescesRatingsPerTrackLastOneWins() started.
+◇ Test maskingIsAnInvolution() started.
+◇ Test matchesRekordboxLocalFiles() started.
+◇ Test readsKnowWhichWritesTheyInclude() started.
+◇ Test legacyManifestIsConvertedOnceWithoutRecopying() started.
+◇ Test settingsAndRecipeChanges() started.
+◇ Test freshDrive() started.
+◇ Test drainWaitsForARatingSetJustBeforeSync() started.
+◇ Test musicsAnswerWinsOverWhatWasAskedFor() started.
+◇ Test unavailableSourcesAreRetainedOrIneligible() started.
+◇ Test overlappingPlaylistsAndDeletedPlaylist() started.
+◇ Test artworkChangesAndUnchangedArt() started.
+◇ Test entireLibraryWithUnsyncableSongs() started.
+◇ Test duplicates() started.
+◇ Test repairsMissingFiles() started.
+◇ Test playlistReorderRenameFolderMoveAndSwap() started.
+◇ Test memoryCueMatchesRekordbox() started.
+◇ Test adoptsExistingAudio() started.
+◇ Test freeSpaceCheckUsesBytesToCopy() started.
+◇ Test tagEditThatGrowsTheSourceKeepsTheDriveSize() started.
+◇ Test metadataEditsRewriteOnlyTheDatabase() started.
+◇ Test analyzedAfterSyncAndRecordedFailures() started.
+◇ Test artworkFieldsRoundTrip() started.
+◇ Test concurrentPlaylistAddsKeepBothEdits() started.
+◇ Test notation(tonic:mode:classic:camelot:) started.
+◇ Test immediateResyncWritesNothing() started.
+◇ Test hotCueMatchesRekordbox() started.
+◇ Test changedSourceAudioMovesToANewPath() started.
+◇ Test legacyAdoptionRequiresKnownSourceAndEveryExistingID() started.
+◇ Test recoversFromASyncCutShortAfterTheDatabaseSwap() started.
+◇ Test writeAtomicallyReplacesWithoutLeftovers() started.
+◇ Test folderReadsM3UOrderAndSkipsNonAudioFiles() started.
+◇ Test olderManifestWithoutArtworkFieldsLoads() started.
+◇ Test mixedLibrarySyncSurvivesSourceChangeDisconnectAndRestart() started.
+◇ Test copyDataFailureLeavesNoTemporaryFile() started.
+◇ Test copyDataReplacesExistingFile() started.
+◇ Test writeCreatesDirectoriesAndOverwrites() started.
+◇ Test untouchedRekordboxPlaylistRefreshes() started.
+◇ Test folderPersistsPlaylistRatingAndIdentityAfterRename() started.
+◇ Test invalidXMLAndDuplicateTrackIDsAreRejected() started.
+◇ Test secondWriterIsRejectedAndReadersSeeCommittedEdits() started.
+◇ Test untouchedImportsUpdateButExternalDeletionsKeepPlaylistsAndAvailableAudio() started.
+◇ Test xmlExportRoundTripKeepsCuesAndOriginalFile() started.
+◇ Test musicEditsAlwaysSaveLocallyAndRefreshKeepsThem() started.
+◇ Test failedConnectionRemovalRollsBackDefaultAndRecords() started.
+◇ Test emptyFolderSucceedsAndOfflineFolderThrows() started.
+◇ Test ratingEditsDoNotRewriteLargeSourceIndexes() started.
+◇ Test rekordboxPreservesHierarchyOrderMetadataAndLocalEdits() started.
+◇ Test movedImportedPlaylistKeepsPlacementButStillUpdatesMembershipAcrossRestartAndXMLExport() started.
+◇ Test legacyLocalPlaylistsAndClearedRatingsMigrateOnceWithoutReconnecting() started.
+◇ Test folderRenameKeepsIdentityRatingAndLocallySavedMembership() started.
+◇ Test invalidImportedReferencesAreRejectedWithoutSavingAnything() started.
+◇ Test unavailableAndInvalidSourcesDoNotClearTheLibrary() started.
+◇ Test folderAndRekordboxSameFileDeduplicateAndExportPreservesOriginalCueNodes() started.
+◇ Test failedSaveRollsBackDiskAndMemoryTogether() started.
+◇ Test incompleteAllTracksOrderStillImportsEveryReferencedTrack() started.
+◇ Test folderMovesPreserveSubtreesAndRejectCyclesAndInvalidTargetsAtomically() started.
+◇ Test sourceChangesPreserveAllPlaylistsRatingsAndIdentityAcrossRestart() started.
+◇ Test corruptAndFutureDatabasesFailWithoutBeingReplaced() started.
+◇ Test removedImportRetainsXMLMappingsEditsAndAliasesAndReaddingDoesNotDuplicatePlaylists() started.
+◇ Test concurrentEditsKeepBothMembershipChangesAndLatestRating() started.
+◇ Test failedInitialImportRollsBackInitializationConnectionsAndRecords() started.
+◇ Test sameNumericIDsInDifferentConnectionsDoNotCollide() started.
+◇ Test case passing 2 arguments text → "8A", expected → MusicalKey(tonic: 9, mode: DeckhandCore.MusicalKey.Mode.minor) to keys(text:expected:) started.
+◇ Test case passing 2 arguments text → "03A", expected → MusicalKey(tonic: 10, mode: DeckhandCore.MusicalKey.Mode.minor) to keys(text:expected:) started.
+◇ Test case passing 2 arguments text → "12B", expected → MusicalKey(tonic: 4, mode: DeckhandCore.MusicalKey.Mode.major) to keys(text:expected:) started.
+◇ Test case passing 2 arguments text → "1m", expected → MusicalKey(tonic: 9, mode: DeckhandCore.MusicalKey.Mode.minor) to keys(text:expected:) started.
+◇ Test case passing 2 arguments text → "1d", expected → MusicalKey(tonic: 0, mode: DeckhandCore.MusicalKey.Mode.major) to keys(text:expected:) started.
+◇ Test case passing 2 arguments text → "F#m", expected → MusicalKey(tonic: 6, mode: DeckhandCore.MusicalKey.Mode.minor) to keys(text:expected:) started.
+◇ Test case passing 2 arguments text → "Bbmaj", expected → MusicalKey(tonic: 10, mode: DeckhandCore.MusicalKey.Mode.major) to keys(text:expected:) started.
+◇ Test case passing 2 arguments text → "A minor", expected → MusicalKey(tonic: 9, mode: DeckhandCore.MusicalKey.Mode.minor) to keys(text:expected:) started.
+◇ Test case passing 2 arguments text → "Amin", expected → MusicalKey(tonic: 9, mode: DeckhandCore.MusicalKey.Mode.minor) to keys(text:expected:) started.
+◇ Test case passing 2 arguments text → "Energy", expected → nil to keys(text:expected:) started.
+◇ Test case passing 1 argument populated → false to savedEmptyAndPopulatedLibrariesNeverStartInChooser(populated:) started.
+◇ Test case passing 1 argument populated → true to savedEmptyAndPopulatedLibrariesNeverStartInChooser(populated:) started.
+◇ Test case passing 2 arguments path → "/Contents/Leo Portela/Bon Vibrant - Leo Portela.flac", expected → "/PIONEER/USBANLZ/P00E/000281CE" to matchesRekordbox(path:expected:) started.
+◇ Test case passing 2 arguments path → "/Contents/Daniela Cast/Jazzy - Daniela Cast.flac", expected → "/PIONEER/USBANLZ/P00A/0000CC9C" to matchesRekordbox(path:expected:) started.
+◇ Test case passing 1 argument seed → 1 to evaluateAfterExecuteIsClean(seed:) started.
+◇ Test case passing 1 argument seed → 2 to evaluateAfterExecuteIsClean(seed:) started.
+◇ Test case passing 1 argument seed → 3 to evaluateAfterExecuteIsClean(seed:) started.
+◇ Test case passing 1 argument seed → 4 to evaluateAfterExecuteIsClean(seed:) started.
+evaluate 20k tracks: first 1.044 s, clean 0.622 s
+◇ Test case passing 1 argument seed → 5 to evaluateAfterExecuteIsClean(seed:) started.
+◇ Test case passing 1 argument seed → 6 to evaluateAfterExecuteIsClean(seed:) started.
+checked 1278 Rekordbox phrase sections
+◇ Test folderTracksAreAddedOnlyWhenExplicitlyExportingAndRetryUsesDurableReceipts() started.
+◇ Test missingAudioFailsBeforeMutatingDestination() started.
+◇ Test explicitExportCopiesPlaylistsPreservesDuplicatesAndAvoidsRepeatedImports() started.
+◇ Test case passing 4 arguments tonic → 9, mode → .minor, classic → "Am", camelot → "8A" to notation(tonic:mode:classic:camelot:) started.
+◇ Test exportAfterSwitchingSourcesIncludesTheSelectedOldAndNewPlaylists() started.
+◇ Test case passing 4 arguments tonic → 0, mode → .major, classic → "C", camelot → "8B" to notation(tonic:mode:classic:camelot:) started.
+◇ Test case passing 4 arguments tonic → 4, mode → .minor, classic → "Em", camelot → "9A" to notation(tonic:mode:classic:camelot:) started.
+◇ Test externallyEditedDestinationIsNotOverwritten() started.
+◇ Test case passing 4 arguments tonic → 7, mode → .major, classic → "G", camelot → "9B" to notation(tonic:mode:classic:camelot:) started.
+◇ Test case passing 4 arguments tonic → 6, mode → .minor, classic → "F#m", camelot → "11A" to notation(tonic:mode:classic:camelot:) started.
+◇ Test case passing 4 arguments tonic → 11, mode → .minor, classic → "Bm", camelot → "10A" to notation(tonic:mode:classic:camelot:) started.
+◇ Test case passing 4 arguments tonic → 1, mode → .minor, classic → "C#m", camelot → "12A" to notation(tonic:mode:classic:camelot:) started.
+◇ Test case passing 4 arguments tonic → 10, mode → .major, classic → "Bb", camelot → "6B" to notation(tonic:mode:classic:camelot:) started.
+◇ Test case passing 4 arguments tonic → 3, mode → .major, classic → "Eb", camelot → "5B" to notation(tonic:mode:classic:camelot:) started.
+✔ Test strongEvidenceCanChangeOffPhrase() passed after 15.280 seconds.
+✔ Test namedCuesSkipMissingRoles() passed after 15.280 seconds.
+✔ Test flacSkipsMetadata() passed after 15.280 seconds.
+✔ Test wavHashesOnlyData() passed after 15.286 seconds.
+✔ Test m4aHashesOnlyMdat() passed after 15.301 seconds.
+✔ Test unknownFormatHashesWholeFile() passed after 15.305 seconds.
+✔ Test mp3IgnoresTags() passed after 15.323 seconds.
+✔ Test percentileMatchesNumpy() passed after 15.323 seconds.
+✔ Test mp3IgnoresLameHeaderFrame() passed after 15.330 seconds.
+✔ Test fitsIntegerTempo() passed after 15.330 seconds.
+✔ Test snapsNearIntegers() passed after 15.350 seconds.
+✔ Test downbeatIsFirstKickAfterSilence() passed after 15.350 seconds.
+✔ Test buildDoesNotKnockOutMainDrop() passed after 15.350 seconds.
+✔ Test foldsFastTempoToHalfTime() passed after 15.350 seconds.
+✔ Test keepsTwoDecimalTempo() passed after 15.350 seconds.
+✔ Test rhythmFeaturesSeeTheKick() passed after 15.350 seconds.
+✔ Test correctsHalfTimeIntoRange() passed after 15.350 seconds.
+✔ Test passesLowFrequencies() passed after 15.350 seconds.
+✔ Test keys(text:expected:) with 10 test cases passed after 15.350 seconds.
+✔ Test pssiKindMapping() passed after 15.350 seconds.
+✔ Test silenceHasNoKey() passed after 15.350 seconds.
+✔ Test phraseAnalysisForRekordbox() passed after 15.350 seconds.
+✔ Test rotationEquivariant() passed after 15.350 seconds.
+✔ Test tagHintSelectsOctave() passed after 15.350 seconds.
+✔ Test modelLoads() passed after 15.350 seconds.
+✔ Test shiftedGridKeepsBarPositions() passed after 15.350 seconds.
+✔ Test namedCuesFollowTheArrangement() passed after 15.350 seconds.
+✔ Test windowsMatchWholeSignal() passed after 15.350 seconds.
+✔ Test sineTriad() passed after 15.350 seconds.
+✔ Test keyAndEnergyComment() passed after 15.350 seconds.
+✔ Test backfillsFromLegacyEntryAndPersistsIndex() passed after 15.350 seconds.
+✔ Test indexFollowsRewrittenAndRemovedEntries() passed after 15.350 seconds.
+✔ Test avoidsAnalysisPathCollisions() passed after 15.350 seconds.
+✔ Test sanitizesFileNames() passed after 15.350 seconds.
+✔ Test entireLibraryAddsEverySongButOnlySelectedPlaylists() passed after 15.350 seconds.
+✔ Test clickTrackEndToEnd() passed after 15.350 seconds.
+✔ Test clipsSpreadAcrossTrack() passed after 15.350 seconds.
+✔ Test summaryMatchesFullAnalysis() passed after 15.350 seconds.
+✔ Test resamplesNonIntegerRatios() passed after 15.350 seconds.
+✔ Test bpm() passed after 15.350 seconds.
+✔ Test tooShortTrackHasNoCues() passed after 15.350 seconds.
+✔ Test musicBackFillingACommentAfterASyncStaysClean() passed after 15.351 seconds.
+✔ Test weakEvidenceSnapsToPhraseLines() passed after 15.350 seconds.
+✔ Test updateWritesTheOtherFileAndChecksTheGeneration() passed after 15.350 seconds.
+✔ Test outputOrderMapsToDeckhandKeys() passed after 15.350 seconds.
+✔ Test lockIsExclusiveAndStaleLocksAreReplaced() passed after 15.350 seconds.
+✔ Test tornNewestFileFallsBackAndIsOverwritten() passed after 15.350 seconds.
+✔ Test firstSaveOfALegacyFileKeepsIt() passed after 15.350 seconds.
+✔ Test ignoresOtherLines() passed after 15.350 seconds.
+✔ Test tracksNotHashedYetAreUnknownNotPending() passed after 15.351 seconds.
+✔ Test ineligibleTracksAreReported() passed after 15.350 seconds.
+✔ Test equalGenerationsPickTheSecondFileAndWriteTheFirst() passed after 15.350 seconds.
+✔ Test parsesTheLiveWarning() passed after 15.350 seconds.
+✔ Test percentileMatchesNumpy() passed after 15.350 seconds.
+✔ Test refusesNewerFormats() passed after 15.351 seconds.
+✔ Test shippedModelsLoad() passed after 15.350 seconds.
+✔ Test interleavedAppEditsBothSurvive() passed after 15.351 seconds.
+✔ Test parsesTheSyncResult() passed after 15.351 seconds.
+✔ Test mergeKeepsAppEditsAndRejectsOtherSyncs() passed after 15.351 seconds.
+✔ Test treeEnsembleFollowsSplits() passed after 15.351 seconds.
+✔ Test wontFitUsesTheSyncsOwnSpaceCheck() passed after 15.351 seconds.
+✔ Test tracksAndPlaylistsComeFromTheEvaluation() passed after 15.351 seconds.
+✔ Test aCleanSyncMarksPendingTracksSynced() passed after 15.351 seconds.
+✔ Test aLocalChangeBeatsReadsBegunBeforeIt() passed after 15.351 seconds.
+✔ Test decodesAndNormalizesColumns() passed after 15.351 seconds.
+✔ Test aStaleDriveProbeNeverOverwritesANewerOne() passed after 15.351 seconds.
+✔ Test agreesWithTheEngineAndASyncLeavesItClean() passed after 15.352 seconds.
+✔ Test cqtPeaksAtTheRightBin() passed after 15.351 seconds.
+✔ Test overlayClearsWhatMusicCleared() passed after 15.351 seconds.
+✔ Test missingValuesReadAsNil() passed after 15.351 seconds.
+✔ Test readRetriesOnceWhenTheLibraryChangesMidRead() passed after 15.351 seconds.
+✔ Test keepsOnlyRatedTracks() passed after 15.351 seconds.
+✔ Test modelProducesADistribution() passed after 15.351 seconds.
+✔ Test savesOnlyWhenChangedAndNeverEmpty() passed after 15.351 seconds.
+✔ Test overlayTakesMusicsValuesButNeverDatesOrLocations() passed after 15.351 seconds.
+✔ Test keepsNewerRatingsUnlessOverwriting() passed after 15.351 seconds.
+✔ Test theNewestEvaluationWins() passed after 15.351 seconds.
+✔ Test incompleteAnalysisFolders() passed after 15.351 seconds.
+✔ Test overlayIsANoOpWhenMusicAgrees() passed after 15.351 seconds.
+✔ Test columnsThatDontLineUpAreRejected() passed after 15.351 seconds.
+✔ Test incrementalReorderAddRemove() passed after 15.352 seconds.
+✔ Test cuesFollowPhraseRules() passed after 15.351 seconds.
+✔ Test errorsAreReported() passed after 15.351 seconds.
+✔ Test analysisVersionChangeDoesNotRecopyAudio() passed after 15.352 seconds.
+✔ Test newDriveBindsToFolderAndThenRejectsMusic() passed after 15.351 seconds.
+✔ Test filtersBySearchKeyAndRating() passed after 15.351 seconds.
+✔ Test legacyDriveIDsRemainValidForMusic() passed after 15.351 seconds.
+✔ Test emptyFilterKeepsEverything() passed after 15.351 seconds.
+✔ Test restoresIntoRebuiltLibraryByPathThenName() passed after 15.351 seconds.
+✔ Test validEmptyFolderIsCompleteWhileEmptyMusicRemainsUnreadable() passed after 15.351 seconds.
+✔ Test matchesPathsTheWayFATDoes() passed after 15.351 seconds.
+✔ Test databaseIdChangesWithEveryWrite() passed after 15.351 seconds.
+✔ Test missingAndChangedFiles() passed after 15.352 seconds.
+✔ Test mixesWithPlayingUsesKeyAndTempo() passed after 15.351 seconds.
+✔ Test verificationReportsWhatsStillPending() passed after 15.351 seconds.
+✔ Test loadsAnOlderSingleFileManifest() passed after 15.351 seconds.
+✔ Test digestsMatchFullAndDigestedFingerprints() passed after 15.351 seconds.
+✔ Test fallsBackWhenTheNewestIsCorrupt() passed after 15.352 seconds.
+✔ Test savesAlternateFilesAndLoadsTheNewest() passed after 15.351 seconds.
+✔ Test syncFinishingWhileAnEvaluationIsInFlight() passed after 15.351 seconds.
+✔ Test aRatingEditIsPendingUntilSynced() passed after 15.353 seconds.
+✔ Test entireLibraryWithoutAllSongsLoadedRemovesNothing() passed after 15.352 seconds.
+✔ Test sharedTrackIsNotRemovedWhileReferenced() passed after 15.352 seconds.
+✔ Test sortsNaturallyByTitle() passed after 15.352 seconds.
+✔ Test switchingDrivesForgetsTheStatus() passed after 15.352 seconds.
+✔ Test aSyncThatDidntReportCleanShowsNothingOptimistic() passed after 15.352 seconds.
+✔ Test folderPlaylistExecutesAndVerifiesOnADeviceLibrary() passed after 15.352 seconds.
+✔ Test readingLeavesNoSideFiles() passed after 15.352 seconds.
+✔ Test reusesPreviousOrderOnlyWhileItStillHolds() passed after 15.352 seconds.
+✔ Test unreadableFilesAreNotRecordedAsAnalyzerFailures() passed after 15.352 seconds.
+✔ Test journalIsCheckpointed() passed after 15.352 seconds.
+✔ Test matchesRekordbox(path:expected:) with 2 test cases passed after 15.352 seconds.
+✔ Test refusesOverwrite() passed after 15.352 seconds.
+✔ Test sourceSwitchCannotRemoveExistingDriveContents() passed after 15.352 seconds.
+✔ Test onlyTheNewestRatingOnATrackIsApplied() passed after 15.352 seconds.
+✔ Test modes() passed after 15.352 seconds.
+✔ Test snapshotOnlyReadsKeepTheOverlay() passed after 15.352 seconds.
+✔ Test appEditDuringSyncIsKept() passed after 15.353 seconds.
+✔ Test emptyLibraryReadChangesNothing() passed after 15.352 seconds.
+✔ Test ratingSetDuringALibraryReloadSurvivesTheReload() passed after 15.352 seconds.
+✔ Test schemaMatchesGoldenExport() passed after 15.352 seconds.
+✔ Test roundTrip() passed after 15.352 seconds.
+✔ Test writtenLastInExt() passed after 15.352 seconds.
+✔ Test clearingARatingShowsNoStars() passed after 15.352 seconds.
+✔ Test roundTrip() passed after 15.353 seconds.
+✔ Test filesWrittenWithoutADatabaseWriteReachTheDriveBeforeTheManifest() passed after 15.353 seconds.
+✔ Test matchesRekordboxUsbExport() passed after 15.353 seconds.
+✔ Test carriesPlayerHistoryAcrossRebuilds() passed after 15.353 seconds.
+✔ Test unknownFactsAreNeitherSyncedNorPending() passed after 15.353 seconds.
+✔ Test syncWithoutAnalyzingKeepsAnalysisThatStoppedBeingCurrent() passed after 15.353 seconds.
+✔ Test evaluatesTwentyThousandTracksQuickly() passed after 15.354 seconds.
+✔ Test maskingIsAnInvolution() passed after 15.353 seconds.
+✔ Test duplicateWithOtherTagsSharesTheFileWithoutCopying() passed after 15.353 seconds.
+✔ Test anotherSyncMeanwhileAbortsBeforeTheDatabaseIsTouched() passed after 15.354 seconds.
+✔ Test retainedTrackKeepsItsAnalysisWhenTheCacheEntryIsGone() passed after 15.354 seconds.
+✔ Test contentIdsFromACutShortSyncAreNotReused() passed after 15.354 seconds.
+✔ Test analysisFilesRewrittenInPlaceAreCheckedAgainAfterACutShortSync() passed after 15.354 seconds.
+✔ Test matchesRekordboxLocalFiles() passed after 15.354 seconds.
+✔ Test musicsAnswerWinsOverWhatWasAskedFor() passed after 15.354 seconds.
+✔ Test legacyManifestIsConvertedOnceWithoutRecopying() passed after 15.354 seconds.
+✔ Test freshDrive() passed after 15.354 seconds.
+✔ Test unavailableSourcesAreRetainedOrIneligible() passed after 15.354 seconds.
+✔ Test overlappingPlaylistsAndDeletedPlaylist() passed after 15.354 seconds.
+✔ Test settingsAndRecipeChanges() passed after 15.354 seconds.
+✔ Test artworkChangesAndUnchangedArt() passed after 15.354 seconds.
+✔ Test duplicates() passed after 15.354 seconds.
+✔ Test memoryCueMatchesRekordbox() passed after 15.354 seconds.
+✔ Test entireLibraryWithUnsyncableSongs() passed after 15.354 seconds.
+✔ Test adoptsExistingAudio() passed after 15.354 seconds.
+✔ Test freeSpaceCheckUsesBytesToCopy() passed after 15.354 seconds.
+✔ Test metadataEditsRewriteOnlyTheDatabase() passed after 15.363 seconds.
+✔ Test repairsMissingFiles() passed after 15.363 seconds.
+✔ Test artworkFieldsRoundTrip() passed after 15.367 seconds.
+✔ Test tagEditThatGrowsTheSourceKeepsTheDriveSize() passed after 15.368 seconds.
+✔ Test hotCueMatchesRekordbox() passed after 15.368 seconds.
+✔ Test notation(tonic:mode:classic:camelot:) with 9 test cases passed after 15.368 seconds.
+✔ Test immediateResyncWritesNothing() passed after 15.368 seconds.
+✔ Test changedSourceAudioMovesToANewPath() passed after 15.374 seconds.
+✔ Test writeAtomicallyReplacesWithoutLeftovers() passed after 15.374 seconds.
+✔ Test olderManifestWithoutArtworkFieldsLoads() passed after 15.374 seconds.
+✔ Test legacyAdoptionRequiresKnownSourceAndEveryExistingID() passed after 15.380 seconds.
+✔ Test copyDataFailureLeavesNoTemporaryFile() passed after 15.380 seconds.
+✔ Test copyDataReplacesExistingFile() passed after 15.380 seconds.
+✔ Test writeCreatesDirectoriesAndOverwrites() passed after 15.380 seconds.
+✔ Test untouchedRekordboxPlaylistRefreshes() passed after 15.380 seconds.
+✔ Test invalidXMLAndDuplicateTrackIDsAreRejected() passed after 15.380 seconds.
+✔ Test secondWriterIsRejectedAndReadersSeeCommittedEdits() passed after 15.380 seconds.
+✔ Test untouchedImportsUpdateButExternalDeletionsKeepPlaylistsAndAvailableAudio() passed after 15.380 seconds.
+✔ Test xmlExportRoundTripKeepsCuesAndOriginalFile() passed after 15.380 seconds.
+✔ Test musicEditsAlwaysSaveLocallyAndRefreshKeepsThem() passed after 15.380 seconds.
+✔ Test emptyFolderSucceedsAndOfflineFolderThrows() passed after 15.380 seconds.
+✔ Test failedConnectionRemovalRollsBackDefaultAndRecords() passed after 15.380 seconds.
+✔ Test playlistReorderRenameFolderMoveAndSwap() passed after 15.381 seconds.
+✔ Test rekordboxPreservesHierarchyOrderMetadataAndLocalEdits() passed after 15.381 seconds.
+✔ Test movedImportedPlaylistKeepsPlacementButStillUpdatesMembershipAcrossRestartAndXMLExport() passed after 15.381 seconds.
+✔ Test invalidImportedReferencesAreRejectedWithoutSavingAnything() passed after 15.375 seconds.
+✔ Test incompleteAllTracksOrderStillImportsEveryReferencedTrack() passed after 15.375 seconds.
+✔ Test folderMovesPreserveSubtreesAndRejectCyclesAndInvalidTargetsAtomically() passed after 15.375 seconds.
+✔ Test corruptAndFutureDatabasesFailWithoutBeingReplaced() passed after 15.375 seconds.
+✔ Test removedImportRetainsXMLMappingsEditsAndAliasesAndReaddingDoesNotDuplicatePlaylists() passed after 15.375 seconds.
+✔ Test failedInitialImportRollsBackInitializationConnectionsAndRecords() passed after 15.373 seconds.
+✔ Test sameNumericIDsInDifferentConnectionsDoNotCollide() passed after 15.373 seconds.
+✔ Test writesRunInTheOrderAskedOneAtATime() passed after 15.383 seconds.
+✔ Test missingAudioFailsBeforeMutatingDestination() passed after 3.467 seconds.
+✔ Test explicitExportCopiesPlaylistsPreservesDuplicatesAndAvoidsRepeatedImports() passed after 1.892 seconds.
+✔ Test externallyEditedDestinationIsNotOverwritten() passed after 0.401 seconds.
+✔ Suite StructureAnalyzerTests passed after 15.386 seconds.
+✔ Suite AudioHashTests passed after 15.386 seconds.
+✔ Suite BeatGridTests passed after 15.386 seconds.
+✔ Suite NamedCueGapTests passed after 15.386 seconds.
+✔ Suite DecimateTests passed after 15.387 seconds.
+✔ Suite FileTagsTests passed after 15.387 seconds.
+✔ Suite KeyAnalyzerTests passed after 15.387 seconds.
+✔ Suite AnalysisCacheTests passed after 15.387 seconds.
+✔ Suite SyncPlannerTests passed after 15.387 seconds.
+✔ Suite SKeyTests passed after 15.387 seconds.
+✔ Suite CueAnalyzerTests passed after 15.387 seconds.
+✔ Suite AppStatusTests passed after 15.387 seconds.
+✔ Suite ManifestConcurrencyTests passed after 15.387 seconds.
+✔ Suite JobLineTests passed after 15.387 seconds.
+✔ Suite DriveStatusTests passed after 15.387 seconds.
+✔ Suite ReadLedgerTests passed after 15.387 seconds.
+✔ Suite MusicLiveTests passed after 15.387 seconds.
+✔ Suite RatingsBackupTests passed after 15.387 seconds.
+✔ Suite StatusStoreTests passed after 15.387 seconds.
+✔ Suite DriveProbeTests passed after 15.387 seconds.
+✔ Suite SourceOwnershipTests passed after 15.387 seconds.
+✔ Suite TrackListingTests passed after 15.387 seconds.
+✔ Suite ManifestFileTests passed after 15.387 seconds.
+✔ Suite OneLibraryDatabaseTests passed after 15.387 seconds.
+✔ Suite SyncRecoveryTests passed after 15.387 seconds.
+✔ Suite AnlzPathTests passed after 15.387 seconds.
+✔ Suite RatingOverlayTests passed after 15.387 seconds.
+✔ Suite CueBuilderTests passed after 15.387 seconds.
+✔ Suite SyncConflictTests passed after 15.388 seconds.
+✔ Suite PhraseCodecTests passed after 15.388 seconds.
+✔ Test errorsAreReportedWithWhatMusicHasNow() passed after 15.386 seconds.
+✔ Suite SyncScaleTests passed after 15.389 seconds.
+✔ Suite AnlzCueTests passed after 15.389 seconds.
+✔ Suite ManifestTests passed after 15.396 seconds.
+✔ Suite MusicalKeyTests passed after 15.397 seconds.
+✔ Suite FileOpsTests passed after 15.397 seconds.
+✔ Test analyzedAfterSyncAndRecordedFailures() passed after 15.473 seconds.
+✔ Test folderPersistsPlaylistRatingAndIdentityAfterRename() passed after 15.473 seconds.
+✔ Test legacyLocalPlaylistsAndClearedRatingsMigrateOnceWithoutReconnecting() passed after 15.473 seconds.
+✔ Test folderRenameKeepsIdentityRatingAndLocallySavedMembership() passed after 15.473 seconds.
+✔ Test unavailableAndInvalidSourcesDoNotClearTheLibrary() passed after 15.469 seconds.
+✔ Test folderAndRekordboxSameFileDeduplicateAndExportPreservesOriginalCueNodes() passed after 15.469 seconds.
+✔ Test failedSaveRollsBackDiskAndMemoryTogether() passed after 15.469 seconds.
+✔ Test readsKnowWhichWritesTheyInclude() passed after 15.475 seconds.
+✔ Test folderTracksAreAddedOnlyWhenExplicitlyExportingAndRetryUsesDurableReceipts() passed after 3.559 seconds.
+✔ Test playlistAndTrackDragPayloadsDoNotOverlap() passed after 15.476 seconds.
+✔ Test firstLaunchWaitsForSavedLibraryCheckBeforeShowingChooser() passed after 15.479 seconds.
+✔ Test startupReadFailureShowsErrorAndRetryRechecksSavedLibrary() passed after 15.499 seconds.
+✔ Test folderReadsM3UOrderAndSkipsNonAudioFiles() passed after 15.503 seconds.
+✔ Test sourceChangesPreserveAllPlaylistsRatingsAndIdentityAcrossRestart() passed after 15.498 seconds.
+✔ Test exportAfterSwitchingSourcesIncludesTheSelectedOldAndNewPlaylists() passed after 0.819 seconds.
+✔ Test invalidFirstImportDoesNotInitializeOrReplaceAnEmptyLibrary() passed after 15.512 seconds.
+✔ Test concurrentPlaylistAddsKeepBothEdits() passed after 15.512 seconds.
+✔ Test concurrentEditsKeepBothMembershipChangesAndLatestRating() passed after 15.503 seconds.
+✔ Suite MusicExportTests passed after 15.516 seconds.
+✔ Suite LibrarySourcesTests passed after 15.517 seconds.
+✔ Test savedEmptyAndPopulatedLibrariesNeverStartInChooser(populated:) with 2 test cases passed after 15.520 seconds.
+✔ Test coalescesRatingsPerTrackLastOneWins() passed after 15.520 seconds.
+✔ Test collapsedFoldersPersistSkipKeyboardRowsAndKeepTracks() passed after 15.522 seconds.
+✔ Test failedImportKeepsLibraryEditableAndRestartsWithMissingAudio() passed after 15.529 seconds.
+✔ Test movingIntoCollapsedNestedFolderRevealsDestinationAndKeepsUSBPlaylistIdentity() passed after 15.533 seconds.
+✔ Test addingAndUpdatingSecondaryImportKeepsDefaultAndChangingDefaultPersistsWithoutReadingSource() passed after 15.535 seconds.
+✔ Test removeReaddAndFailedSecondaryImportPreserveDefaultLocalEditsAndIdentities() passed after 15.549 seconds.
+✔ Test usbSelectionAndReconnectKeepPlaylistAndKeyboardOrderAndLibraryOwnership() passed after 15.553 seconds.
+✔ Test emptyLibraryThenFolderMusicAndSecondFolderKeepsMixedPlaylistAndRatingsAcrossRestart() passed after 15.554 seconds.
+✔ Test savedLibraryReadsNeverImportAndExplicitReimportKeepsLocalWork() passed after 15.559 seconds.
+✔ Suite DedicatedLibraryModelTests passed after 15.561 seconds.
+✔ Test drainWaitsForARatingSetJustBeforeSync() passed after 15.572 seconds.
+✔ Suite MusicBridgeTests passed after 15.574 seconds.
+✔ Test ratingEditsDoNotRewriteLargeSourceIndexes() passed after 16.756 seconds.
+✔ Suite DeckhandLibraryTests passed after 16.759 seconds.
+✔ Test recoversFromASyncCutShortAfterTheDatabaseSwap() passed after 16.960 seconds.
+✔ Suite SyncEngineTests passed after 16.963 seconds.
+✔ Test mixedLibrarySyncSurvivesSourceChangeDisconnectAndRestart() passed after 17.123 seconds.
+✔ Suite LibrarySyncTests passed after 17.125 seconds.
+✔ Test evaluateAfterExecuteIsClean(seed:) with 6 test cases passed after 22.683 seconds.
+✔ Suite SyncPropertyTests passed after 22.685 seconds.
+✔ Test run with 220 tests in 43 suites passed after 22.686 seconds.

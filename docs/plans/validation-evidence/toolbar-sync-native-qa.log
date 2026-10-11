@@ -1,0 +1,124 @@
+Timestamp               Ty Process[PID:TID]
+2026-10-11 09:53:41.727 E  DeckhandApp[80210:439996f] [rocks.deckhand.app:app] [hang] App was unresponsive for 601 ms
+2026-10-11 09:53:50.008 E  DeckhandApp[80210:439996f] [rocks.deckhand.app:app] [hang] App was unresponsive for 466 ms
+2026-10-11 09:58:28.365 I  DeckhandApp[80210:439990a] [rocks.deckhand.app:app] [drives] Read 4 drive(s) in 8 ms
+2026-10-11 09:58:29.028 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [ui] Selected All Tracks
+2026-10-11 09:58:29.160 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [app] Launched
+2026-10-11 09:58:29.286 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [drives] Read 4 drive(s) in 64 ms
+2026-10-11 09:58:29.503 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [analysis] Loaded cached analysis in 0.2 s; 0 tracks not analyzed
+2026-10-11 09:58:41.028 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 1 ms: 1 pending, 0 unknown
+2026-10-11 09:58:41.047 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [drives] Read 4 drive(s) in 20 ms
+2026-10-11 09:58:41.108 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 32 ms: 1 pending, 0 unknown
+2026-10-11 09:58:41.137 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 0 ms: 1 pending, 0 unknown
+2026-10-11 09:58:51.103 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [ui] Selected Friday
+2026-10-11 09:58:56.015 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [job] Started: deckhand sync /Volumes/DH_SYNC -y --analyze --source-library /var/folders/ck/jj78p8ts6bn77xg3_40wcqdh0000gn/T/deckhand-source-D97C41FD-C13D-4DDB-B829-F1A893A2F834.json
+2026-10-11 09:58:56.015 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 6 ms: 1 pending, 0 unknown
+2026-10-11 09:58:56.078 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 2 ms: 1 pending, 0 unknown
+2026-10-11 09:59:08.079 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] [timing] open drive 0.01s
+2026-10-11 09:59:08.079 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] [timing] load library 0.00s
+2026-10-11 09:59:08.080 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] [timing] open cache 0.00s
+2026-10-11 09:59:08.085 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] [timing] plan 0.01s
+2026-10-11 09:59:08.085 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] Deckhand — DH_SYNC
+2026-10-11 09:59:08.085 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] PLAYLISTS
+2026-10-11 09:59:08.085 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] = Friday  (3)
+2026-10-11 09:59:08.085 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] = RB Set  (2)
+2026-10-11 09:59:08.085 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] TRACKS
+2026-10-11 09:59:08.085 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] + 0 new
+2026-10-11 09:59:08.085 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] ~ 0 to copy again (audio changed or missing from the drive)
+2026-10-11 09:59:08.085 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] - 0 to remove
+2026-10-11 09:59:08.085 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] # 1 with database changes
+2026-10-11 09:59:08.085 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] = 1 unchanged
+2026-10-11 09:59:08.085 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] ANALYSIS
+2026-10-11 09:59:08.085 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] 0 tracks to analyze
+2026-10-11 09:59:08.088 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] COPY
+2026-10-11 09:59:08.088 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] Zero KB
+2026-10-11 09:59:08.096 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] [timing] copy 0.00s
+2026-10-11 09:59:08.096 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] [timing] anlz files 0.00s
+2026-10-11 09:59:08.097 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] [timing] artwork 0.00s
+2026-10-11 09:59:08.097 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] writing library database
+2026-10-11 09:59:08.274 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] [timing] db build 0.13s
+2026-10-11 09:59:08.316 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] [timing] db validate 0.09s
+2026-10-11 09:59:08.323 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] [timing] database 0.01s
+2026-10-11 09:59:08.324 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] committing
+2026-10-11 09:59:08.386 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] [timing] commit flush 0.06s
+2026-10-11 09:59:08.391 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] [timing] commit swap 0.00s
+2026-10-11 09:59:08.394 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] [timing] commit manifest 0.00s
+2026-10-11 09:59:08.441 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] [timing] cleanup 0.05s
+2026-10-11 09:59:08.441 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] [timing] sync 0.36s
+2026-10-11 09:59:08.445 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] [timing] verify 0.00s
+2026-10-11 09:59:08.445 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] Done. 2 tracks in 2 playlists on DH_SYNC.
+2026-10-11 09:59:08.445 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] Run `deckhand eject /Volumes/DH_SYNC` before unplugging.
+2026-10-11 09:59:08.445 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] Result: generation 13, clean
+2026-10-11 09:59:08.448 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [job] Syncing DH_SYNC finished after 12 s
+2026-10-11 09:59:08.521 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 0 ms: 1 pending, 0 unknown (stale, dropped)
+2026-10-11 09:59:08.588 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [analysis] Loaded cached analysis in 0.0 s; 0 tracks not analyzed
+2026-10-11 09:59:08.588 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 30 ms: 0 pending, 0 unknown (stale, dropped)
+2026-10-11 09:59:08.589 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 0 ms: 0 pending, 0 unknown
+2026-10-11 09:59:08.589 I  DeckhandApp[82490:439b87e] [rocks.deckhand.app:app] [sync] DH_SYNC verified up to date after syncing
+2026-10-11 10:00:09.842 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [ui] Selected Playlist
+2026-10-11 10:00:10.021 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [app] Launched
+2026-10-11 10:00:10.142 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [drives] Read 4 drive(s) in 75 ms
+2026-10-11 10:00:10.393 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [analysis] Loaded cached analysis in 0.3 s; 0 tracks not analyzed
+2026-10-11 10:00:10.395 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 2 ms: 0 pending, 0 unknown
+2026-10-11 10:00:10.399 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 0 ms: 0 pending, 0 unknown
+2026-10-11 10:00:22.991 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 0 ms: 1 pending, 0 unknown
+2026-10-11 10:00:23.029 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 0 ms: 1 pending, 0 unknown
+2026-10-11 10:00:28.014 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [job] Started: deckhand sync /Volumes/DH_SYNC -y --analyze --source-library /var/folders/ck/jj78p8ts6bn77xg3_40wcqdh0000gn/T/deckhand-source-BBB4BE72-10CB-47FD-9F4B-2C5FFDC13956.json
+2026-10-11 10:00:28.103 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 12 ms: 1 pending, 0 unknown
+2026-10-11 10:00:58.074 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] [timing] open drive 0.01s
+2026-10-11 10:00:58.075 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] [timing] load library 0.00s
+2026-10-11 10:00:58.075 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] [timing] open cache 0.00s
+2026-10-11 10:00:58.083 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] [timing] plan 0.01s
+2026-10-11 10:00:58.083 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] Deckhand — DH_SYNC
+2026-10-11 10:00:58.083 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] PLAYLISTS
+2026-10-11 10:00:58.083 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] = Friday  (3)
+2026-10-11 10:00:58.083 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] = RB Set  (2)
+2026-10-11 10:00:58.083 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] + Saturday  (2)
+2026-10-11 10:00:58.083 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] TRACKS
+2026-10-11 10:00:58.083 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] + 0 new
+2026-10-11 10:00:58.083 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] ~ 0 to copy again (audio changed or missing from the drive)
+2026-10-11 10:00:58.083 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] - 0 to remove
+2026-10-11 10:00:58.083 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] = 2 unchanged
+2026-10-11 10:00:58.083 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] ANALYSIS
+2026-10-11 10:00:58.083 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] 0 tracks to analyze
+2026-10-11 10:00:58.084 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] COPY
+2026-10-11 10:00:58.084 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] Zero KB
+2026-10-11 10:00:58.092 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] [timing] copy 0.00s
+2026-10-11 10:00:58.092 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] [timing] anlz files 0.00s
+2026-10-11 10:00:58.092 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] [timing] artwork 0.00s
+2026-10-11 10:00:58.093 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] writing library database
+2026-10-11 10:00:58.203 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] [timing] db build 0.11s
+2026-10-11 10:00:58.255 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] [timing] db validate 0.05s
+2026-10-11 10:00:58.260 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] [timing] database 0.00s
+2026-10-11 10:00:58.260 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] committing
+2026-10-11 10:00:58.310 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] [timing] commit flush 0.05s
+2026-10-11 10:00:58.315 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] [timing] commit swap 0.01s
+2026-10-11 10:00:58.318 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] [timing] commit manifest 0.00s
+2026-10-11 10:00:58.359 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] [timing] cleanup 0.04s
+2026-10-11 10:00:58.359 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] [timing] sync 0.28s
+2026-10-11 10:00:58.364 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] [timing] verify 0.01s
+2026-10-11 10:00:58.364 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] Done. 2 tracks in 3 playlists on DH_SYNC.
+2026-10-11 10:00:58.364 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] Run `deckhand eject /Volumes/DH_SYNC` before unplugging.
+2026-10-11 10:00:58.364 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] Result: generation 15, clean
+2026-10-11 10:00:58.367 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [job] Syncing DH_SYNC finished after 30 s
+2026-10-11 10:00:58.416 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 0 ms: 1 pending, 0 unknown (stale, dropped)
+2026-10-11 10:00:58.473 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [analysis] Loaded cached analysis in 0.0 s; 0 tracks not analyzed
+2026-10-11 10:00:58.473 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 26 ms: 0 pending, 0 unknown (stale, dropped)
+2026-10-11 10:00:58.474 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 0 ms: 0 pending, 0 unknown
+2026-10-11 10:00:58.474 I  DeckhandApp[83144:439c4b4] [rocks.deckhand.app:app] [sync] DH_SYNC verified up to date after syncing
+2026-10-11 10:01:29.503 I  DeckhandApp[83593:439ccc6] [rocks.deckhand.app:app] [ui] Selected Playlist
+2026-10-11 10:01:29.664 I  DeckhandApp[83593:439ccc6] [rocks.deckhand.app:app] [app] Launched
+2026-10-11 10:01:29.934 I  DeckhandApp[83593:439ccc6] [rocks.deckhand.app:app] [drives] Read 4 drive(s) in 236 ms
+2026-10-11 10:01:30.022 I  DeckhandApp[83593:439ccc6] [rocks.deckhand.app:app] [analysis] Loaded cached analysis in 0.1 s; 0 tracks not analyzed
+2026-10-11 10:01:30.050 I  DeckhandApp[83593:439ccc6] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 28 ms: 0 pending, 0 unknown
+2026-10-11 10:01:30.060 I  DeckhandApp[83593:439ccc6] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 5 ms: 0 pending, 0 unknown
+2026-10-11 10:01:39.761 I  DeckhandApp[83593:439ccc6] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 0 ms: 1 pending, 0 unknown
+2026-10-11 10:01:39.803 I  DeckhandApp[83593:439ccc6] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 0 ms: 1 pending, 0 unknown
+2026-10-11 10:01:43.512 I  DeckhandApp[83593:439ccc6] [rocks.deckhand.app:app] [job] Started: deckhand sync /Volumes/DH_SYNC -y --analyze --source-library /var/folders/ck/jj78p8ts6bn77xg3_40wcqdh0000gn/T/deckhand-source-E6B8F5E9-092B-4C96-AFBF-EF567A57A1AC.json
+2026-10-11 10:01:43.579 I  DeckhandApp[83593:439ccc6] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 0 ms: 1 pending, 0 unknown
+2026-10-11 10:02:05.627 E  DeckhandApp[83593:439ccc6] [rocks.deckhand.app:app] [job] Syncing DH_SYNC exited with status 130 after 22 s
+2026-10-11 10:02:05.634 I  DeckhandApp[83593:439ccc6] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 0 ms: 1 pending, 0 unknown (stale, dropped)
+2026-10-11 10:02:05.699 I  DeckhandApp[83593:439ccc6] [rocks.deckhand.app:app] [analysis] Loaded cached analysis in 0.0 s; 0 tracks not analyzed
+2026-10-11 10:02:05.699 I  DeckhandApp[83593:439ccc6] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 29 ms: 1 pending, 0 unknown (stale, dropped)
+2026-10-11 10:02:05.700 I  DeckhandApp[83593:439ccc6] [rocks.deckhand.app:app] [status] Evaluated DH_SYNC in 0 ms: 1 pending, 0 unknown
+2026-10-11 10:02:05.700 E  DeckhandApp[83593:439ccc6] [rocks.deckhand.app:app] [sync] Still pending on DH_SYNC after syncing: Playlist “Saturday”: leaving the drive

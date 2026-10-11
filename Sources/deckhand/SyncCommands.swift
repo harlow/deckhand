@@ -1,5 +1,6 @@
 import ArgumentParser
 import DeckhandCore
+import DeckhandLibrary
 import Foundation
 import MusicSource
 import OneLibrary
@@ -36,6 +37,9 @@ struct SyncCommand: ParsableCommand {
     @Flag(help: .hidden) var rewriteAnalysis = false
     @Flag(help: "Stop without writing if Music is running but its current data can't be read (the library snapshot can trail recent edits). Never shows the Automation prompt.")
     var requireLive = false
+    @Option(name: .long, help: "Use a normalized Deckhand library snapshot JSON.")
+    var sourceLibrary: String?
+    @Flag(help: "Use Apple Music directly instead of the saved Deckhand library.") var music = false
 
     func run() throws {
         let timer = PhaseTimer()
@@ -46,8 +50,9 @@ struct SyncCommand: ParsableCommand {
         timer.mark("open drive")
 
         let wholeLibrary = entireLibrary ?? (manifest.entireLibrary == true)
-        var lib = try loadLibrary(allSongs: wholeLibrary, requireLive: requireLive)
-        if lib.playlists.isEmpty && lib.tracks.isEmpty && !manifest.tracks.isEmpty {
+        var lib = try loadLibrary(allSongs: wholeLibrary, requireLive: requireLive, snapshot: sourceLibrary, music: music)
+        guard manifest.acceptsSource(lib.sourceID) else { throw SyncError.sourceMismatch }
+        if lib.sourceID == nil && lib.playlists.isEmpty && lib.tracks.isEmpty && !manifest.tracks.isEmpty {
             throw ValidationError("Apple Music returned an empty library, so nothing on \(v.name) was changed. Check that Music "
                                   + "has its library and Deckhand may read it (System Settings → Privacy & Security → Media & Apple Music).")
         }
@@ -137,8 +142,9 @@ struct SyncCommand: ParsableCommand {
         defer { lock.release() }
         if let current = try Manifest.load(from: v), current.generationNumber != manifest.generationNumber {
             manifest = current
+            guard current.acceptsSource(lib.sourceID) else { throw SyncError.sourceMismatch }
             if selection?.entireLibrary ?? (current.entireLibrary == true), lib.allTrackIds == nil {
-                lib = try loadLibrary(allSongs: true, requireLive: requireLive)
+                lib = try loadLibrary(allSongs: true, requireLive: requireLive, snapshot: sourceLibrary, music: music)
                 planner = SyncPlanner(library: lib, cache: cache)
             }
             changes = planner.plan(volume: v, manifest: current, profile: profile, selection: selection, adoptable: adoptable,
@@ -155,6 +161,7 @@ struct SyncCommand: ParsableCommand {
         timer.mark("sync")
 
         // Self-check: read everything again; a sync that did its job leaves nothing to do.
+        print("  checking USB")
         let after = try planner.verify(volume: v, profile: profile)
         timer.mark("verify")
         let onDrive = after.tracks.filter(\.isOnDrive).count
@@ -220,11 +227,15 @@ struct StatusCommand: ParsableCommand {
     @Argument var volume: String
     @Flag(help: "Output JSON.") var json = false
     @Flag(help: "List every pending track.") var verbose = false
+    @Option(name: .long, help: "Use a normalized Deckhand library snapshot JSON.")
+    var sourceLibrary: String?
+    @Flag(help: "Use Apple Music directly instead of the saved Deckhand library.") var music = false
 
     func run() throws {
         let v = try Volume(url: URL(fileURLWithPath: volume))
         guard let m = try Manifest.load(from: v) else { throw SyncError.notInitialized(v.name) }
-        let lib = try loadLibrary(allSongs: m.entireLibrary == true, requireLive: false)
+        let lib = try loadLibrary(allSongs: m.entireLibrary == true, requireLive: false, snapshot: sourceLibrary, music: music)
+        guard m.acceptsSource(lib.sourceID) else { throw SyncError.sourceMismatch }
         var profile = OutputProfile(settings: OutputSettings(saved: m.settings))
         profile.artwork = lib.artwork != nil
         let changes = SyncPlanner(library: lib, cache: try AnalysisCache()).plan(volume: v, manifest: m, profile: profile)
@@ -241,7 +252,7 @@ struct StatusCommand: ParsableCommand {
         let folders = Set(lib.playlists.filter(\.isFolder).map(\.id))
         print("On the drive: \(m.tracks.count) track(s), \(m.playlists.keys.filter { !folders.contains($0) }.count) playlist(s)")
         if changes.isClean {
-            print("Up to date with Apple Music.")
+            print("Up to date with the source library.")
         } else {
             print("\(s.total) change(s) pending (run `deckhand sync \(v.url.path) --dry-run` for details):")
             for line in pendingLines(changes, limit: verbose ? .max : 0) { print("  \(line)") }
@@ -255,7 +266,9 @@ struct StatusCommand: ParsableCommand {
 /// The Apple Music library with every field the database uses read live from Music (see `MusicLive`). If Music is
 /// running but can't be read, warns and uses the snapshot, or with `requireLive` prints a machine-readable
 /// `@live {...}` line for the app and stops (exit status 3) before anything is written.
-func loadLibrary(allSongs: Bool, requireLive: Bool) throws -> SourceLibrary {
+func loadLibrary(allSongs: Bool, requireLive: Bool, snapshot: String? = nil, music: Bool = false) throws -> SourceLibrary {
+    if let snapshot { return try LibrarySnapshot.load(at: URL(fileURLWithPath: snapshot)) }
+    if !music, let lib = try DeckhandLibraryStore.savedLibrary() { return lib }
     let (lib, status) = try AppleMusicLibrary.loadLive(allSongs: allSongs, prompt: !requireLive)
     guard case .unavailable(let failure) = status else { return lib }
     if requireLive {

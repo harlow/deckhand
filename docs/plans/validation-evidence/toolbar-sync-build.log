@@ -1,0 +1,17 @@
+Building for debugging...
+[0/4] Write sources
+[1/4] Write swift-version--58304C5D6DBC2206.txt
+[3/7] Compiling DeckhandApp JobCard.swift
+[4/7] Compiling DeckhandApp TrackListView.swift
+[5/7] Emitting module DeckhandApp
+[6/8] Compiling DeckhandApp QueueView.swift
+[6/9] Write Objects.LinkFileList
+ld: warning: building for macOS-14.0, but linking with dylib '/opt/homebrew/opt/sqlcipher/lib/libsqlcipher.dylib' which was built for newer version 26.0
+[7/9] Linking DeckhandApp
+[8/9] Applying DeckhandApp
+Build of product 'DeckhandApp' complete! (4.39s)
+Building for debugging...
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'deckhand' complete! (0.12s)
+/tmp/deckhand-usb-progress/Deckhand.app: replacing existing signature
+Built /tmp/deckhand-usb-progress/Deckhand.app (open it with: open /tmp/deckhand-usb-progress/Deckhand.app)

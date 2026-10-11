@@ -1,0 +1,54 @@
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/19] Write sources
+[4/19] Write swift-version--58304C5D6DBC2206.txt
+[6/12] Emitting module DeckhandApp
+[7/12] Compiling DeckhandApp LibraryModel.swift
+[8/12] Compiling DeckhandApp TrackListView.swift
+[9/27] Compiling DeckhandApp USBConnectionView.swift
+[10/27] Compiling DeckhandApp QueueView.swift
+[11/27] Compiling DeckhandApp Review.swift
+[12/27] Compiling DeckhandApp SourceChooserView.swift
+[13/27] Compiling DeckhandApp USBChangesView.swift
+[14/27] Compiling DeckhandApp PlaylistDrop.swift
+[15/27] Compiling DeckhandApp PlaylistPicker.swift
+[16/27] Compiling DeckhandApp SidebarView.swift
+[17/27] Compiling DeckhandApp ReviewView.swift
+[18/27] Compiling DeckhandApp JobCard.swift
+[19/27] Compiling DeckhandApp LibraryDestinationsView.swift
+[20/27] Compiling DeckhandApp MusicImportsView.swift
+[21/27] Compiling DeckhandApp PlayerBar.swift
+[22/27] Compiling DeckhandApp ContentView.swift
+[23/27] Compiling DeckhandApp DeckhandApp.swift
+[23/28] Write Objects.LinkFileList
+ld: warning: building for macOS-14.0, but linking with dylib '/opt/homebrew/opt/sqlcipher/lib/libsqlcipher.dylib' which was built for newer version 26.0
+[24/28] Linking DeckhandApp
+[25/28] Applying DeckhandApp
+[27/32] Compiling DeckhandAppTests TrackListingTests.swift
+[28/32] Compiling DeckhandAppTests TrackKeyboardTests.swift
+[29/32] Emitting module DeckhandAppTests
+[30/32] Compiling DeckhandAppTests DedicatedLibraryModelTests.swift
+[30/32] Write Objects.LinkFileList
+ld: warning: building for macOS-14.0, but linking with dylib '/opt/homebrew/opt/sqlcipher/lib/libsqlcipher.dylib' which was built for newer version 26.0
+[31/32] Linking DeckhandPackageTests
+Build complete! (11.90s)
+Test Suite 'Selected tests' started at 2026-10-11 10:22:45.917.
+Test Suite 'DeckhandPackageTests.xctest' started at 2026-10-11 10:22:45.918.
+Test Suite 'DeckhandPackageTests.xctest' passed at 2026-10-11 10:22:45.918.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-11 10:22:45.918.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+◇ Test run started.
+↳ Testing Library Version: 1743
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite DedicatedLibraryModelTests started.
+◇ Test unreadableExistingUSBDoesNotBecomeAnEmptySetupTarget() started.
+◇ Test cleanUSBStaysCleanAcrossLaunchAndConfirmationIsDistinctFromPendingChanges() started.
+◇ Test newAndMismatchedUSBsOfferSetupWithoutWritingOrChangingTheLibrary() started.
+✔ Test unreadableExistingUSBDoesNotBecomeAnEmptySetupTarget() passed after 0.236 seconds.
+✔ Test newAndMismatchedUSBsOfferSetupWithoutWritingOrChangingTheLibrary() passed after 0.243 seconds.
+✔ Test cleanUSBStaysCleanAcrossLaunchAndConfirmationIsDistinctFromPendingChanges() passed after 0.281 seconds.
+✔ Suite DedicatedLibraryModelTests passed after 0.282 seconds.
+✔ Test run with 3 tests in 1 suite passed after 0.282 seconds.

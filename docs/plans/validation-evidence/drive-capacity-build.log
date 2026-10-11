@@ -1,0 +1,17 @@
+[0/1] Planning build
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/8] Compiling DeckhandApp SidebarView.swift
+[4/8] Emitting module DeckhandApp
+[5/8] Compiling DeckhandApp DriveCapacityBar.swift
+[5/8] Write Objects.LinkFileList
+ld: warning: building for macOS-14.0, but linking with dylib '/opt/homebrew/opt/sqlcipher/lib/libsqlcipher.dylib' which was built for newer version 26.0
+[6/8] Linking DeckhandApp
+[7/8] Applying DeckhandApp
+Build of product 'DeckhandApp' complete! (2.91s)
+Building for debugging...
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'deckhand' complete! (0.12s)
+/tmp/deckhand-capacity-build/Deckhand.app: replacing existing signature
+Built /tmp/deckhand-capacity-build/Deckhand.app (open it with: open /tmp/deckhand-capacity-build/Deckhand.app)

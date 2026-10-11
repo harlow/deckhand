@@ -54,7 +54,8 @@ public final class AnalysisCache: @unchecked Sendable {
 
     /// Hash of a file's audio payload (ignores tags), reusing a cached hash when path, size and mtime are unchanged.
     public func contentHash(of url: URL) throws -> String {
-        try contentHash(of: url, size: FileOps.size(url), modified: FileOps.modificationDate(url)?.timeIntervalSince1970 ?? 0)
+        let attributes = FileOps.attributes(url)
+        return try contentHash(of: url, size: attributes?.size ?? 0, modified: attributes?.modified ?? 0)
     }
 
     /// `contentHash(of:)` for a file whose size and modification time (`FileOps.attributes`) are already known.
@@ -67,6 +68,12 @@ public final class AnalysisCache: @unchecked Sendable {
     }
 
     /// The hash `contentHash(of:size:modified:)` would return if it's already known; never reads the file.
+    public func cachedContentHash(of url: URL) -> String? {
+        guard let attributes = FileOps.attributes(url) else { return nil }
+        return cachedContentHash(of: url, size: attributes.size, modified: attributes.modified)
+    }
+
+    /// Uses metadata the caller already read; never opens the audio file.
     public func cachedContentHash(of url: URL, size: Int64, modified: Double) -> String? {
         lock.withLock { fingerprints["\(AudioHash.scheme)\(url.path)|\(size)|\(modified)"] }
     }
