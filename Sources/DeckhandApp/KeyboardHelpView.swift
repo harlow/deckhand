@@ -167,7 +167,8 @@ struct KeyboardHelpView: View {
                         section("Hot cues", [("1–5", "Jump to hot cue 1–5")])
                         section("Playlists", [("A", "Add selection to playlist"), ("/", "Search songs")])
                     }
-                    section("General", [("? / ⌘/", "Keyboard shortcuts"), ("Esc", "Close overlay / cancel")])
+                    section("General", [("? / ⌘/", "Keyboard shortcuts"),
+                        ("Esc", quickRate ? "Close overlay / cancel" : "Close overlay / single selection")])
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
             Divider()

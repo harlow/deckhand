@@ -290,16 +290,24 @@ struct TrackTable: NSViewRepresentable {
 final class KeyTableView: NSTableView {
     weak var coordinator: TrackTable.Coordinator?
     private var navigationMonitor: Any?
+    private var trackingMenus = Set<ObjectIdentifier>()
 
     override func viewWillMove(toWindow newWindow: NSWindow?) {
         if let navigationMonitor { NSEvent.removeMonitor(navigationMonitor) }
         navigationMonitor = nil
+        NotificationCenter.default.removeObserver(self, name: NSMenu.didBeginTrackingNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: NSMenu.didEndTrackingNotification, object: nil)
+        trackingMenus.removeAll()
         super.viewWillMove(toWindow: newWindow)
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         guard window != nil else { return }
+        NotificationCenter.default.addObserver(self, selector: #selector(menuTrackingBegan(_:)),
+                                              name: NSMenu.didBeginTrackingNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(menuTrackingEnded(_:)),
+                                              name: NSMenu.didEndTrackingNotification, object: nil)
         navigationMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.routeWorkspaceNavigation(event) == true ? nil : event
         }
@@ -307,6 +315,14 @@ final class KeyTableView: NSTableView {
 
     deinit {
         if let navigationMonitor { NSEvent.removeMonitor(navigationMonitor) }
+    }
+
+    @objc private func menuTrackingBegan(_ notification: Notification) {
+        if let menu = notification.object as? NSMenu { trackingMenus.insert(ObjectIdentifier(menu)) }
+    }
+
+    @objc private func menuTrackingEnded(_ notification: Notification) {
+        if let menu = notification.object as? NSMenu { trackingMenus.remove(ObjectIdentifier(menu)) }
     }
 
     /// Route song shortcuts from this table’s workspace, while editors and modal UI keep their keys.
@@ -318,6 +334,10 @@ final class KeyTableView: NSTableView {
               !(window.firstResponder is KeyboardShortcutView) else { return false }
         if let editor = window.firstResponder as? NSText, editor.isEditable { return false }
         if let field = window.firstResponder as? NSTextField, field.isEditable { return false }
+        if collapseSelection(with: event) {
+            window.makeFirstResponder(self)
+            return true
+        }
         if let delta = Self.navigationDelta(event) {
             guard numberOfRows > 0 else { return false }
             move(delta, extend: false)
@@ -341,6 +361,7 @@ final class KeyTableView: NSTableView {
     }
 
     override func keyDown(with event: NSEvent) {
+        if collapseSelection(with: event) { return }
         if let delta = Self.navigationDelta(event) {
             move(delta, extend: event.modifierFlags.contains(.shift))
             return
@@ -367,6 +388,16 @@ final class KeyTableView: NSTableView {
         }
         if let command = Self.songCommand(event) { send(command) }
         else { super.keyDown(with: event) }
+    }
+
+    /// Escape leaves one selected song, without changing playback or playlist contents.
+    private func collapseSelection(with event: NSEvent) -> Bool {
+        guard event.type == .keyDown, event.keyCode == 53,
+              trackingMenus.isEmpty,
+              event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty,
+              selectedRowIndexes.count > 1, let row = selectedRowIndexes.first else { return false }
+        select(row)
+        return true
     }
 
     private static func songCommand(_ event: NSEvent) -> TrackCommand? {

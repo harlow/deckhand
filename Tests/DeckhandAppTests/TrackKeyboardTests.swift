@@ -71,6 +71,70 @@ import SwiftUI
         }
     }
 
+    @Test func escapeCollapsesMultipleSongsToFirstSelectedSong() {
+        withTable { table, window, button in
+            table.selectRowIndexes([1, 2, 3], byExtendingSelection: false)
+            window.makeFirstResponder(table)
+            table.keyDown(with: key("\u{1b}", in: window, code: 53))
+            #expect(table.selectedRowIndexes == IndexSet([1]))
+
+            table.selectRowIndexes([0, 2, 3], byExtendingSelection: false)
+            window.makeFirstResponder(button)
+            #expect(table.routeWorkspaceNavigation(key("\u{1b}", in: window, code: 53)))
+            #expect(table.selectedRowIndexes == IndexSet([0]))
+            #expect(window.firstResponder === table)
+
+            window.makeFirstResponder(button)
+            #expect(!table.routeWorkspaceNavigation(key("\u{1b}", in: window, code: 53)))
+            #expect(table.selectedRowIndexes == IndexSet([0]))
+            table.deselectAll(nil)
+            #expect(!table.routeWorkspaceNavigation(key("\u{1b}", in: window, code: 53)))
+            #expect(table.selectedRowIndexes.isEmpty)
+        }
+    }
+
+    @Test func escapeLeavesEditorsHelpAndSheetsInCharge() {
+        withTable { table, window, _ in
+            let selection = IndexSet([0, 1, 2])
+            table.selectRowIndexes(selection, byExtendingSelection: false)
+            let escape = key("\u{1b}", in: window, code: 53)
+            let editor = NSTextField()
+            window.contentView!.addSubview(editor)
+            window.makeFirstResponder(editor)
+            #expect(!table.routeWorkspaceNavigation(escape))
+            #expect(table.selectedRowIndexes == selection)
+
+            let help = KeyboardShortcutView()
+            window.contentView!.addSubview(help)
+            window.makeFirstResponder(help)
+            #expect(!table.routeWorkspaceNavigation(escape))
+            #expect(table.selectedRowIndexes == selection)
+
+            let sheet = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+            sheet.isReleasedWhenClosed = false
+            window.beginSheet(sheet)
+            #expect(!table.routeWorkspaceNavigation(escape))
+            #expect(table.selectedRowIndexes == selection)
+            window.endSheet(sheet)
+            sheet.close()
+        }
+    }
+
+    @Test func escapeLeavesTrackingMenusInChargeUntilTheyClose() {
+        withTable { table, window, _ in
+            let selection = IndexSet([0, 1, 2])
+            table.selectRowIndexes(selection, byExtendingSelection: false)
+            let escape = key("\u{1b}", in: window, code: 53)
+            let menu = NSMenu()
+            NotificationCenter.default.post(name: NSMenu.didBeginTrackingNotification, object: menu)
+            #expect(!table.routeWorkspaceNavigation(escape))
+            #expect(table.selectedRowIndexes == selection)
+            NotificationCenter.default.post(name: NSMenu.didEndTrackingNotification, object: menu)
+            #expect(table.routeWorkspaceNavigation(escape))
+            #expect(table.selectedRowIndexes == IndexSet([0]))
+        }
+    }
+
     @Test func dispatchesEveryCleanSongShortcutAndRejectsRemovedAliases() {
         withTable { table, window, button in
             var commands: [(TrackCommand, [String])] = []
