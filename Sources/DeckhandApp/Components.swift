@@ -36,6 +36,44 @@ func formatTime(_ seconds: Double) -> String {
     return String(format: "%d:%02d", s / 60, s % 60)
 }
 
+/// Quiet toolbar controls gain a little contrast under the pointer. Active filters stay blue;
+/// disabled controls never suggest an available action.
+struct ControlHoverSurface<S: InsettableShape>: ViewModifier {
+    var shape: S
+    var active = false
+    var bordered = true
+    var pressed = false
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hovered = false
+
+    private var highlighted: Bool { enabled && (hovered || pressed) }
+
+    func body(content: Content) -> some View {
+        content
+            .background((active ? Color.accentColor : .white)
+                .opacity(active ? (highlighted ? 0.4 : 0.3) : (highlighted ? 0.12 : 0.06)), in: shape)
+            .overlay {
+                if bordered {
+                    shape.strokeBorder(active ? Color.accentColor : Color.white.opacity(highlighted ? 0.22 : 0.12))
+                }
+            }
+            .contentShape(shape)
+            .onHover { hovered = $0 }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: highlighted)
+    }
+}
+
+struct QuietHoverButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 10)
+            .frame(height: 24)
+            .modifier(ControlHoverSurface(shape: RoundedRectangle(cornerRadius: 5),
+                                          bordered: false, pressed: configuration.isPressed))
+    }
+}
+
 struct KeyChip: View {
     var key: MusicalKey?
 

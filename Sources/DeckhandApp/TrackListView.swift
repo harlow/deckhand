@@ -418,6 +418,7 @@ struct FilterBar: View {
                 Button { library.startReview(player: player) } label: {
                     Label("Quick Rate", systemImage: "star.leadinghalf.filled")
                 }
+                .buttonStyle(QuietHoverButtonStyle())
                 .fixedSize()
                 .help("Rate this list's unrated tracks one by one")
                 SearchField(text: $library.filter.search)
@@ -517,9 +518,7 @@ struct FilterBar: View {
         .font(.subheadline)
         .padding(.horizontal, 9)
         .frame(height: 22)
-        .background(on ? Color.accentColor.opacity(0.3) : Color.white.opacity(0.06), in: Capsule())
-        .overlay(Capsule().strokeBorder(on ? Color.accentColor : Color.white.opacity(0.12)))
-        .contentShape(Capsule())
+        .modifier(ControlHoverSurface(shape: Capsule(), active: on))
     }
 }
 
@@ -644,8 +643,8 @@ private struct SearchField: View {
         }
         .padding(.horizontal, 10)
         .frame(width: 240, height: 24)
-        .background(Color.white.opacity(0.06), in: Capsule())
-        .overlay(Capsule().strokeBorder(focused ? Color.accentColor : Color.white.opacity(0.12)))
+        .modifier(ControlHoverSurface(shape: Capsule()))
+        .overlay(Capsule().strokeBorder(focused ? Color.accentColor : .clear))
         .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in focused = true }
     }
 }
