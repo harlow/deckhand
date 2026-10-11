@@ -1,5 +1,6 @@
 import Analysis
 import ArgumentParser
+import CSQLCipher
 import DeckhandCore
 import Foundation
 import MusicSource
@@ -11,8 +12,32 @@ struct DebugCommands: ParsableCommand {
         commandName: "debug",
         abstract: "Developer tools.",
         shouldDisplay: false,
-        subcommands: [WriteAnlz.self, AnalyzeTiming.self, HashCommand.self, MusicLiveCommand.self]
+        subcommands: [WriteAnlz.self, AnalyzeTiming.self, HashCommand.self, MusicLiveCommand.self, RuntimeCheck.self]
     )
+}
+
+/// Checks the shipped model and database engine without accessing a user's library or Music.
+struct RuntimeCheck: ParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "runtime-check")
+    func run() throws {
+        let model = try AnalysisRuntime.verifyModel()
+        var database: OpaquePointer?
+        guard sqlite3_open(":memory:", &database) == SQLITE_OK else {
+            throw ValidationError("Couldn't initialize the bundled database engine")
+        }
+        defer { sqlite3_close(database) }
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, "PRAGMA cipher_version", -1, &statement, nil) == SQLITE_OK else {
+            throw ValidationError("Couldn't check the bundled SQLCipher version")
+        }
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW, let value = sqlite3_column_text(statement, 0) else {
+            throw ValidationError("The bundled database engine isn't SQLCipher")
+        }
+        print("SQLCipher: \(String(cString: value))")
+        print("Analysis model: \(model.path)")
+        print("Runtime check passed")
+    }
 }
 
 /// Writes ANLZ files for one audio file, for comparison against Rekordbox output.

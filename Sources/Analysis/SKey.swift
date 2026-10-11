@@ -158,7 +158,7 @@ enum SKey {
     /// Compiled ChromaNet; predictions are serialized because MLModel thread-safety isn't guaranteed.
     final class Model: @unchecked Sendable {
         static let shared: Model? = {
-            guard let url = Bundle.module.url(forResource: "SKeyChromaNet", withExtension: "mlmodelc") else { return nil }
+            guard let url = AnalysisResources.modelURL else { return nil }
             let config = MLModelConfiguration()
             config.computeUnits = .all
             guard let model = try? MLModel(contentsOf: url, configuration: config) else { return nil }

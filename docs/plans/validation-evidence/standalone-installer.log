@@ -1,0 +1,7 @@
+SQLCipher: 4.19.0 community
+Analysis model: /private/tmp/Deckhand DMG Installed/Deckhand.app/Contents/Resources/Deckhand_Analysis.bundle/SKeyChromaNet.mlmodelc
+Runtime check passed
+Standalone bundle verified: arm64, macOS 26+, system libraries only
+SQLCipher: 4.19.0 community
+Analysis model: /tmp/Deckhand DMG Installed/Deckhand.app/Contents/Resources/Deckhand_Analysis.bundle/SKeyChromaNet.mlmodelc
+Runtime check passed

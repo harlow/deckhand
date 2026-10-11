@@ -1,0 +1,8 @@
+Native release QA: fresh isolated library and cache.
+Imported 2 WAV files, analyzed 2 with bundled helper, previewed audio.
+Created Release Test playlist with 2 tracks; staged selection before explicit Sync.
+Closer.wav SHA256: 6852ed0f1e4b1d0b916675c8febafdec9db6646a3635f2e3bb7e2d9fe0186eea (matches USB copy)
+Warmup.wav SHA256: 279da196a6edb37b2b1b64a866afa318b1025a3477e30fd5b70372028a824486 (matches USB copy)
+6 ANLZ files, exportLibrary.db, 1 manifest playlist, 2 manifest tracks.
+OK — no problems found on DH_RELEASE.
+After restart: playlist 2 tracks, Needs Analysis 0, BPM/key/waveforms intact, Sync disabled/up to date.

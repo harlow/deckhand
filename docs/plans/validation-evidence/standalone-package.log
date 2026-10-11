@@ -1,0 +1,18 @@
+/Users/harlow/Code/deckhand/.build-release-deps/sqlcipher-4.19.0.tar.gz: OK
+Built pinned SQLCipher in /Users/harlow/Code/deckhand/.build-release-deps/prefix
+Building for production...
+[0/2] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'DeckhandApp' complete! (0.14s)
+Building for production...
+[0/2] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'deckhand' complete! (0.13s)
+/Users/harlow/Code/deckhand/build/release/Deckhand.app/Contents/MacOS/deckhand: replacing existing signature
+/Users/harlow/Code/deckhand/build/release/Deckhand.app: replacing existing signature
+SQLCipher: 4.19.0 community
+Analysis model: /Users/harlow/Code/deckhand/build/release/Deckhand.app/Contents/Resources/Deckhand_Analysis.bundle/SKeyChromaNet.mlmodelc
+Runtime check passed
+Standalone bundle verified: arm64, macOS 26+, system libraries only
+Built /Users/harlow/Code/deckhand/build/release/Deckhand.app (open it with: open /Users/harlow/Code/deckhand/build/release/Deckhand.app)
+created: /Users/harlow/Code/deckhand/build/release/Deckhand-0.1-arm64.dmg
+Local preview package only: not notarized. Developer ID + DECKHAND_NOTARY_PROFILE are needed before public distribution.
+Release artifacts: /Users/harlow/Code/deckhand/build/release

@@ -9,7 +9,11 @@ following third-party work.
   license in Sources/CQMDSP/COPYING.
 - KISS FFT (Mark Borgerding) — BSD-3-Clause. Vendored with qm-dsp; license in
   Sources/CQMDSP/qm-dsp/ext/kissfft/COPYING.
-- SQLCipher (Zetetic LLC) — BSD-style. Linked from the system (Homebrew), not vendored.
+- SQLCipher (Zetetic LLC) — BSD-style. Standalone app builds statically link the pinned
+  Community Edition with Apple's CommonCrypto. Its license is included in the app's Licenses
+  directory. Source-build command-line tools may still link a system SQLCipher installation.
+- Swift Argument Parser (Apple Inc.) — Apache-2.0 with Swift Runtime Library Exception.
+  Its license is included in the app's Licenses directory.
 - S-KEY (Deezer) — MIT. The ChromaNet model in Sources/Analysis/Resources/SKeyChromaNet.mlmodelc
   and the constants in Sources/Analysis/SKeyConstants.swift are derived from it (Scripts/export-skey.py).
 - nnAudio (Kin Wai Cheuk) — MIT. The CQT filter constants in Sources/Analysis/SKeyConstants.swift
