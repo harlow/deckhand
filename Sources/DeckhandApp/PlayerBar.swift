@@ -110,6 +110,7 @@ struct PlayerWaveform: View {
     var player: Player
     var waveHeight: CGFloat = 44
     var phraseHeight: CGFloat = 12
+    var keyboardCueLimit = 5
 
     var body: some View {
         if let d = player.detail {
@@ -127,7 +128,7 @@ struct PlayerWaveform: View {
                                     .background(Color(rgb: c.rgb), in: RoundedRectangle(cornerRadius: 3))
                             }
                             .buttonStyle(.plain)
-                            .help("\(c.letter) · \(c.name) · key \(c.slot)")
+                            .help("\(c.letter) · \(c.name)" + (c.slot <= keyboardCueLimit ? " · key \(c.slot)" : ""))
                             .offset(x: c.position * geo.size.width - 7, y: -6)
                         }
                     }

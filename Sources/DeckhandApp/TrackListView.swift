@@ -9,8 +9,7 @@ struct TrackListView: View {
     @State private var selection = Set<String>()
     /// Tracks waiting for "Remove from playlist?" confirmation.
     @State private var removing: [String] = []
-    @State private var showKeys = false
-    /// Tracks waiting in the ⇧P "Add to playlist" picker.
+    /// Tracks waiting in the A "Add to playlist" picker.
     @State private var picking: [String] = []
     @State private var reviewUnavailableAudio = false
 
@@ -115,7 +114,6 @@ struct TrackListView: View {
         .focusedSceneValue(\.rateSelection, selection.isEmpty ? nil : RateSelection { [selection] stars in
             library.setRating(stars, for: Array(selection))
         })
-        .sheet(isPresented: $showKeys) { KeyboardHelp() }
         .sheet(isPresented: Binding(get: { !picking.isEmpty }, set: { if !$0 { picking = [] } }),
                onDismiss: { NotificationCenter.default.post(name: .focusTracks, object: nil) }) {
             PlaylistPicker(library: library, ids: picking) { picking = [] }
@@ -141,8 +139,9 @@ struct TrackListView: View {
             guard let r = picked.first else { return }
             if fromMixIn { player.play(from: .mixIn, r, artwork: library.artwork) } else { player.play(r, artwork: library.artwork) }
         case .preview:
-            guard let r = picked.first else { return }
-            player.play(from: .preview, r, artwork: library.artwork)
+            if player.current != nil { player.jumpToPreview() }
+            else if let r = picked.first { player.play(from: .preview, r, artwork: library.artwork) }
+        case .songStart: player.seek(to: 0)
         case .togglePlay:
             if player.current == nil, let r = picked.first { player.play(r, artwork: library.artwork) } else { player.toggle() }
         case .queue(let next):
@@ -159,7 +158,7 @@ struct TrackListView: View {
             guard let id = player.current?.id else { NSSound.beep(); return }
             if !rows.contains(where: { $0.id == id }) { library.selection = .all; library.filter = TrackFilter() }
             selection = [id]
-        case .help: showKeys = true
+        case .help: library.showingKeyboardHelp = true
         case .review: library.startReview(player: player)
         case .addToPlaylist:
             if ids.isEmpty { NSSound.beep() } else { picking = ids }
@@ -420,7 +419,7 @@ struct FilterBar: View {
                     Label("Quick Rate", systemImage: "star.leadinghalf.filled")
                 }
                 .fixedSize()
-                .help("Rate this list's unrated tracks one by one (r)")
+                .help("Rate this list's unrated tracks one by one")
                 SearchField(text: $library.filter.search)
             }
         }
@@ -648,77 +647,6 @@ private struct SearchField: View {
         .background(Color.white.opacity(0.06), in: Capsule())
         .overlay(Capsule().strokeBorder(focused ? Color.accentColor : Color.white.opacity(0.12)))
         .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in focused = true }
-    }
-}
-
-/// The keyboard cheat sheet (press ? in the track list).
-private struct KeyboardHelp: View {
-    @Environment(\.dismiss) private var dismiss
-
-    private let groups: [(String, [(String, String)])] = [
-        ("Moving around", [
-            ("j  k", "Next / previous track (anywhere, except while typing)"),
-            ("↓  ↑", "Next / previous track (in the list)"),
-            ("⌘⇧]  ⌘⇧[", "Next / previous playlist"),
-            ("Tab / ⇧Tab", "Into tracks / back to playlists"),
-            ("J  K", "Extend the selection"),
-            ("⌘↑  ⌘↓", "Top / bottom of the list"),
-            ("/", "Search (Escape or Return goes back to the list)"),
-            ("⌘L", "Show the playing track"),
-        ]),
-        ("Playing", [
-            ("l  (or p)", "Preview: from just before the first drop"),
-            ("Return", "Play from the start"),
-            ("⇧ Return", "Play from Mix In (cue A)"),
-            ("Space", "Play / pause"),
-            ("q  ⇧Q", "Add to Up Next / play next"),
-            ("⇧P", "Add to playlist (j k, Space in/out, Return, / filters)"),
-            ("⌘→  ⌘←", "Next / previous in Up Next"),
-        ]),
-        ("In the playing track", [
-            ("1 – 8", "Hot cue A – H"),
-            (",  .", "Back / forward 4 beats"),
-            ("<  >", "Back / forward 16 beats"),
-            ("[  ]", "Previous / next section"),
-        ]),
-        ("Other", [
-            ("⌥1 – ⌥5   ⌥0", "Rate / clear rating"),
-            ("m", "Mixes with now playing"),
-            ("r", "Quick Rate: ⌥1–⌥5 rate, j next, k back, o order, g groove"),
-            ("Delete", "Remove from playlist"),
-            ("?", "This list"),
-        ]),
-    ]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Keyboard Shortcuts").font(.title2.bold())
-            HStack(alignment: .top, spacing: 32) {
-                ForEach([0, 2], id: \.self) { start in
-                    VStack(alignment: .leading, spacing: 16) {
-                        ForEach(groups[start..<start + 2], id: \.0) { title, keys in
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(title).font(.headline)
-                                Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 5) {
-                                    ForEach(keys, id: \.0) { key, what in
-                                        GridRow {
-                                            Text(key).font(.system(.body, design: .monospaced)).foregroundStyle(Color.accentColor)
-                                            Text(what)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            HStack {
-                Spacer()
-                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(24)
-        .frame(width: 640)
     }
 }
 

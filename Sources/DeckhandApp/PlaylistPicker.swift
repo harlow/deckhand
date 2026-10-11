@@ -1,7 +1,7 @@
 import DeckhandCore
 import SwiftUI
 
-/// Keyboard-first "Add to playlist" (⇧P in the track list and Quick Rate). Recently used playlists
+/// Keyboard-first "Add to playlist" (A in the track list; ⇧P in Quick Rate). Recently used playlists
 /// come first. j/k or ↓/↑ (or Tab/⇧Tab) move, Space puts the tracks in or takes them out of the
 /// highlighted playlist and stays open, Return adds and closes, / filters by name, Escape closes.
 struct PlaylistPicker: View {

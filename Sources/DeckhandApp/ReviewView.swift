@@ -33,7 +33,7 @@ struct ReviewView: View {
             header
             if let row = review.current {
                 track(row)
-                PlayerWaveform(player: player, waveHeight: 90, phraseHeight: 16)
+                PlayerWaveform(player: player, waveHeight: 90, phraseHeight: 16, keyboardCueLimit: 8)
                     .frame(maxWidth: .infinity)
                 HStack {
                     Text("\(formatTime(player.time)) / \(formatTime(player.duration))").monospacedDigit()
@@ -201,7 +201,7 @@ struct ReviewView: View {
     /// Returns true when the key was a Quick Rate command. Leaves keys alone while the playlist
     /// picker (or any sheet) is open, while typing in a text field, and with ⌘ or ⌃ held.
     private func handle(_ event: NSEvent) -> Bool {
-        guard picking == nil, let window = event.window, window.attachedSheet == nil, window.isKeyWindow,
+        guard !library.showingKeyboardHelp, picking == nil, let window = event.window, window.attachedSheet == nil, window.isKeyWindow,
               !(window.firstResponder is NSTextView),
               event.modifierFlags.isDisjoint(with: [.command, .control]) else { return false }
         switch event.keyCode {

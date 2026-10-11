@@ -61,6 +61,16 @@ struct ContentView: View {
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .background(KeyboardShortcutHost(library: library))
+        .overlay {
+            if library.showingKeyboardHelp {
+                ZStack {
+                    Color.black.opacity(0.45).ignoresSafeArea()
+                        .onTapGesture { library.showingKeyboardHelp = false }
+                    KeyboardHelpView(quickRate: library.review != nil) { library.showingKeyboardHelp = false }
+                }
+            }
+        }
         .sheet(isPresented: $library.showingDestinations) {
             LibraryDestinationsView().frame(width: 680)
         }

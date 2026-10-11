@@ -45,11 +45,12 @@ struct TrackSort: Equatable {
 }
 
 /// Keyboard commands the track list hands to its owner (movement and selection it handles itself).
-/// See `KeyTableView.keyDown` for the key map and `KeyboardHelp` for the cheat sheet.
-enum TrackCommand {
+/// See `KeyTableView.keyDown` for the key map and `KeyboardHelpView` for the cheat sheet.
+enum TrackCommand: Equatable {
     case play(fromMixIn: Bool), preview, togglePlay, queue(next: Bool)
     case hotCue(Int), beats(Int), section(Int), rate(Int)
     case toggleMixes, search, revealPlaying, help, delete, addToPlaylist, review
+    case songStart
 }
 
 extension Notification.Name {
@@ -101,7 +102,7 @@ struct TrackTable: NSViewRepresentable {
         table.usesAlternatingRowBackgroundColors = true
         table.allowsMultipleSelection = true
         table.allowsColumnReordering = false
-        // Single letters are commands (j/k, q, n…), so typing doesn't jump to titles; `/` searches.
+        // Single letters are commands, so typing doesn't jump to titles; `/` searches.
         table.allowsTypeSelect = false
         table.intercellSpacing = NSSize(width: 8, height: 0)
         table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
@@ -284,21 +285,8 @@ struct TrackTable: NSViewRepresentable {
     }
 }
 
-/// The track list's keyboard map. Arrow keys, Shift-arrows and ⌘A keep their normal table behaviour.
-///
-///   j / k (↓ / ↑)       next / previous track; J / K extend the selection
-///   ⌘↑ / ⌘↓             top / bottom
-///   Return / ⇧Return    play / play from Mix In (cue A)
-///   Space               play / pause
-///   q / Q               add to Up Next / play next
-///   P (⇧p)              add to playlist (picker)
-///   l (or p)            preview: play from just before the first drop
-///   1–8                 hot cue A–H of the playing track
-///   , / .               back / forward 4 beats; < / > 16 beats
-///   [ / ]               previous / next section
-///   ⌥1–⌥5, ⌥0           rate, clear rating
-///   m                   toggle "Mixes with now playing"
-///   /                   search;  ⌘L  show playing track;  ?  this list;  Delete  remove from playlist
+/// The song-list shortcuts are shown in KeyboardHelpView. Arrow keys, Shift-arrows, ⌘A and
+/// ⌘↑/⌘↓ keep their standard table behavior; unmodified letter keys never intercept typing.
 final class KeyTableView: NSTableView {
     weak var coordinator: TrackTable.Coordinator?
     private var navigationMonitor: Any?
@@ -321,25 +309,30 @@ final class KeyTableView: NSTableView {
         if let navigationMonitor { NSEvent.removeMonitor(navigationMonitor) }
     }
 
-    /// Only borrow j/k from this table's own workspace. Text editors, sheets, popovers and
-    /// other windows keep their keys; the table's normal keyDown handles already-focused input.
+    /// Route song shortcuts from this table’s workspace, while editors and modal UI keep their keys.
     @discardableResult
     func routeWorkspaceNavigation(_ event: NSEvent) -> Bool {
         guard let window, event.window === window, window.isKeyWindow,
               window.attachedSheet == nil, !window.isSheet, NSApp.modalWindow == nil,
               !isHiddenOrHasHiddenAncestor, window.firstResponder !== self,
-              let delta = Self.navigationDelta(event) else { return false }
+              !(window.firstResponder is KeyboardShortcutView) else { return false }
         if let editor = window.firstResponder as? NSText, editor.isEditable { return false }
         if let field = window.firstResponder as? NSTextField, field.isEditable { return false }
-        guard numberOfRows > 0 else { return false }
-        move(delta, extend: event.modifierFlags.contains(.shift))
+        if let delta = Self.navigationDelta(event) {
+            guard numberOfRows > 0 else { return false }
+            move(delta, extend: false)
+            window.makeFirstResponder(self)
+            return true
+        }
+        guard Self.songCommand(event) != nil else { return false }
         window.makeFirstResponder(self)
+        keyDown(with: event)
         return true
     }
 
     private static func navigationDelta(_ event: NSEvent) -> Int? {
         guard event.type == .keyDown,
-              event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return nil }
+              event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty else { return nil }
         switch event.charactersIgnoringModifiers?.lowercased() {
         case "j": return 1
         case "k": return -1
@@ -358,45 +351,46 @@ final class KeyTableView: NSTableView {
         let ch = event.charactersIgnoringModifiers ?? ""
         let send = { (cmd: TrackCommand) in parent.onCommand(cmd, c.targetIds(clicked: -1)) }
 
+        if flags.contains(.control) { return super.keyDown(with: event) }
+
         if flags.contains(.command) {
             switch (event.keyCode, ch) {
             case (126, _): select(0)
             case (125, _): select(numberOfRows - 1)
-            case (_, "l"): send(.revealPlaying)
             default: super.keyDown(with: event)
             }
             return
         }
-        if flags.contains(.option) {
-            if let n = Int(ch), (0...5).contains(n) { send(.rate(n)) } else { super.keyDown(with: event) }
-            return
-        }
-        switch event.keyCode {
-        case 48 where shift:
+        if event.keyCode == 48, shift {
             NotificationCenter.default.post(name: .focusSidebar, object: nil)
             return
-        case 51, 117: return send(.delete)
-        case 49: return send(.togglePlay)
-        case 36, 76: return send(.play(fromMixIn: shift))
+        }
+        if let command = Self.songCommand(event) { send(command) }
+        else { super.keyDown(with: event) }
+    }
+
+    private static func songCommand(_ event: NSEvent) -> TrackCommand? {
+        let flags = event.modifierFlags
+        let shift = flags.contains(.shift)
+        let text = event.charactersIgnoringModifiers ?? ""
+        guard flags.intersection([.command, .control]).isEmpty else { return nil }
+        if flags.contains(.option) {
+            return Int(text).flatMap { (0...5).contains($0) ? .rate($0) : nil }
+        }
+        switch event.keyCode {
+        case 51, 117: return .delete
+        case 49 where !shift: return .togglePlay
+        case 36 where !shift, 76 where !shift: return .play(fromMixIn: false)
         default: break
         }
-        switch ch {
-        case "1", "2", "3", "4", "5", "6", "7", "8": send(.hotCue(Int(ch)!))
-        case ",": send(.beats(-4))
-        case ".": send(.beats(4))
-        case "<": send(.beats(-16))
-        case ">": send(.beats(16))
-        case "[": send(.section(-1))
-        case "]": send(.section(1))
-        case "P": send(.addToPlaylist)
-        case "q": send(.queue(next: false))
-        case "Q": send(.queue(next: true))
-        case "l", "p": send(.preview)
-        case "m": send(.toggleMixes)
-        case "r": send(.review)
-        case "/": send(.search)
-        case "?": send(.help)
-        default: super.keyDown(with: event)
+        switch text.lowercased() {
+        case "h": return shift ? .beats(-64) : .songStart // 16 four-beat bars.
+        case "l": return shift ? .beats(64) : .preview
+        case "a" where !shift: return .addToPlaylist
+        case "1" where !shift, "2" where !shift, "3" where !shift, "4" where !shift, "5" where !shift: return .hotCue(Int(text)!)
+        case "/" where !shift: return .search
+        case "?": return .help
+        default: return nil
         }
     }
 

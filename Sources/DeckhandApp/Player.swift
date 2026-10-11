@@ -95,6 +95,9 @@ final class Player: NSObject, AVAudioPlayerDelegate {
         seek(to: seconds / duration)
     }
 
+    /// Seek within the playing song without changing its play/pause state.
+    func jumpToPreview() { seek(seconds: previewStart) }
+
     /// Moves `n` beats (negative = back) along the beat grid, or by tempo when there's no grid.
     func jumpBeats(_ n: Int) {
         guard current != nil else { return }

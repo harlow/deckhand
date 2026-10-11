@@ -40,6 +40,10 @@ struct DeckhandApp: App {
         .commands {
             ConsoleCommands()
             TrackCommands()
+            CommandGroup(replacing: .help) {
+                Button("Keyboard Shortcuts") { library.showingKeyboardHelp.toggle() }
+                    .keyboardShortcut("/", modifiers: .command)
+            }
             CommandMenu("Library") {
                 Button("Add Music…") { library.choosingSource = true }
                     .keyboardShortcut("l", modifiers: [.command, .option])
@@ -57,9 +61,9 @@ struct DeckhandApp: App {
             }
             CommandGroup(after: .sidebar) {
                 Divider()
-                Button("Next Playlist") { library.selectAdjacentSidebarItem(1); library.focusTrackList() }
+                Button("Next Playlist") { library.selectAdjacentPlaylist(1) }
                     .keyboardShortcut("]", modifiers: [.command, .shift])
-                Button("Previous Playlist") { library.selectAdjacentSidebarItem(-1); library.focusTrackList() }
+                Button("Previous Playlist") { library.selectAdjacentPlaylist(-1) }
                     .keyboardShortcut("[", modifiers: [.command, .shift])
             }
             CommandMenu("Playback") {

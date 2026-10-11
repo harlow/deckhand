@@ -139,6 +139,7 @@ final class LibraryModel {
     var showingDestinations = false
     var showingUSBConnection = false
     var showingUSBChanges = false
+    var showingKeyboardHelp = false
     private(set) var exportingMusic = false
     private(set) var musicExportResult: String?
     @ObservationIgnored private var localStore: DeckhandLibraryStore?
@@ -1053,6 +1054,15 @@ final class LibraryModel {
         guard !order.isEmpty else { return }
         let i = selection.flatMap { order.firstIndex(of: $0) } ?? (delta > 0 ? -1 : 0)
         selection = order[(i + delta + order.count) % order.count]
+    }
+
+    /// Brackets browse visible playlists, skipping library filters and folder headers.
+    func selectAdjacentPlaylist(_ delta: Int) {
+        let order = playlistEntries.filter { !$0.playlist.isFolder }.map { SidebarItem.playlist($0.id) }
+        guard !order.isEmpty else { return }
+        let i = selection.flatMap { order.firstIndex(of: $0) } ?? (delta > 0 ? -1 : 0)
+        selection = order[(i + delta + order.count) % order.count]
+        focusTrackList()
     }
 
     // MARK: Drive selection
