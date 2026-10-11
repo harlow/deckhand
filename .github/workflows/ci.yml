@@ -18,14 +18,14 @@ jobs:
         run: |
           python3 Scripts/release.py check
           python3 -m unittest discover -s Tests/ReleaseTests -v
-          zsh -n Scripts/build-app.sh Scripts/build-sqlcipher.sh Scripts/package-release.sh
+          for script in Scripts/build-app.sh Scripts/build-sqlcipher.sh Scripts/package-release.sh; do zsh -n "$script"; done
       - name: Install build-only pkg-config
         run: command -v pkg-config || brew install pkg-config
       - name: Build pinned database and run Swift tests
         run: |
           Scripts/build-sqlcipher.sh
           export PKG_CONFIG_PATH="$PWD/.build-release-deps/prefix/lib/pkgconfig"
-          swift test --scratch-path .build-standalone
+          swift test --scratch-path .build-standalone --force-resolved-versions
       - name: Build and verify standalone preview installer
         run: Scripts/package-release.sh
       - name: Preserve preview artifacts

@@ -1,6 +1,7 @@
 """Exercise release boundaries with disposable Git repositories and mocked GitHub calls."""
 import importlib.util
 import json
+import gzip
 import os
 from pathlib import Path
 import plistlib
@@ -23,7 +24,7 @@ class ReleaseTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name) / "checkout"
         self.root.mkdir()
-        self.data = {"version": "0.1.0-beta.1", "build": 1, "repository": "harlow/deckhand"}
+        self.data = {"version": "0.1.0-beta.1", "build": 1, "repository": "fixture/deckhand"}
         (self.root / "release.json").write_text(json.dumps(self.data))
         (self.root / "docs/releases").mkdir(parents=True)
         (self.root / "docs/releases/0.1.0-beta.1.md").write_text("First beta.\n")
@@ -39,6 +40,7 @@ class ReleaseTests(unittest.TestCase):
         origin = Path(self.temporary.name) / "origin.git"
         subprocess.run(["git", "init", "--bare", "-q", str(origin)], check=True)
         self.git("remote", "add", "origin", str(origin))
+        self.git("push", "-q", "origin", "HEAD:main")
         self.artifacts = self.root / "build/release"
 
     def git(self, *args):
@@ -98,6 +100,13 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "checked-out commit"):
             release.check(self.root, "v0.1.0-beta.1")
 
+    def test_release_commit_must_be_merged_on_remote_main(self):
+        release.public_commit(self.root)
+        (self.root / "LICENSE").write_text("Unmerged change")
+        self.commit()
+        with self.assertRaisesRegex(ValueError, "origin/main"):
+            release.public_commit(self.root)
+
     def test_cli_creates_annotated_tag_and_pushes_only_to_fixture_remote(self):
         command = ["python3", str(self.root / "Scripts/release.py"), "tag"]
         subprocess.run(command + ["--dry-run"], check=True, capture_output=True)
@@ -149,11 +158,27 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Source archive"):
             release.validate_artifacts(self.artifacts, root=self.root)
 
+    def test_modified_release_notes_are_rejected_even_with_valid_checksums(self):
+        self.make_artifacts()
+        (self.root / "docs/releases/0.1.0-beta.1.md").write_text("Different notes")
+        with self.assertRaisesRegex(ValueError, "notes do not match"):
+            release.validate_artifacts(self.artifacts, root=self.root)
+
     def test_preview_cannot_pass_public_validation(self):
         self.make_artifacts()
         self.tag()
         with self.assertRaisesRegex(ValueError, "must be notarized"):
             release.validate_artifacts(self.artifacts, True, self.root)
+
+    def test_public_source_is_exactly_the_committed_tree(self):
+        source = Path(self.temporary.name) / "source.tar.gz"
+        committed = subprocess.check_output(["git", "archive", "--format=tar", "HEAD"], cwd=self.root)
+        source.write_bytes(gzip.compress(committed))
+        release.verify_source_commit(source, self.root)
+        (self.root / "LICENSE").write_text("Changed source")
+        self.commit()
+        with self.assertRaisesRegex(ValueError, "exactly git archive"):
+            release.verify_source_commit(source, self.root)
 
     def publish_fixture(self, uploaded_override=None, existing=False):
         self.make_artifacts()
@@ -202,6 +227,47 @@ class ReleaseTests(unittest.TestCase):
         with validation, patch.object(release, "github_release", side_effect=[{"draft": True}, self.uploaded]), commands:
             release.publish(self.artifacts, self.root)
         self.assertEqual([args[2] for args in self.commands if args[0] == "gh"], ["upload", "edit"])
+
+    def test_draft_lookup_uses_authenticated_list_then_id_not_published_tag_endpoint(self):
+        draft = {"id": 12, "tag_name": "v0.1.0-beta.1", "draft": True, "assets": []}
+        with patch.object(release, "run", side_effect=[json.dumps([[draft]]), json.dumps(draft)]) as command:
+            self.assertEqual(release.github_release("fixture/deckhand", draft["tag_name"]), draft)
+        self.assertEqual(command.call_args_list[0].args, ("gh", "api", "--paginate", "--slurp", "repos/fixture/deckhand/releases?per_page=100"))
+        self.assertEqual(command.call_args_list[1].args, ("gh", "api", "repos/fixture/deckhand/releases/12"))
+        with patch.object(release, "run", return_value="[[]]"):
+            self.assertIsNone(release.github_release("fixture/deckhand", "missing"))
+        with patch.object(release, "run", return_value=json.dumps([[draft, draft]])), self.assertRaisesRegex(ValueError, "Multiple releases"):
+            release.github_release("fixture/deckhand", draft["tag_name"])
+
+    def test_stable_release_promotes_latest_and_rejects_rollback(self):
+        validation, lookup, commands = self.publish_fixture()
+        self.data["version"] = "0.1.0"
+        (self.artifacts / "Deckhand-0.1.0-beta.1-source.tar.gz").rename(self.artifacts / "Deckhand-0.1.0-source.tar.gz")
+        for asset in self.uploaded["assets"]:
+            if asset["name"] == "Deckhand-0.1.0-beta.1-source.tar.gz":
+                asset["name"] = "Deckhand-0.1.0-source.tar.gz"
+        self.git("tag", "v0.1.0")
+        self.git("push", "-q", "origin", "v0.1.0")
+        # The validator is mocked here; real clean-tag/source/Gatekeeper validation is
+        # independently covered. This test exercises promotion and rollback decisions.
+        latest = subprocess.CompletedProcess([], 0, json.dumps({"tag_name": "v0.0.9"}), "")
+
+        def decision_command(*args, **kwargs):
+            if args[:2] == ("git", "rev-parse"): return "fixture"
+            if args[:2] == ("git", "ls-remote"): return "fixture\trefs/tags/v0.1.0"
+            self.commands.append(args)
+            return ""
+
+        with validation, lookup, patch.object(release.subprocess, "run", return_value=latest), patch.object(release, "run", side_effect=decision_command):
+            release.publish(self.artifacts, self.root)
+        self.assertIn("--latest=true", self.commands[-1])
+        self.assertIn("--prerelease=false", self.commands[-1])
+        self.commands.clear()
+        latest.stdout = json.dumps({"tag_name": "v0.2.0"})
+        with patch.object(release, "validate_artifacts", return_value=self.data), patch.object(release, "github_release", return_value=None), patch.object(release.subprocess, "run", return_value=latest), patch.object(release, "run", side_effect=decision_command):
+            with self.assertRaisesRegex(ValueError, "older or equal"):
+                release.publish(self.artifacts, self.root)
+        self.assertEqual(self.commands, [])
 
 
 if __name__ == "__main__":

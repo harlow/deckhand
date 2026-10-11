@@ -2,6 +2,7 @@
 """Version, validate, tag and publish Deckhand releases. No third-party Python packages."""
 import argparse
 import hashlib
+import gzip
 import json
 import os
 from pathlib import Path
@@ -41,6 +42,13 @@ def config(root=ROOT):
 def clean(root=ROOT):
     if run("git", "status", "--porcelain", cwd=root):
         raise ValueError("Commit all changes before tagging or publishing a release")
+
+
+def public_commit(root=ROOT):
+    run("git", "fetch", "--no-tags", "origin", "main:refs/remotes/origin/main", cwd=root)
+    result = subprocess.run(["git", "merge-base", "--is-ancestor", "HEAD", "origin/main"], cwd=root, capture_output=True)
+    if result.returncode != 0:
+        raise ValueError("Merge the release commit into origin/main before tagging or publishing")
 
 
 def check(root=ROOT, tag=None, require_clean=False):
@@ -90,8 +98,14 @@ def preflight(public=False, root=ROOT):
         profile = os.environ.get("DECKHAND_NOTARY_PROFILE", "")
         if not identity.startswith("Developer ID Application:") or not profile:
             raise ValueError("Public release requires DECKHAND_SIGN_IDENTITY (Developer ID Application) and DECKHAND_NOTARY_PROFILE")
-        if identity not in run("security", "find-identity", "-v", "-p", "codesigning", "-s", identity):
+        report = run("security", "find-identity", "-v", "-p", "codesigning")
+        names = re.findall(r'^\s*\d+\) [A-Fa-f0-9]+ "([^"]+)"', report, re.MULTILINE)
+        if identity not in names:
             raise ValueError("The requested Developer ID identity is not installed in the keychain")
+        keychain = os.environ.get("DECKHAND_NOTARY_KEYCHAIN")
+        options = ["--keychain", keychain] if keychain else []
+        run("xcrun", "notarytool", "history", "--keychain-profile", profile, "--output-format", "json", *options)
+        public_commit(root)
     return data
 
 
@@ -126,6 +140,25 @@ def verify_installer(directory, public=False, root=ROOT):
             print(run(*args, cwd=root))
         finally:
             run("hdiutil", "detach", str(mount))
+
+
+def verify_source_commit(path, root=ROOT):
+    # Compare uncompressed archives so gzip implementation differences do not matter.
+    expected = hashlib.sha256()
+    process = subprocess.Popen(["git", "archive", "--format=tar", "HEAD"], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    with process.stdout:
+        for block in iter(lambda: process.stdout.read(1024 * 1024), b""):
+            expected.update(block)
+    error = process.stderr.read().decode()
+    process.stderr.close()
+    if process.wait() != 0:
+        raise ValueError("Could not verify corresponding source: " + error)
+    actual = hashlib.sha256()
+    with gzip.open(path, "rb") as archive:
+        for block in iter(lambda: archive.read(1024 * 1024), b""):
+            actual.update(block)
+    if actual.digest() != expected.digest():
+        raise ValueError("Public source must be exactly git archive of the tagged commit")
 
 
 def write_artifacts(directory, public=False, root=ROOT):
@@ -178,6 +211,8 @@ def validate_artifacts(directory, public=False, root=ROOT):
         check(root, tag="v" + data["version"], require_clean=True)
         if manifest["distribution"] != "notarized" or manifest["dirty"] or manifest["commit"] != run("git", "rev-parse", "HEAD", cwd=root):
             raise ValueError("Public artifacts must be notarized and built from this clean tagged commit")
+        verify_source_commit(directory / f"Deckhand-{data['version']}-source.tar.gz", root)
+        public_commit(root)
         run("xcrun", "stapler", "validate", str(directory / "Deckhand-arm64.dmg"))
         run("spctl", "--assess", "--type", "open", "--context", "context:primary-signature", "--verbose=2", str(directory / "Deckhand-arm64.dmg"))
     verify_installer(directory, public, root)
@@ -185,12 +220,13 @@ def validate_artifacts(directory, public=False, root=ROOT):
 
 
 def github_release(repo, tag):
-    result = subprocess.run(["gh", "api", f"repos/{repo}/releases/tags/{tag}"], text=True, capture_output=True)
-    if result.returncode == 0:
-        return json.loads(result.stdout)
-    if "HTTP 404" in result.stderr:
-        return None
-    raise ValueError("GitHub release lookup failed: " + result.stderr.strip())
+    # The tag endpoint only finds published releases. The authenticated list includes
+    # drafts; fetch by numeric ID so retries inspect the same draft and its fresh assets.
+    pages = json.loads(run("gh", "api", "--paginate", "--slurp", f"repos/{repo}/releases?per_page=100"))
+    matches = [item for page in pages for item in page if item["tag_name"] == tag]
+    if len(matches) > 1:
+        raise ValueError("Multiple releases share this tag; resolve duplicate drafts before retrying")
+    return json.loads(run("gh", "api", f"repos/{repo}/releases/{matches[0]['id']}")) if matches else None
 
 
 def publish(directory, root=ROOT):
@@ -255,6 +291,7 @@ def main():
         elif args.command == "tag":
             data = check(require_clean=True); name = "v" + data["version"]
             if run("git", "tag", "--list", name): raise ValueError("This tag already exists; choose a new version or rerun its workflow")
+            public_commit()
             if args.dry_run: print(f"Would create annotated tag {name} at {run('git', 'rev-parse', 'HEAD')}")
             else:
                 run("git", "tag", "-a", name, "-F", str(ROOT / "docs/releases" / (data["version"] + ".md")))

@@ -155,14 +155,14 @@ Building for debugging...
  77 |         guard beats.count > 64, features.count >= 16, let models else { return [] }
     |                                                           `- warning: immutable value 'models' was never used; consider replacing with '_' or removing it [#no-usage]
  78 |         guard let (path, starts, rms) = barPath(features: features, rhythm: rhythm, bars: beats.map(\.barPosition)) else { return [] }
- 79 | 
+ 79 |
 /Users/harlow/Code/deckhand/Sources/Analysis/StructureAnalyzer.swift:77:59: warning: immutable value 'models' was never used; consider replacing with '_' or removing it [#no-usage]
  75 |     public static func analyze(features: [[Float]], rhythm: [[Float]], analysis: TrackAnalysis) -> [Section] {
  76 |         let beats = analysis.beats
  77 |         guard beats.count > 64, features.count >= 16, let models else { return [] }
     |                                                           `- warning: immutable value 'models' was never used; consider replacing with '_' or removing it [#no-usage]
  78 |         guard let (path, starts, rms) = barPath(features: features, rhythm: rhythm, bars: beats.map(\.barPosition)) else { return [] }
- 79 | 
+ 79 |
 [166/201] Emitting module MusicSourceTests
 [167/201] Emitting module OneLibraryTests
 [172/237] Compiling OneLibraryTests AnlzCueTests.swift
@@ -189,7 +189,7 @@ Building for debugging...
  61 | var truths = try JSONDecoder().decode([Truth].self, from: Data(contentsOf: URL(fileURLWithPath: args[1])))
     |     `- note: var declared here
  62 | if args.count >= 3, let n = Int(args[2]) { truths = Array(truths.prefix(n)) }
- 63 | 
+ 63 |
     :
  68 | let workers = 6
  69 | DispatchQueue.concurrentPerform(iterations: workers) { w in
@@ -204,7 +204,7 @@ Building for debugging...
  61 | var truths = try JSONDecoder().decode([Truth].self, from: Data(contentsOf: URL(fileURLWithPath: args[1])))
     |     `- note: var declared here
  62 | if args.count >= 3, let n = Int(args[2]) { truths = Array(truths.prefix(n)) }
- 63 | 
+ 63 |
     :
  69 | DispatchQueue.concurrentPerform(iterations: workers) { w in
  70 |   for i in stride(from: w, to: truths.count, by: workers) {
@@ -234,7 +234,7 @@ Building for debugging...
  61 | var truths = try JSONDecoder().decode([Truth].self, from: Data(contentsOf: URL(fileURLWithPath: args[1])))
     |     `- note: var declared here
  62 | if args.count >= 3, let n = Int(args[2]) { truths = Array(truths.prefix(n)) }
- 63 | 
+ 63 |
     :
  68 | let workers = 6
  69 | DispatchQueue.concurrentPerform(iterations: workers) { w in
@@ -249,7 +249,7 @@ Building for debugging...
  61 | var truths = try JSONDecoder().decode([Truth].self, from: Data(contentsOf: URL(fileURLWithPath: args[1])))
     |     `- note: var declared here
  62 | if args.count >= 3, let n = Int(args[2]) { truths = Array(truths.prefix(n)) }
- 63 | 
+ 63 |
     :
  69 | DispatchQueue.concurrentPerform(iterations: workers) { w in
  70 |   for i in stride(from: w, to: truths.count, by: workers) {

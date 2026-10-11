@@ -28,12 +28,15 @@ is numeric (`0.1.0`); its build number distinguishes beta and stable builds, and
 
    The tag is derived from `release.json`; there is no version argument to mistype.
    It is created only from a clean checkout. Tag push starts the **Release** workflow.
+   The command also verifies that the release commit has been merged into `origin/main`.
 5. Watch GitHub Actions. It verifies tag/version/commit consistency and credentials,
    runs release-tooling and Swift tests, builds, signs and notarizes the app and DMG,
    verifies the installer, then uploads into a draft GitHub release. It checks every
    uploaded asset's size and SHA-256 digest before publishing.
 
 Beta releases get GitHub's prerelease flag and do not move the stable download link.
+Cut one tag at a time and let its run finish before cutting another; the workflow serializes
+publishing, and GitHub may replace an older pending run when multiple tags are queued.
 Stable releases become latest. Published versions cannot be overwritten; fixes require
 a new version. An older stable release cannot replace a newer stable download.
 

@@ -5,6 +5,7 @@ import pathlib
 import plistlib
 import subprocess
 import json
+import re
 
 
 def run(*args):
@@ -48,7 +49,7 @@ def verify(app, public=False):
     if public:
         for target in [app, app / "Contents/MacOS/deckhand"]:
             signature = run("codesign", "--display", "--verbose=4", str(target))
-            if "Authority=Developer ID Application:" not in signature or "runtime" not in signature:
+            if "Authority=Developer ID Application:" not in signature or not re.search(r"^CodeDirectory .*flags=.*\bruntime\b", signature, re.MULTILINE):
                 raise ValueError("Public executables must be Developer ID signed with hardened runtime")
         run("xcrun", "stapler", "validate", str(app))
         run("spctl", "--assess", "--type", "execute", "--verbose=2", str(app))

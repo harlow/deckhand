@@ -8,8 +8,8 @@ CONFIG=${1:-release}
 SCRATCH=.build-standalone
 Scripts/build-sqlcipher.sh
 export PKG_CONFIG_PATH="$PWD/.build-release-deps/prefix/lib/pkgconfig"
-swift build -c $CONFIG --scratch-path $SCRATCH --product DeckhandApp
-swift build -c $CONFIG --scratch-path $SCRATCH --product deckhand
+swift build -c $CONFIG --scratch-path $SCRATCH --force-resolved-versions --product DeckhandApp
+swift build -c $CONFIG --scratch-path $SCRATCH --force-resolved-versions --product deckhand
 BIN=$SCRATCH/$CONFIG
 APP=${DECKHAND_APP_PATH:-build/Deckhand.app}
 rm -rf "$APP"
@@ -67,8 +67,8 @@ python3 Scripts/release.py stamp-plist "$APP/Contents/Info.plist"
 # behind other windows) reading the library waits. A fixed designated requirement doesn't help ad-hoc
 # builds; a stable signing certificate would.
 IDENTITY=${DECKHAND_SIGN_IDENTITY:--}
-SIGN_OPTIONS=()
-if [[ "$IDENTITY" != - ]]; then SIGN_OPTIONS=(--options runtime --timestamp --entitlements Scripts/Deckhand.entitlements); fi
+SIGN_OPTIONS=(--options runtime --entitlements Scripts/Deckhand.entitlements)
+if [[ "$IDENTITY" != - ]]; then SIGN_OPTIONS+=(--timestamp); fi
 # Sign nested executables first, then the outer bundle.
 codesign --force --sign "$IDENTITY" "${SIGN_OPTIONS[@]}" "$APP/Contents/MacOS/deckhand"
 codesign --force --sign "$IDENTITY" "${SIGN_OPTIONS[@]}" "$APP"
