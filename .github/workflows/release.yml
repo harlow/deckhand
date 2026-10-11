@@ -1,0 +1,109 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build (for example v0.1.0-beta.1)
+        required: true
+        type: string
+      preview:
+        description: Build a local preview without signing credentials or publishing
+        default: true
+        type: boolean
+permissions:
+  contents: write
+concurrency:
+  group: deckhand-release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      PREVIEW: ${{ github.event_name == 'workflow_dispatch' && inputs.preview }}
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+      - name: Verify the exact tagged version
+        run: |
+          python3 Scripts/release.py check --tag "$RELEASE_TAG" --require-clean
+          python3 -m unittest discover -s Tests/ReleaseTests -v
+      - name: Configure temporary signing keychain
+        if: env.PREVIEW != 'true'
+        env:
+          SIGN_IDENTITY: ${{ secrets.DECKHAND_SIGN_IDENTITY }}
+          CERTIFICATE_BASE64: ${{ secrets.DECKHAND_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DECKHAND_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.DECKHAND_APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.DECKHAND_APPLE_APP_PASSWORD }}
+          TEAM_ID: ${{ secrets.DECKHAND_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          for required in SIGN_IDENTITY CERTIFICATE_BASE64 CERTIFICATE_PASSWORD APPLE_ID APPLE_APP_PASSWORD TEAM_ID; do
+            if [[ -z "${!required}" ]]; then
+              echo "::error::Missing signing secret: $required. See docs/releases.md."
+              exit 1
+            fi
+          done
+          keychain_path="$RUNNER_TEMP/deckhand-signing.keychain-db"
+          keychain_password="$(openssl rand -hex 24)"
+          echo "::add-mask::$keychain_password"
+          certificate_path="$RUNNER_TEMP/deckhand-signing.p12"
+          python3 -c 'import base64,os,pathlib; pathlib.Path(os.environ["RUNNER_TEMP"], "deckhand-signing.p12").write_bytes(base64.b64decode(os.environ["CERTIFICATE_BASE64"], validate=True))'
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -t private -k "$keychain_password" "$keychain_path" >/dev/null
+          security list-keychains -d user -s "$keychain_path" "$HOME/Library/Keychains/login.keychain-db"
+          rm "$certificate_path"
+          xcrun notarytool store-credentials deckhand-ci --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APPLE_APP_PASSWORD" --keychain "$keychain_path"
+          {
+            echo "DECKHAND_SIGN_IDENTITY=$SIGN_IDENTITY"
+            echo "DECKHAND_NOTARY_PROFILE=deckhand-ci"
+            echo "DECKHAND_NOTARY_KEYCHAIN=$keychain_path"
+          } >> "$GITHUB_ENV"
+      - name: Verify public signing prerequisites before building
+        if: env.PREVIEW != 'true'
+        run: python3 Scripts/release.py preflight --public
+      - name: Install build-only pkg-config
+        run: command -v pkg-config || brew install pkg-config
+      - name: Run Swift tests with the shipped database engine
+        run: |
+          Scripts/build-sqlcipher.sh
+          export PKG_CONFIG_PATH="$PWD/.build-release-deps/prefix/lib/pkgconfig"
+          swift test --scratch-path .build-standalone
+      - name: Package and verify the installer
+        run: |
+          if [[ "$PREVIEW" == true ]]; then
+            Scripts/package-release.sh
+          else
+            Scripts/package-release.sh --public
+          fi
+      - name: Preserve artifacts for inspection
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Deckhand-${{ github.run_id }}
+          path: |
+            build/release/Deckhand-arm64.dmg
+            build/release/Deckhand-*-source.tar.gz
+            build/release/release-notes.md
+            build/release/release-manifest.json
+            build/release/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish verified assets through a draft GitHub release
+        if: env.PREVIEW != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 Scripts/release.py publish
+      - name: Remove temporary signing keychain
+        if: always() && env.PREVIEW != 'true'
+        run: |
+          security delete-keychain "$RUNNER_TEMP/deckhand-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/deckhand-signing.p12"

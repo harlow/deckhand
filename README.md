@@ -13,13 +13,33 @@ Deckhand imports tracks and playlists from Apple Music, Rekordbox XML, or folder
 then syncs to a Pioneer DJ / AlphaTheta USB drive (OneLibrary format) with key, BPM, beat grids, waveforms
 and hot cues already set. Playlists and ratings save in Deckhand; audio stays in place.
 
-Free and open source · macOS 14+
+Free and open source · Apple Silicon · macOS 26+
 
 ![Deckhand](docs/images/app.png)
 
 ```
 Music / Rekordbox XML / Folders  →  Deckhand library  →  USB  →  the decks
 ```
+
+## Install
+
+Requires an **Apple Silicon Mac running macOS 26 or newer**. No Homebrew, Python,
+FFmpeg or developer tools needed.
+
+The first public beta is being prepared. Downloads and release notes will appear on
+[GitHub Releases](https://github.com/harlow/deckhand/releases). For a published release:
+
+1. Download `Deckhand-arm64.dmg`, open it and drag Deckhand into Applications.
+2. Import tracks and playlists from Apple Music, Rekordbox XML or a folder.
+3. Check the playlists you want on your drive, then click **Sync**.
+
+Deckhand needs no account or subscription. Analysis runs on your Mac. Your audio stays
+in its original location; playlists and ratings save in Deckhand. Changes reach a USB
+or another music app only when you explicitly sync or export them.
+
+The initial release is a beta. [Hardware compatibility](#hardware-compatibility) lists
+confirmed and untested players. There is no automatic updater yet; download a newer
+release and replace the app to update. Your saved library stays in Application Support.
 
 ## Features
 
@@ -50,7 +70,7 @@ Every edit saves locally in `~/Library/Application Support/Deckhand/Library/libr
 **Add Music…** brings tracks and playlists into the same library. **Library Settings** keeps import
 history with an optional **Re-import** action for each input. Opening the library reads saved data;
 external changes arrive only when you import them.
-**Sync USB** sends the chosen content directly to the selected drive. Library → **Export Playlists…**
+**Sync** sends the chosen content directly to the selected drive. Library → **Export Playlists…**
 sends playlist copies to a Deckhand folder in Music or exports Rekordbox XML. Audio stays at its original
 paths. Empty folders work too: add audio, then re-import that folder from Library Settings.
 
@@ -61,20 +81,21 @@ See [the source plan](docs/plans/library-sources.md) and [test report](docs/plan
 
 ## Requirements
 
-- macOS 14 or later
-- Xcode command line tools (Swift 6)
-- SQLCipher: `brew install sqlcipher`
+- An Apple Silicon Mac running macOS 26 (Tahoe) or later.
+- The packaged app requires no Homebrew, Python, FFmpeg or developer tools.
 - Music files you own (purchased or imported). DRM-protected Apple Music streaming tracks can't be copied to a
   USB drive by anyone, so Deckhand skips them and lists which ones it skipped.
 
-## Install
+## Building from source
 
-There are no prebuilt binaries yet, so you build from source.
+To build from source, install Xcode command line tools with the macOS 26 SDK, Python 3, and `pkg-config`.
+These are development requirements only. The app build downloads checksum-pinned SQLCipher source
+and statically links it with Apple's CommonCrypto.
 
 ```sh
 git clone https://github.com/harlow/deckhand.git
 cd deckhand
-brew install sqlcipher
+brew install pkg-config     # only if pkg-config isn't already installed
 ```
 
 ### Mac app
@@ -85,13 +106,17 @@ open build/Deckhand.app
 ```
 
 This builds `build/Deckhand.app`, an ad-hoc signed bundle with the `deckhand` CLI inside it (the app runs the
-CLI to analyze and sync). On first launch, allow Media & Apple Music access. The prompt can end up hidden
-behind other windows, and the library won't load until you click Allow. Each rebuild changes the ad-hoc
-signature, so macOS asks again after every rebuild. More detail is in [docs/mac-app.md](docs/mac-app.md).
+CLI to analyze and sync). Choosing Apple Music may ask for Media & Apple Music access. Folder and XML imports
+do not need that permission. Each ad-hoc rebuild changes the signature, so macOS may ask again. More detail is in [docs/mac-app.md](docs/mac-app.md).
+
+`Scripts/package-release.sh` creates a disk image and matching source archive in `build/release`.
+`python3 Scripts/verify-app.py build/Deckhand.app` checks signatures, dependencies, and actual model
+loading. See [the release runbook](docs/releases.md) for version cutting, CI, signing and publishing.
 
 ### CLI
 
 ```sh
+brew install sqlcipher      # direct Swift CLI builds only; the app's helper is already self-contained
 swift build -c release --product deckhand
 .build/release/deckhand --help
 ```
@@ -159,7 +184,7 @@ instead of using Deckhand's analysis.
 | `DeckhandCore` | Normalized source model, `TrackAnalysis`, `MusicalKey` |
 | `CQMDSP` | Vendored [qm-dsp](https://github.com/c4dm/qm-dsp) (GPL) for beat tracking and key features |
 | `CKeyFinder` | Vendored [libKeyFinder](https://github.com/mixxxdj/libkeyfinder) (GPL-3) with an Accelerate FFT backend |
-| `CSQLCipher` | SQLCipher system library (Homebrew) for the encrypted OneLibrary database |
+| `CSQLCipher` | SQLCipher interface for the encrypted OneLibrary database; statically linked in packaged apps |
 | `EvalSupport` | Eval-only helpers: the reference-label reader and file-tag parsing used by the `deckhand-*-eval` tools (not linked into the app or CLI) |
 | `deckhand-eval`, `deckhand-grid-eval`, `deckhand-cue-eval`, `deckhand-structure-eval` | Accuracy evaluation and training-data export for key, beat grid, cues/energy, and structure |
 

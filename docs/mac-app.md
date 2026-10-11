@@ -6,7 +6,7 @@ rest is the design for what comes next.
 
 ## Build and run
 
-`Sources/DeckhandApp` (SwiftUI, macOS 14+):
+`Sources/DeckhandApp` (SwiftUI, Apple Silicon, macOS 26+):
 
 ```sh
 Scripts/build-app.sh          # or `Scripts/build-app.sh debug`; writes build/Deckhand.app (ad-hoc signed)
@@ -14,6 +14,11 @@ open build/Deckhand.app
 ```
 
 The bundle contains the `deckhand` CLI next to the app, which the app runs for analyzing and syncing.
+App builds statically link pinned SQLCipher with Apple CommonCrypto and include all analysis resources
+and third-party licenses. No Homebrew libraries or developer tools are required on a user's Mac.
+`Scripts/package-release.sh` creates a disk image and matching source archive under `build/release`.
+See [the release runbook](releases.md) for version cutting, signing, CI and publishing,
+and [standalone-release.md](plans/standalone-release.md) for the dependency audit and QA.
 The app must be code-signed (ad-hoc is enough), because the iTunesLibrary framework only returns data
 to signed apps.
 
