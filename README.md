@@ -15,6 +15,8 @@ and hot cues already set. Playlists and ratings save in Deckhand; audio stays in
 
 Free and open source · Apple Silicon · macOS 26+
 
+**[Download for Mac](https://github.com/harlow/deckhand/releases)** · First public beta coming soon.
+
 ![Deckhand](docs/images/app.png)
 
 ```
