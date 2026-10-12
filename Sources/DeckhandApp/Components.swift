@@ -36,6 +36,18 @@ func formatTime(_ seconds: Double) -> String {
     return String(format: "%d:%02d", s / 60, s % 60)
 }
 
+/// Footer height plus its host's bottom inset keeps dividers level across the workspace.
+struct WorkspaceFooterSurface: ViewModifier {
+    var bottomInset: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .frame(height: 84 - bottomInset)
+            .background(.bar)
+            .overlay(alignment: .top) { Divider() }
+    }
+}
+
 /// Quiet toolbar controls gain a little contrast under the pointer. Active filters stay blue;
 /// disabled controls never suggest an available action.
 struct ControlHoverSurface<S: InsettableShape>: ViewModifier {

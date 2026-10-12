@@ -22,9 +22,7 @@ struct PlayerBar: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .frame(height: 84)
-        .background(.bar)
-        .overlay(alignment: .top) { Divider() }
+        .modifier(WorkspaceFooterSurface())
     }
 
     private var nowPlaying: some View {

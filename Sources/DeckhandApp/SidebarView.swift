@@ -66,7 +66,7 @@ struct SidebarView: View {
         }
         .onKeyPress(.upArrow) { library.selectAdjacentSidebarItem(-1); return .handled }
         .onKeyPress(.downArrow) { library.selectAdjacentSidebarItem(1); return .handled }
-        .safeAreaInset(edge: .bottom) { DriveFooter() }
+        .safeAreaInset(edge: .bottom, spacing: 0) { DriveFooter() }
         .alert(namingFolder ? "New Folder" : "New Playlist", isPresented: $naming) {
             TextField("Name", text: $newName)
             Button("Create") {
@@ -399,8 +399,8 @@ private struct DriveFooter: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(.bar)
-        .overlay(alignment: .top) { Divider() }
+        // The native sidebar card has an eight-point bottom inset that the player column doesn't.
+        .modifier(WorkspaceFooterSurface(bottomInset: 8))
         .overlay(alignment: .top) {
             if let message = library.notice ?? library.status ?? player.error {
                 SidebarNotice(text: message)
