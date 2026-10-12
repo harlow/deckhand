@@ -68,7 +68,7 @@ playback. These single-key shortcuts leave search and playlist-name typing alone
 jumps back / forward 8 bars (32 beats). **A** adds the selected songs to a playlist;
 **1–5** jumps to hot cues and **Option+1–5 / Option+0** rates / clears ratings.
 
-![Deckhand keyboard shortcuts](docs/images/keyboard-shortcuts.png)
+![Deckhand keyboard shortcuts](docs/images/keyboard-shortcuts.jpg)
 
 ## Deckhand library
 

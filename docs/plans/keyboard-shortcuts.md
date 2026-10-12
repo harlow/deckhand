@@ -57,7 +57,7 @@ mode-specific shortcuts remain; native testing confirmed cue 8 and its contextua
   metadata, plus mounted USB manifests and export databases, were unchanged by QA.
 - Original app settings were restored and the regular installed app was reopened.
 
-Screenshot: [keyboard-shortcuts.png](../images/keyboard-shortcuts.png).
+Screenshot: [keyboard-shortcuts.jpg](../images/keyboard-shortcuts.jpg).
 
 To regenerate the isolated native fixture, optionally retain the player-test artifacts:
 

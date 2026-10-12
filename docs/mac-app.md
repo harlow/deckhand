@@ -75,7 +75,7 @@ App icon: the "Platter" mark, drawn by `Scripts/make-icon.swift` at build time. 
   offers Set Up USB for an unprepared drive, or USB Help if a drive cannot be safely matched;
   drive switching and Eject live in the sidebar footer. A mismatch no longer adds a banner to the workspace.
 
-![Deckhand keyboard shortcuts](images/keyboard-shortcuts.png)
+![Deckhand keyboard shortcuts](images/keyboard-shortcuts.jpg)
 
 ### Keyboard (track list)
 
