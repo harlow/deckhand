@@ -27,14 +27,13 @@ struct ContentView: View {
         }
     }
 
-    /// Giving the Up Next column its own toolbar item makes the toolbar split at that column, so the
-    /// track list's trailing items stop at the Up Next divider instead of the window edge.
+    /// A real toolbar title keeps this column's header and divider aligned with drive/sync controls.
     @ToolbarContentBuilder private var queueTitle: some ToolbarContent {
         if #available(macOS 26, *) {
-            ToolbarItem(placement: .primaryAction) { Color.clear.frame(width: 1, height: 1).accessibilityHidden(true) }
+            ToolbarItem(placement: .principal) { Text(library.review == nil ? "Suggestions" : "Quick Rate").font(.headline) }
                 .sharedBackgroundVisibility(.hidden)
         } else {
-            ToolbarItem(placement: .primaryAction) { Color.clear.frame(width: 1, height: 1).accessibilityHidden(true) }
+            ToolbarItem(placement: .principal) { Text(library.review == nil ? "Suggestions" : "Quick Rate").font(.headline) }
         }
     }
 
@@ -112,6 +111,7 @@ struct ContentView: View {
             }
             .environment(library).environment(player)
             .toolbar { queueTitle }
+            .toolbarBackground(.visible)
             .navigationSplitViewColumnWidth(min: 240, ideal: 290, max: 360)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
