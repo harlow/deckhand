@@ -12,7 +12,7 @@ struct QueueView: View {
                         Text("NEXT IN LIST")
                             .font(.caption.weight(.medium)).tracking(0.8)
                             .foregroundStyle(.secondary)
-                            .padding(.top, 8)
+                            .padding(.top, 16)
                             .padding(.horizontal, 16)
                         TrackLine(row: next)
                     }
