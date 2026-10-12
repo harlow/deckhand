@@ -96,7 +96,7 @@ struct PlayerBar: View {
             .help(player.isPlaying ? "Pause" : "Play")
             Button { player.next() } label: { Image(systemName: "forward.end.fill") }
                 .help("Next")
-                .disabled(player.queue.isEmpty)
+                .disabled(!player.canAdvance)
         }
         .buttonStyle(.plain)
         .font(.body)

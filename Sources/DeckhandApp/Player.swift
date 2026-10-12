@@ -35,6 +35,9 @@ struct PlayerDetail: Equatable, Sendable {
 final class Player: NSObject, AVAudioPlayerDelegate {
     var cache: AnalysisCache?
     var queue: [TrackRow] = []
+    /// The remaining visible list, captured when playback starts so browsing doesn't change it.
+    private(set) var following: [TrackRow] = []
+    @ObservationIgnored private var playbackArtwork: (any ArtworkProvider)?
     private(set) var current: TrackRow?
     private(set) var detail: PlayerDetail?
     private(set) var artwork: NSImage?
@@ -49,6 +52,8 @@ final class Player: NSObject, AVAudioPlayerDelegate {
     private(set) var history: [TrackRow] = []
 
     var progress: Double { duration > 0 ? time / duration : 0 }
+    var canAdvance: Bool { !queue.isEmpty || !following.isEmpty }
+    var nextInList: TrackRow? { following.first { row in !queue.contains { $0.id == row.id } } }
 
     enum StartPoint {
         /// Hot cue A, where a DJ would start the track.
@@ -60,14 +65,12 @@ final class Player: NSObject, AVAudioPlayerDelegate {
     /// Where to jump once a newly started track's analysis has loaded.
     @ObservationIgnored private var pendingStart: StartPoint?
 
-    func play(from point: StartPoint, _ row: TrackRow, artwork provider: (any ArtworkProvider)? = nil) {
-        if current?.id == row.id, detail != nil {
-            play(row, artwork: provider)
-            jump(to: point)
-            return
-        }
-        pendingStart = point
-        play(row, artwork: provider)
+    func play(from point: StartPoint, _ row: TrackRow, artwork provider: (any ArtworkProvider)? = nil,
+              continuingIn rows: [TrackRow] = []) {
+        play(row, artwork: provider, continuingIn: rows)
+        guard current?.id == row.id else { return }
+        if detail != nil { jump(to: point) }
+        else { pendingStart = point }
     }
 
     private func jump(to point: StartPoint) {
@@ -129,12 +132,25 @@ final class Player: NSObject, AVAudioPlayerDelegate {
         }
     }
 
-    /// Plays `row` from `fraction` of the way in (0 = start).
-    func play(_ row: TrackRow, at fraction: Double = 0, artwork provider: (any ArtworkProvider)? = nil) {
+    /// Plays `row` from `fraction` (0 = start), then continues in the supplied list's visible order.
+    /// Standalone playback, including Quick Rate, clears any previous list continuation.
+    func play(_ row: TrackRow, at fraction: Double = 0, artwork provider: (any ArtworkProvider)? = nil,
+              continuingIn rows: [TrackRow] = []) {
+        guard start(row, at: fraction, artwork: provider) else { return }
+        pendingStart = nil
+        playbackArtwork = provider
+        following = rows.firstIndex { $0.id == row.id }.map { Array(rows.dropFirst($0 + 1)) } ?? []
+        following.removeAll { $0.id == row.id }
+        queue.removeAll { $0.id == row.id }
+    }
+
+    @discardableResult
+    private func start(_ row: TrackRow, at fraction: Double = 0, artwork provider: (any ArtworkProvider)? = nil,
+                       recordHistory: Bool = true) -> Bool {
         if current?.id == row.id, let audio {
             seek(to: fraction)
             if !audio.isPlaying { resume() }
-            return
+            return true
         }
         do {
             let a = try AVAudioPlayer(contentsOf: row.location)
@@ -143,7 +159,7 @@ final class Player: NSObject, AVAudioPlayerDelegate {
             a.currentTime = max(0, min(1, fraction)) * a.duration
             audio?.stop()
             audio = a
-            if let current { history.append(current) }
+            if recordHistory, let current, current.id != row.id { history.append(current) }
             current = row
             duration = a.duration
             time = a.currentTime
@@ -151,15 +167,18 @@ final class Player: NSObject, AVAudioPlayerDelegate {
             resume()
             Log.info("player", "Playing \(row.title)")
             loadDetail(for: row, artwork: provider)
+            return true
         } catch {
             self.error = "Can't play \(row.title): \(error.localizedDescription)"
             Log.error("player", self.error!)
+            return false
         }
     }
 
     func toggle() {
         guard let audio else {
-            if let first = queue.first { queue.removeFirst(); play(first) }
+            if canAdvance { next() }
+            else if let current { play(current, artwork: playbackArtwork) }
             return
         }
         audio.isPlaying ? pause() : resume()
@@ -172,16 +191,31 @@ final class Player: NSObject, AVAudioPlayerDelegate {
     }
 
     func next() {
-        guard !queue.isEmpty else { stop(); return }
-        play(queue.removeFirst())
+        pendingStart = nil
+        // A missing or unreadable song mustn't stop the rest of the list from playing.
+        while canAdvance {
+            let row = !queue.isEmpty ? queue.removeFirst() : following.removeFirst()
+            following.removeAll { $0.id == row.id }
+            if start(row, artwork: playbackArtwork) { return }
+        }
+        stop()
+    }
+
+    /// An explicit queued choice interrupts the list, then playback resumes its remaining order.
+    func playQueued(_ row: TrackRow, artwork provider: (any ArtworkProvider)? = nil) {
+        guard start(row, artwork: provider ?? playbackArtwork) else { return }
+        pendingStart = nil
+        queue.removeAll { $0.id == row.id }
+        following.removeAll { $0.id == row.id }
     }
 
     func previous() {
         if time > 3 || history.isEmpty { seek(to: 0); return }
-        let prev = history.removeLast()
-        if let current { queue.insert(current, at: 0) }
-        current = nil   // so play() doesn't push it back onto history
-        play(prev)
+        let prev = history.last!, old = current
+        guard start(prev, artwork: playbackArtwork, recordHistory: false) else { return }
+        pendingStart = nil
+        history.removeLast()
+        if let old { queue.insert(old, at: 0) }
     }
 
     func enqueue(_ rows: [TrackRow], next: Bool = false) {
@@ -219,6 +253,8 @@ final class Player: NSObject, AVAudioPlayerDelegate {
         detail = nil
         artwork = nil
         queue = []
+        following = []
+        playbackArtwork = nil
         history = []
         duration = 0
         pendingStart = nil
@@ -231,7 +267,11 @@ final class Player: NSObject, AVAudioPlayerDelegate {
     }
 
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        Task { @MainActor in self.next() }
+        Task { @MainActor in
+            // A completion already queued for an old player must not skip a newly chosen song.
+            guard self.audio === player else { return }
+            self.next()
+        }
     }
 
     private func loadDetail(for row: TrackRow, artwork provider: (any ArtworkProvider)?) {

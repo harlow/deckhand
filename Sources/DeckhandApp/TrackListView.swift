@@ -105,7 +105,7 @@ struct TrackListView: View {
             sort: $library.sort,
             cell: { column, r in cell(column, r) },
             menu: { ids in menu(ids, rows: rows) },
-            onOpen: { player.play($0, artwork: library.artwork) },
+            onOpen: { player.play($0, artwork: library.artwork, continuingIn: rows) },
             onCommand: { command, ids in perform(command, ids, rows: rows) },
             onDragBegin: { library.draggedItems = [TrackDrag.encode($0)] },
             onDragEnd: { library.draggedItems = [] }
@@ -139,13 +139,15 @@ struct TrackListView: View {
         switch command {
         case .play(let fromMixIn):
             guard let r = picked.first else { return }
-            if fromMixIn { player.play(from: .mixIn, r, artwork: library.artwork) } else { player.play(r, artwork: library.artwork) }
+            if fromMixIn { player.play(from: .mixIn, r, artwork: library.artwork, continuingIn: rows) }
+            else { player.play(r, artwork: library.artwork, continuingIn: rows) }
         case .preview:
             if player.current != nil { player.jumpToPreview() }
-            else if let r = picked.first { player.play(from: .preview, r, artwork: library.artwork) }
+            else if let r = picked.first { player.play(from: .preview, r, artwork: library.artwork, continuingIn: rows) }
         case .songStart: player.seek(to: 0)
         case .togglePlay:
-            if player.current == nil, let r = picked.first { player.play(r, artwork: library.artwork) } else { player.toggle() }
+            if player.current == nil, let r = picked.first { player.play(r, artwork: library.artwork, continuingIn: rows) }
+            else { player.toggle() }
         case .queue(let next):
             player.enqueue(picked, next: next)
             if !picked.isEmpty { library.flash(next ? "Playing next: \(picked[0].title)\(picked.count > 1 ? " +\(picked.count - 1)" : "")" : "Added \(picked.count) to Up Next") }
@@ -185,7 +187,8 @@ struct TrackListView: View {
         case .overview:
             AnyView(OverviewCell(row: r, player: player) {
                 selection = [r.id]
-                player.play(r, at: $0, artwork: library.artwork)
+                player.play(r, at: $0, artwork: library.artwork,
+                            continuingIn: library.listing(playing: player.current).rows)
             })
         case .bpm: AnyView(Text(r.bpmText).monospacedDigit())
         case .key: AnyView(KeyChip(key: r.key))
@@ -200,7 +203,7 @@ struct TrackListView: View {
         let wanted = Set(ids)
         let picked = rows.filter { wanted.contains($0.id) }
         var items: [TrackMenuItem] = [
-            TrackMenuItem(title: "Play") { if let f = picked.first { player.play(f, artwork: library.artwork) } },
+            TrackMenuItem(title: "Play") { if let f = picked.first { player.play(f, artwork: library.artwork, continuingIn: rows) } },
             TrackMenuItem(title: "Play Next") { player.enqueue(picked, next: true) },
             TrackMenuItem(title: "Add to Up Next") { player.enqueue(picked) },
             .divider,

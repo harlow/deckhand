@@ -7,7 +7,12 @@ struct QueueView: View {
     var body: some View {
         List {
             Section {
-                if player.queue.isEmpty {
+                if player.queue.isEmpty, let next = player.nextInList {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Next in list").font(.caption).foregroundStyle(.secondary)
+                        TrackLine(row: next)
+                    }
+                } else if player.queue.isEmpty {
                     Text("Drag tracks here, or right-click them and choose Play Next or Add to Up Next.")
                         .font(.callout).foregroundStyle(.secondary)
                 }
@@ -23,7 +28,7 @@ struct QueueView: View {
                         TrackLine(row: t)
                     }
                     .contextMenu {
-                        Button("Play Now") { player.queue.remove(at: i); player.play(t, artwork: library.artwork) }
+                        Button("Play Now") { player.playQueued(t, artwork: library.artwork) }
                         Button("Remove") { player.queue.remove(at: i) }
                     }
                 }
