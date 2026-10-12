@@ -380,6 +380,8 @@ final class KeyTableView: NSTableView {
 
         if flags.contains(.command) {
             switch (event.keyCode, ch) {
+            case (_, "l") where flags.intersection([.command, .option, .control, .shift]) == .command:
+                send(.revealPlaying)
             case (126, _): select(0)
             case (125, _): select(numberOfRows - 1)
             default: super.keyDown(with: event)

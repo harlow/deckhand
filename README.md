@@ -67,6 +67,7 @@ Press **?** or **⌘/** to open the keyboard shortcut overlay, or choose **Help 
 Press **Esc** or **?** again to close it. **[ / ]** switches playlists;
 **k / j** moves up / down through songs, **Enter** plays the selection, and **Space** toggles
 playback. These single-key shortcuts leave search and playlist-name typing alone.
+**⌘L** reveals and selects the playing song, returning to All Tracks if needed.
 **H** jumps to the playing song’s start, **L** plays the highlighted song from its pre-drop preview, and **Shift+H / Shift+L**
 jumps back / forward 8 bars (32 beats). **A** adds the selected songs to a playlist;
 **M** opens Matches for the selected (or playing) song. In Matches, **A** adds directly to the playlist

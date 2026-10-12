@@ -349,6 +349,21 @@ final class LibraryModel {
     private(set) var matches: MatchSession?
     var matchGroup: MatchGroup?
 
+    /// Reveal the playing song without changing playback. Keep its current list when possible.
+    func revealPlaying(_ track: TrackRow?) {
+        guard review == nil, let track, rows[track.id] != nil else { NSSound.beep(); return }
+        if !listing(playing: track).rows.contains(where: { $0.id == track.id }) {
+            endMatches()
+            if !listing(playing: track).rows.contains(where: { $0.id == track.id }) {
+                selection = .all
+                filter = TrackFilter()
+            }
+        }
+        trackSelection = [track.id]
+        // A new focus request also scrolls an already-selected song back into view.
+        focusTrackList()
+    }
+
     func openMatches(seed: TrackRow) {
         guard sourceAvailable, review == nil else { return }
         let previous = matches

@@ -255,9 +255,7 @@ struct TrackListView: View {
             if player.current != nil { library.filter.mixesWithPlaying.toggle() } else { NSSound.beep() }
         case .search: NotificationCenter.default.post(name: .focusSearch, object: nil)
         case .revealPlaying:
-            guard let id = player.current?.id else { NSSound.beep(); return }
-            if !rows.contains(where: { $0.id == id }) { library.selection = .all; library.filter = TrackFilter() }
-            selection = [id]
+            library.revealPlaying(player.current)
         case .help: library.showingKeyboardHelp = true
         case .review: library.startReview(player: player)
         case .addToPlaylist:

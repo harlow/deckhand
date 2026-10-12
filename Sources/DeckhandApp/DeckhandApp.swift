@@ -67,6 +67,10 @@ struct DeckhandApp: App {
                     .keyboardShortcut("[", modifiers: [.command, .shift])
             }
             CommandMenu("Playback") {
+                Button("Show Playing Song") { library.revealPlaying(player.current) }
+                    .keyboardShortcut("l", modifiers: .command)
+                    .disabled(player.current == nil || library.review != nil || !library.sourceAvailable)
+                Divider()
                 Button(player.isPlaying ? "Pause" : "Play") { player.toggle() }
                     .keyboardShortcut("p", modifiers: [.command, .shift])
                 Button("Next Track") { player.next() }

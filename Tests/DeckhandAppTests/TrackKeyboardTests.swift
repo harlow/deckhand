@@ -153,6 +153,7 @@ import SwiftUI
             let keys: [(String, NSEvent.ModifierFlags, UInt16, TrackCommand)] = [
                 ("\r", [], 36, .play(fromMixIn: false)), (" ", [], 49, .togglePlay),
                 ("h", [], 4, .songStart), ("l", [], 37, .preview),
+                ("l", .command, 37, .revealPlaying),
                 ("H", .shift, 4, .beats(-32)), ("L", .shift, 37, .beats(32)),
                 ("m", [], 46, .matches), ("a", [], 0, .addToPlaylist), ("/", [], 44, .search), ("?", .shift, 44, .help),
             ] + (1...5).map { (String($0), [], UInt16(18 + $0), .hotCue($0)) }
@@ -169,7 +170,8 @@ import SwiftUI
                 table.keyDown(with: key(text, in: window))
             }
             table.keyDown(with: key("\r", in: window, flags: .shift, code: 36))
-            table.keyDown(with: key("l", in: window, flags: .command, code: 37))
+            table.keyDown(with: key("l", in: window, flags: [.command, .shift], code: 37))
+            table.keyDown(with: key("l", in: window, flags: [.command, .option], code: 37))
             table.keyDown(with: key("h", in: window, flags: .control, code: 4))
             #expect(commands.count == count)
             window.makeFirstResponder(button)

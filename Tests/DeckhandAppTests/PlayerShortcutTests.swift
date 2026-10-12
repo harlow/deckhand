@@ -138,8 +138,8 @@ import Testing
             host.layoutSubtreeIfNeeded(); try await Task.sleep(for: .milliseconds(10))
         }
         let table = try #require(findTable(host))
-        func key(_ letter: String, code: UInt16) {
-            table.keyDown(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+        func key(_ letter: String, code: UInt16, flags: NSEvent.ModifierFlags = []) {
+            table.keyDown(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
                 windowNumber: window.windowNumber, context: nil, characters: letter,
                 charactersIgnoringModifiers: letter, isARepeat: false, keyCode: code)!)
         }
@@ -161,6 +161,20 @@ import Testing
         key("l", code: 37)
         #expect(player.current?.id == listed[1].id && !player.isPlaying)
         #expect(abs(player.time - 24) < 0.5)
+
+        // Command-L selects and focuses the playing row, preserving paused playback and position.
+        model.trackSelection = [listed[2].id]
+        let focusBefore = model.trackFocusRequest
+        let timeBefore = player.time
+        key("l", code: 37, flags: .command)
+        #expect(model.trackSelection == [listed[1].id])
+        #expect(model.selection == .playlist(playlist.id))
+        #expect(model.trackFocusRequest != focusBefore)
+        for _ in 0..<100 where table.selectedRow != 1 {
+            host.layoutSubtreeIfNeeded(); try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(table.selectedRow == 1 && window.firstResponder === table)
+        #expect(player.current?.id == listed[1].id && !player.isPlaying && player.time == timeBefore)
 
         await model.closeLibrary()
     }
