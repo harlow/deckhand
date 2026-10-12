@@ -1,0 +1,16 @@
+[0/1] Planning build
+Test Suite 'Selected tests' started at 2026-10-11 21:57:18.438.
+Test Suite 'DeckhandPackageTests.xctest' started at 2026-10-11 21:57:18.440.
+Test Suite 'DeckhandPackageTests.xctest' passed at 2026-10-11 21:57:18.441.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-11 21:57:18.441.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.003) seconds
+◇ Test run started.
+↳ Testing Library Version: 1743
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite SyncScaleTests started.
+◇ Test evaluatesTwentyThousandTracksQuickly() started.
+evaluate 20k tracks: first 3.157 s, clean 1.668 s
+✔ Test evaluatesTwentyThousandTracksQuickly() passed after 6.114 seconds.
+✔ Suite SyncScaleTests passed after 6.114 seconds.
+✔ Test run with 1 test in 1 suite passed after 6.115 seconds.

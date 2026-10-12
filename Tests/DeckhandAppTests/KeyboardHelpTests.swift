@@ -105,6 +105,32 @@ import Testing
         }
     }
 
+    @Test func matchesEscapeRespectsHelpEditorsMenusAndSheets() {
+        withHost { host, window, button in
+            var exits = 0
+            host.leaveMatches = { exits += 1; return true }
+            let escape = key("\u{1b}", in: window, code: 53)
+            #expect(host.handle(escape) && exits == 1)
+            host.showingHelp = true
+            host.toggleHelp = { host.showingHelp = false }
+            #expect(host.handle(escape) && exits == 1 && !host.showingHelp)
+            let field = NSSearchField()
+            window.contentView!.addSubview(field); window.makeFirstResponder(field)
+            #expect(!host.handle(escape) && exits == 1)
+            window.makeFirstResponder(button)
+            let menu = NSMenu()
+            NotificationCenter.default.post(name: NSMenu.didBeginTrackingNotification, object: menu)
+            #expect(!host.handle(escape) && exits == 1)
+            NotificationCenter.default.post(name: NSMenu.didEndTrackingNotification, object: menu)
+            let sheet = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+            sheet.isReleasedWhenClosed = false
+            window.beginSheet(sheet)
+            #expect(!host.handle(escape) && exits == 1)
+            window.endSheet(sheet); sheet.close()
+            #expect(host.handle(escape) && exits == 2)
+        }
+    }
+
     @Test func helpFocusBlocksTableNavigationBehindOverlay() {
         withHost { host, window, _ in
             let table = KeyTableView()

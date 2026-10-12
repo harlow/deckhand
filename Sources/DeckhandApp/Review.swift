@@ -153,6 +153,7 @@ extension LibraryModel {
     /// Starts Quick Rate on the unrated tracks currently listed (sidebar selection plus filters),
     /// leaving out tracks skipped in the last 30 days.
     func startReview(player: Player) {
+        endMatches()
         let now = Date()
         let unrated = listing(playing: player.current).rows
             .filter { $0.rating == 0 && (snoozedUntil($0.id).map { $0 <= now } ?? true) }

@@ -14,6 +14,10 @@ struct KeyboardShortcutHost: NSViewRepresentable {
             guard library.review == nil, case .workspace = library.startupScreen else { return }
             library.selectAdjacentPlaylist(delta)
         }
+        view.leaveMatches = {
+            guard library.matches != nil else { return false }
+            library.endMatches(); return true
+        }
         view.showingHelp = library.showingKeyboardHelp
         view.allowsPlaylistNavigation = library.review == nil
         view.synchronizeFocus()
@@ -25,6 +29,8 @@ struct KeyboardShortcutHost: NSViewRepresentable {
 final class KeyboardShortcutView: NSView {
     var toggleHelp: () -> Void = {}
     var navigatePlaylist: (Int) -> Void = { _ in }
+    var leaveMatches: () -> Bool = { false }
+    private var trackingMenus = Set<ObjectIdentifier>()
     var showingHelp = false
     var allowsPlaylistNavigation = true
     private var monitor: Any?
@@ -38,13 +44,24 @@ final class KeyboardShortcutView: NSView {
         super.viewDidMoveToWindow()
         removeMonitor()
         guard window != nil else { return }
+        NotificationCenter.default.addObserver(self, selector: #selector(menuBegan(_:)), name: NSMenu.didBeginTrackingNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(menuEnded(_:)), name: NSMenu.didEndTrackingNotification, object: nil)
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.handle(event) == true ? nil : event
         }
         synchronizeFocus()
     }
 
+    @objc private func menuBegan(_ note: Notification) {
+        if let menu = note.object as? NSMenu { trackingMenus.insert(ObjectIdentifier(menu)) }
+    }
+    @objc private func menuEnded(_ note: Notification) {
+        if let menu = note.object as? NSMenu { trackingMenus.remove(ObjectIdentifier(menu)) }
+    }
+
     func removeMonitor() {
+        NotificationCenter.default.removeObserver(self)
+        trackingMenus.removeAll()
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
     }
@@ -99,6 +116,7 @@ final class KeyboardShortcutView: NSView {
         guard modifiers.isEmpty else { return false }
         if let editor = window.firstResponder as? NSText, editor.isEditable { return false }
         if let field = window.firstResponder as? NSTextField, field.isEditable { return false }
+        if event.keyCode == 53, !event.modifierFlags.contains(.shift), trackingMenus.isEmpty, leaveMatches() { return true }
         switch text {
         case "?": toggleHelp(); return true
         case "[" where allowsPlaylistNavigation: navigatePlaylist(-1); return true
@@ -165,6 +183,7 @@ struct KeyboardHelpView: View {
                     } else {
                         section("Ratings", [("⌥1–5", "Rate song 1–5 stars"), ("⌥0", "Clear rating")])
                         section("Hot cues", [("1–5", "Jump to hot cue 1–5")])
+                        section("Discovery", [("M", "Matches for selected song"), ("Esc", "Return from Matches")])
                         section("Playlists", [("A", "Add selection to playlist"), ("/", "Search songs")])
                     }
                     section("General", [("? / ⌘/", "Keyboard shortcuts"),

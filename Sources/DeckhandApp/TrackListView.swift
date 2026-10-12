@@ -6,7 +6,10 @@ import SwiftUI
 struct TrackListView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(Player.self) private var player
-    @State private var selection = Set<String>()
+    private var selection: Set<String> {
+        get { library.trackSelection }
+        nonmutating set { library.trackSelection = newValue }
+    }
     /// Tracks waiting for "Remove from playlist?" confirmation.
     @State private var removing: [String] = []
     /// Tracks waiting in the A "Add to playlist" picker.
@@ -18,7 +21,8 @@ struct TrackListView: View {
         let listing = library.listing(playing: player.current)
         let rows = listing.rows
         VStack(spacing: 0) {
-            header(listing)
+            if let matches = library.matches { matchesHeader(matches) }
+            else { header(listing) }
             FilterBar(shown: rows.count, total: listing.base.count, genres: listing.genres)
             SyncNoticeBanner(library: library)
             if library.unavailableTracks > 0, library.selection == .all {
@@ -75,6 +79,57 @@ struct TrackListView: View {
         .padding(.bottom, 6)
     }
 
+    /// This anchor stays above the scrolling table, even when a match starts playing.
+    private func matchesHeader(_ session: MatchSession) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Button { library.endMatches() } label: { Image(systemName: "chevron.left") }
+                    .buttonStyle(.plain).help("Back to \(library.title) · Esc")
+                    .accessibilityLabel("Back to \(library.title)")
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("MATCHES FOR").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    Text(session.seed.title).font(.title3.bold()).lineLimit(1)
+                    Text(session.seed.artist).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer()
+                KeyChip(key: session.seed.key)
+                Text(session.seed.bpmText).monospacedDigit().foregroundStyle(.secondary)
+                Button { player.play(session.seed, artwork: library.artwork,
+                    continuingIn: [session.seed] + library.listing(playing: player.current).rows) } label: {
+                    Image(systemName: "play.fill")
+                }.buttonStyle(.plain).help("Play seed song").accessibilityLabel("Play seed song")
+            }
+            HStack(spacing: 8) {
+                matchGroupButton("All \(session.tracks.count)", group: nil)
+                ForEach(MatchGroup.allCases) { group in
+                    let count = session.tracks.filter { $0.group == group }.count
+                    matchGroupButton("\(group.rawValue) \(count)", group: group)
+                }
+                Spacer()
+                Text(library.matchDestination.map { "A → \($0.name)" } ?? "A → Add to playlist")
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            if session.tracks.isEmpty {
+                Text("No matches yet. Analyze your music for key and tempo, or add more songs, then press M to try again.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+        }.padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
+    }
+
+    private func matchGroupButton(_ title: String, group: MatchGroup?) -> some View {
+        Button {
+            library.matchGroup = group
+            let ids = Set(library.listing(playing: player.current).rows.map(\.id))
+            selection.formIntersection(ids)
+            if selection.isEmpty, let first = library.listing(playing: player.current).rows.first { selection = [first.id] }
+            library.focusTrackList()
+        } label: {
+            Text(title).font(.caption.weight(.medium)).padding(.horizontal, 10).padding(.vertical, 5)
+                .background(Color.white.opacity(library.matchGroup == group ? 0.08 : 0), in: Capsule())
+                .modifier(ControlHoverSurface(shape: Capsule(), bordered: false))
+        }.buttonStyle(.plain)
+    }
+
     private var removeTitle: String {
         let n = removing.count
         let what = n == 1 ? (library.rows[removing[0]]?.title).map { "“\($0)”" } ?? "1 track" : "\(n) tracks"
@@ -101,7 +156,7 @@ struct TrackListView: View {
             rows: rows,
             version: listing.version,
             focusRequest: library.trackFocusRequest,
-            selection: $selection,
+            selection: $library.trackSelection,
             sort: $library.sort,
             cell: { column, r in cell(column, r) },
             menu: { ids in menu(ids, rows: rows) },
@@ -141,8 +196,13 @@ struct TrackListView: View {
             guard let r = picked.first else { return }
             if fromMixIn { player.play(from: .mixIn, r, artwork: library.artwork, continuingIn: rows) }
             else { player.play(r, artwork: library.artwork, continuingIn: rows) }
+        case .matches:
+            if let seed = picked.first ?? library.matches?.seed ?? player.current { library.openMatches(seed: seed) }
+            else { library.flash("Select a song to find matches") }
         case .preview:
-            if player.current != nil { player.jumpToPreview() }
+            if library.matches != nil, let r = picked.first {
+                player.play(from: .preview, r, artwork: library.artwork, continuingIn: rows)
+            } else if player.current != nil { player.jumpToPreview() }
             else if let r = picked.first { player.play(from: .preview, r, artwork: library.artwork, continuingIn: rows) }
         case .songStart: player.seek(to: 0)
         case .togglePlay:
@@ -165,10 +225,12 @@ struct TrackListView: View {
         case .help: library.showingKeyboardHelp = true
         case .review: library.startReview(player: player)
         case .addToPlaylist:
-            if ids.isEmpty { NSSound.beep() } else { picking = ids }
+            if ids.isEmpty { NSSound.beep() }
+            else if library.matchDestination != nil { Task { await library.addMatches(ids) } }
+            else { picking = ids }
         case .delete:
             // Delete removes from the open playlist only; it never deletes songs from the library.
-            guard let p = library.selectedPlaylist, !p.isFolder, !ids.isEmpty else { NSSound.beep(); return }
+            guard library.matches == nil, let p = library.selectedPlaylist, !p.isFolder, !ids.isEmpty else { NSSound.beep(); return }
             removing = ids
         }
     }
@@ -182,7 +244,9 @@ struct TrackListView: View {
         case .title:
             AnyView(VStack(alignment: .leading, spacing: 1) {
                 PlayingTitle(row: r, player: player)
-                Text(r.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(library.matches?.tracks.first(where: { $0.id == r.id }).map {
+                    "\(r.artist) · \($0.group.rawValue) · \($0.reason)"
+                } ?? r.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             })
         case .overview:
             AnyView(OverviewCell(row: r, player: player) {
@@ -204,6 +268,7 @@ struct TrackListView: View {
         let picked = rows.filter { wanted.contains($0.id) }
         var items: [TrackMenuItem] = [
             TrackMenuItem(title: "Play") { if let f = picked.first { player.play(f, artwork: library.artwork, continuingIn: rows) } },
+            TrackMenuItem(title: "Find Matches", action: { if let seed = picked.first { library.openMatches(seed: seed) } }),
             TrackMenuItem(title: "Play Next") { player.enqueue(picked, next: true) },
             TrackMenuItem(title: "Add to Up Next") { player.enqueue(picked) },
             .divider,
@@ -214,7 +279,7 @@ struct TrackListView: View {
                 TrackMenuItem(title: p.name) { Task { await library.add(ids, to: p) } }
             }),
         ]
-        if let p = library.selectedPlaylist, !p.isFolder {
+        if library.matches == nil, let p = library.selectedPlaylist, !p.isFolder {
             items.append(TrackMenuItem(title: "Remove from Playlist") { removing = ids })
         }
         items += [.divider, TrackMenuItem(title: "Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting(picked.map(\.location)) }]
@@ -420,12 +485,14 @@ struct FilterBar: View {
                     Text("\(shown.formatted()) of \(total.formatted())")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                if library.matches == nil {
                 Button { library.startReview(player: player) } label: {
                     Label("Quick Rate", systemImage: "star.leadinghalf.filled")
                 }
                 .buttonStyle(QuietHoverButtonStyle())
                 .fixedSize()
                 .help("Rate this list's unrated tracks one by one")
+                }
                 SearchField(text: $library.filter.search)
             }
         }
@@ -473,11 +540,13 @@ struct FilterBar: View {
                 chipLabel("Genre", value: genreSummary, on: !library.filter.genres.isEmpty)
             }
             .menuStyle(.button).buttonStyle(.plain).fixedSize()
+            if library.matches == nil {
             chip(nil, value: "Mixes with playing", on: library.filter.mixesWithPlaying, icon: "circle.circle") {
                 library.filter.mixesWithPlaying.toggle()
             }
             .disabled(player.current == nil)
             .help(player.current == nil ? "Play a track first" : "Compatible keys and tempo within ±6%")
+            }
             if !library.filter.isEmpty {
                 Button("Clear") { library.filter = TrackFilter() }.buttonStyle(.link)
             }

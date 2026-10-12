@@ -326,6 +326,7 @@ final class LibraryModel {
     }
     var selection: SidebarItem? = .all {
         didSet {
+            if matches != nil, selection != oldValue { endMatches(restoreSidebar: false) }
             let value: String? = switch selection {
             case .playlist(let id): id
             case .needsAnalysis: "needsAnalysis"
@@ -344,6 +345,51 @@ final class LibraryModel {
         case let id?: .playlist(id)
         }
     }
+    var trackSelection = Set<String>()
+    private(set) var matches: MatchSession?
+    var matchGroup: MatchGroup?
+
+    func openMatches(seed: TrackRow) {
+        guard sourceAvailable, review == nil else { return }
+        let previous = matches
+        let destination = selectedPlaylist.flatMap { $0.isFolder ? nil : $0.id }
+        matches = MatchSession(seed: seed,
+            tracks: MatchDiscovery.rank(seed: seed, candidates: Array(rows.values),
+                excluding: Set(unavailableAudioIssues.map(\.id))),
+            origin: previous.map { $0.origin } ?? selection, filter: previous?.filter ?? filter,
+            sort: previous.map { $0.sort } ?? sort, selection: previous?.selection ?? trackSelection,
+            destinationID: previous?.destinationID ?? destination)
+        matchGroup = nil
+        filter = TrackFilter(); sort = nil
+        trackSelection = matches?.tracks.first.map { [$0.id] } ?? []
+        focusTrackList()
+    }
+
+    func endMatches(restoreSidebar: Bool = true) {
+        guard let session = matches else { return }
+        matches = nil; matchGroup = nil
+        filter = session.filter; sort = session.sort
+        trackSelection = session.selection
+        if restoreSidebar { selection = session.origin }
+        focusTrackList()
+    }
+
+    var matchDestination: SourcePlaylist? {
+        guard let id = matches?.destinationID else { return nil }
+        return playlists.first { $0.id == id && !$0.isFolder }
+    }
+
+    /// The saved playlist remains the destination even while auditioning a temporary list.
+    func addMatches(_ ids: [String]) async {
+        guard let playlist = matchDestination, canEditLibrary else { return }
+        let additions = ids.filter { rows[$0] != nil && !playlist.trackIds.contains($0) }
+        guard !additions.isEmpty else { flash("Already in \(playlist.name)"); return }
+        await add(additions, to: playlist)
+        if let saved = playlists.first(where: { $0.id == playlist.id }), additions.allSatisfy(saved.trackIds.contains) {
+            flash("Added \(Set(additions).count) \(Set(additions).count == 1 ? "track" : "tracks") to \(saved.name)")
+        }
+    }
+
     var filter = TrackFilter()
     var sort: TrackSort?
 
@@ -456,7 +502,7 @@ final class LibraryModel {
     }
 
     /// Test teardown releases the single-writer lock before reopening the same library.
-    func closeLibrary() async { scheduledReload?.cancel(); await localStore?.close(); localStore = nil }
+    func closeLibrary() async { endMatches(); scheduledReload?.cancel(); await localStore?.close(); localStore = nil }
 
     /// Selecting a folder/XML never imports files into Music or modifies the source file.
     func chooseSource(_ kind: SourceConnection.Kind) {
@@ -1037,6 +1083,7 @@ final class LibraryModel {
     func focusTrackList() { trackFocusRequest &+= 1 }
 
     func openSidebarItem(_ item: SidebarItem) {
+        endMatches()
         selection = item
         focusTrackList()
     }
@@ -1624,6 +1671,7 @@ final class LibraryModel {
         if playlists != lib.playlists { playlists = lib.playlists }
         artwork = lib.artwork
         library = lib
+        if libraryID != nil, libraryID != lib.sourceID { endMatches() }
         libraryID = lib.sourceID
         hasLibrary = snapshot.initialized
         connections = snapshot.connections
@@ -1668,7 +1716,7 @@ final class LibraryModel {
 
     // Read on every track-list redraw (each selection change, each row update), so memoized: the
     // base by content and sidebar selection, the shown rows by filter and sort as well.
-    private struct BaseKey: Equatable { var content: Int; var selection: SidebarItem? }
+    private struct BaseKey: Equatable { var content: Int; var selection: SidebarItem?; var matches: UUID?; var group: MatchGroup? }
     private struct ShownKey: Equatable { var base: Int; var filter: TrackFilter; var sort: TrackSort?; var playing: TrackRow? }
     @ObservationIgnored private var baseKey: BaseKey?
     @ObservationIgnored private var shownKey: ShownKey?
@@ -1680,7 +1728,8 @@ final class LibraryModel {
     /// The track list for the sidebar selection, filter and sort. `playing` matters only for
     /// "Mixes with playing".
     func listing(playing: TrackRow?) -> TrackListing {
-        let bk = BaseKey(content: contentVersion, selection: selection)
+        let playing = matches?.seed ?? playing
+        let bk = BaseKey(content: contentVersion, selection: selection, matches: matches?.id, group: matchGroup)
         if bk != baseKey {
             baseKey = bk
             baseVersion &+= 1
@@ -1706,6 +1755,9 @@ final class LibraryModel {
 
     /// Tracks of the current sidebar selection, before filtering. Builds them; use `listing`.
     private var baseRows: [TrackRow] {
+        if let matches {
+            return matches.tracks.filter { matchGroup == nil || $0.group == matchGroup }.compactMap { rows[$0.id] }
+        }
         switch selection {
         case .playlist:
             return selectedPlaylist.map { trackIds(of: $0).compactMap { rows[$0] } } ?? []

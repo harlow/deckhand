@@ -19,6 +19,8 @@ require Shift unless the Shift symbol is shown. Quick Rate has its own contextua
 | Clear rating | Option+0 | Native app; persisted rating cleared |
 | Jump to hot cues 1–5 | 1–5 | All five verified at 0s, 32s, 64s, 80s and 96s in the generated track |
 | Add selected songs to a playlist | A | Native picker; Escape cancels, Return adds; membership survives restart |
+| Matches for selected or playing song | M | Ranking, persistence, keyboard and native workspace verification; see [Matches](matches.md) |
+| Leave Matches | Escape | Restores original filters, sort and selected song; editor, help, menu and sheet guards |
 | Search songs | / | Native app; letters, brackets and question marks remain text while editing |
 | Show / hide help | ? or Command+/ | Native app, including Command+/ while editing search |
 | Close help / cancel | Escape | Native overlay and playlist picker |
@@ -70,3 +72,5 @@ swift test --scratch-path .build-standalone --filter PlayerShortcutTests
 Use a fresh directory each time. Launch a single app instance with `DECKHAND_LIBRARY_DIR`
 pointing at that directory's `Library` subdirectory and `DECKHAND_CACHE_DIR` at `Cache`.
 Never sync the generated test library to a real USB.
+
+M is intentionally reintroduced for Matches. Its removed “mix filter” action stays removed. In Matches, L previews the selected result and A adds directly to the originating playlist (or opens the picker when there is no destination).

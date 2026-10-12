@@ -50,7 +50,7 @@ enum TrackCommand: Equatable {
     case play(fromMixIn: Bool), preview, togglePlay, queue(next: Bool)
     case hotCue(Int), beats(Int), section(Int), rate(Int)
     case toggleMixes, search, revealPlaying, help, delete, addToPlaylist, review
-    case songStart
+    case songStart, matches
 }
 
 extension Notification.Name {
@@ -150,6 +150,10 @@ struct TrackTable: NSViewRepresentable {
         c.parent = self
         guard let table = c.table else { return }
         if c.version != version {
+            // Reloading a shorter list can deselect rows. Preserve the owner's requested selection
+            // when switching between Matches and the original playlist.
+            c.applying = true
+            defer { c.applying = false }
             c.version = version
             let old = c.rows
             c.rows = rows
@@ -418,6 +422,7 @@ final class KeyTableView: NSTableView {
         case "h": return shift ? .beats(-32) : .songStart // 8 four-beat bars.
         case "l": return shift ? .beats(32) : .preview
         case "a" where !shift: return .addToPlaylist
+        case "m" where !shift: return .matches
         case "1" where !shift, "2" where !shift, "3" where !shift, "4" where !shift, "5" where !shift: return .hotCue(Int(text)!)
         case "/" where !shift: return .search
         case "?": return .help

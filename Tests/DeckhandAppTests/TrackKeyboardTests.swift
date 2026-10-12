@@ -154,7 +154,7 @@ import SwiftUI
                 ("\r", [], 36, .play(fromMixIn: false)), (" ", [], 49, .togglePlay),
                 ("h", [], 4, .songStart), ("l", [], 37, .preview),
                 ("H", .shift, 4, .beats(-32)), ("L", .shift, 37, .beats(32)),
-                ("a", [], 0, .addToPlaylist), ("/", [], 44, .search), ("?", .shift, 44, .help),
+                ("m", [], 46, .matches), ("a", [], 0, .addToPlaylist), ("/", [], 44, .search), ("?", .shift, 44, .help),
             ] + (1...5).map { (String($0), [], UInt16(18 + $0), .hotCue($0)) }
               + (0...5).map { (String($0), .option, UInt16(18 + $0), .rate($0)) }
             for (text, flags, code, expected) in keys {
@@ -165,7 +165,7 @@ import SwiftUI
                 #expect(commands.last?.1 == [row.id])
             }
             let count = commands.count
-            for text in ["p", "P", "q", "Q", "6", "7", "8", ",", ".", "<", ">", "{", "}", "m", "r"] {
+            for text in ["p", "P", "q", "Q", "6", "7", "8", ",", ".", "<", ">", "{", "}", "r"] {
                 table.keyDown(with: key(text, in: window))
             }
             table.keyDown(with: key("\r", in: window, flags: .shift, code: 36))
@@ -176,6 +176,9 @@ import SwiftUI
             #expect(table.routeWorkspaceNavigation(key("h", in: window, code: 4)))
             #expect(commands.last?.0 == .songStart)
             #expect(commands.count == count + 1)
+            window.makeFirstResponder(button)
+            #expect(table.routeWorkspaceNavigation(key("m", in: window, code: 46)))
+            #expect(commands.last?.0 == .matches && commands.count == count + 2)
         }
     }
 
@@ -187,7 +190,7 @@ import SwiftUI
                 #expect(window.firstResponder is NSTextView) // The real AppKit field editor.
                 #expect(!table.routeWorkspaceNavigation(key("j", in: window)))
                 #expect(!table.routeWorkspaceNavigation(key("k", in: window)))
-                for text in ["h", "l", "H", "L", "a", "/", "1"] {
+                for text in ["h", "l", "H", "L", "a", "m", "/", "1"] {
                     #expect(!table.routeWorkspaceNavigation(key(text, in: window)))
                 }
                 #expect(table.selectedRow == -1)
