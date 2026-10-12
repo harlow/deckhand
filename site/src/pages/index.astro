@@ -31,6 +31,29 @@ const cues = [
 
 const ratings = ["Not for me", "Meh", "Decent", "Great", "Banger"];
 
+const shortcutGroups = [
+  {
+    title: "Browse and organize",
+    shortcuts: [
+      ["[", "Previous playlist"], ["]", "Next playlist"],
+      ["K / ↑", "Previous song"], ["J / ↓", "Next song"],
+      ["/", "Search songs"], ["A", "Add selection to a playlist"],
+      ["Delete, Enter", "Remove selection from a playlist"],
+      ["Esc", "Close an overlay or return to one selected song"],
+    ],
+  },
+  {
+    title: "Preview and rate",
+    shortcuts: [
+      ["Enter", "Play selected song"], ["Space", "Play / pause"],
+      ["H", "Jump to song start"], ["L", "Jump to pre-drop preview"],
+      ["⇧H", "Jump back 16 bars"], ["⇧L", "Jump forward 16 bars"],
+      ["1–5", "Jump to hot cues 1–5"], ["⌥1–5", "Rate song 1–5 stars"],
+      ["⌥0", "Clear rating"],
+    ],
+  },
+];
+
 const steps = [
   {
     n: "01",
@@ -55,7 +78,7 @@ const steps = [
 const faqs = [
   {
     q: "Do I need Rekordbox?",
-    a: "No. Deckhand writes the OneLibrary database and analysis files itself, straight from Apple Music.",
+    a: "No. Deckhand writes the OneLibrary database and analysis files itself. Add music from a folder, Apple Music, or Rekordbox XML, and keep your playlists in Deckhand.",
   },
   {
     q: "Which players work?",
@@ -71,11 +94,11 @@ const faqs = [
   },
   {
     q: "Does it change my Apple Music library?",
-    a: "Only when you ask: star ratings and playlist edits you make in Deckhand go to Apple Music, and Deckhand keeps a daily backup of your ratings in case your library ever goes missing.",
+    a: "Your playlist edits and ratings save locally in Deckhand. Sending playlists back to Apple Music is an explicit export; importing music doesn't change your Apple Music library.",
   },
   {
     q: "What does it cost?",
-    a: "Nothing. Deckhand is free and open source (GPL-3.0). It needs macOS 14 or later.",
+    a: "Nothing. Deckhand is free and open source (GPL-3.0). It requires an Apple Silicon Mac running macOS 26 (Tahoe) or later. No Homebrew or extra software to install.",
   },
 ];
 ---
@@ -90,6 +113,7 @@ const faqs = [
       <div class="hidden items-center gap-8 text-sm text-white/60 md:flex">
         <a href="#features" class="transition hover:text-white">Features</a>
         <a href="#quick-rate" class="transition hover:text-white">Quick Rate</a>
+        <a href="#keyboard" class="transition hover:text-white">Shortcuts</a>
         <a href="#how" class="transition hover:text-white">How it works</a>
         <a href="#faq" class="transition hover:text-white">FAQ</a>
       </div>
@@ -119,7 +143,8 @@ const faqs = [
         </h1>
         <p class="mx-auto mt-8 max-w-2xl text-lg text-pretty text-white/60 sm:text-xl">
           Deckhand syncs your playlists to a Pioneer DJ / AlphaTheta USB with key, BPM, beat grids,
-          waveforms and hot cues already set. Your library stays in Apple Music, where it belongs.
+          waveforms and hot cues already set. Bring tracks and playlists from a folder, Apple Music, or
+          Rekordbox XML into one library, saved locally in Deckhand.
         </p>
         <div class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <a href={github} class="group inline-flex items-center gap-2 rounded-full bg-amber px-6 py-3 font-semibold text-ink shadow-[0_0_40px_-8px_var(--color-amber)] transition hover:scale-[1.03]">
@@ -130,7 +155,7 @@ const faqs = [
             See how it works
           </a>
         </div>
-        <p class="mt-4 text-xs text-white/40">Free and open source · macOS 14+</p>
+        <p class="mt-4 text-xs text-white/40">Free and open source · Apple Silicon · macOS 26+</p>
 
         <!-- Deck mock -->
         <div class="relative mx-auto mt-20 max-w-5xl">
@@ -167,7 +192,7 @@ const faqs = [
             </div>
             <Waveform class="mt-6" height={110} seed={11} duration="18s" />
             <div class="mt-3 hidden justify-between font-mono text-[11px] text-white/40 sm:flex">
-              <span>1–8 hot cues · , . 4 beats · [ ] sections</span>
+              <span>1–5 hot cues · ⇧H / ⇧L 16 bars · [ ] playlists</span>
               <span>Space pause</span>
             </div>
           </div>
@@ -194,8 +219,8 @@ const faqs = [
     <section class="mx-auto max-w-6xl px-4 py-24 sm:px-6">
       <div class="grid items-center gap-4 font-display text-lg font-semibold sm:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] sm:text-xl">
         {[
-          ["Apple Music", "Your library, playlists and ratings"],
-          ["Deckhand", "Analyzes and builds the drive"],
+          ["Your music", "Folder, Apple Music or Rekordbox XML"],
+          ["Deckhand", "Your local library, analysis and playlists"],
           ["USB", "OneLibrary format"],
           ["The decks", "Plug in and play"],
         ].map(([name, sub], i) => (
@@ -277,20 +302,21 @@ const faqs = [
         <!-- Keyboard -->
         <article class="relative overflow-hidden rounded-3xl border border-line bg-panel p-6 md:col-span-2 sm:p-8">
           <h3 class="font-display text-2xl font-bold">Keyboard first</h3>
-          <p class="mt-2 text-white/55">Browse, preview from the drop, queue and rate without touching the mouse.</p>
+          <p class="mt-2 text-white/55">Browse playlists, preview from the drop, organize and rate without reaching for the mouse.</p>
           <div class="mt-6 flex flex-wrap gap-2 font-mono text-sm">
-            {["j", "k", "l", "q", "⇧P", "1–8", "[", "]", "⌥5", "?"].map((k) => (
+            {["J", "K", "H", "L", "A", "[", "]", "⌥5", "?"].map((k) => (
               <kbd class="rounded-md border border-white/15 border-b-white/5 bg-white/8 px-2.5 py-1 font-bold shadow-[0_2px_0_rgb(255_255_255/0.08)]">{k}</kbd>
             ))}
           </div>
+          <a href="#keyboard" class="mt-5 inline-block text-sm font-semibold text-amber transition hover:text-white">See the shortcuts →</a>
         </article>
 
         <!-- Ratings -->
         <article class="relative overflow-hidden rounded-3xl border border-line bg-panel p-6 md:col-span-2 sm:p-8">
           <h3 class="font-display text-2xl font-bold">Ratings, safe</h3>
           <p class="mt-2 text-white/55">
-            Stars sync both ways with Apple Music and onto the drive, with a daily backup so years of crate digging
-            never vanish.
+            Ratings save in your Deckhand library and go onto your USB when you sync. Keep the results of your
+            crate digging with your music.
           </p>
           <div class="mt-6 text-3xl tracking-widest text-amber">★★★★<span class="text-white/15">★</span></div>
         </article>
@@ -353,6 +379,42 @@ const faqs = [
       </div>
     </section>
 
+    <!-- Keyboard shortcuts -->
+    <section id="keyboard" class="mx-auto max-w-6xl scroll-mt-20 px-4 py-24 sm:px-6" aria-labelledby="keyboard-heading">
+      <p class="font-mono text-xs tracking-[0.2em] text-amber uppercase">Keyboard shortcuts</p>
+      <h2 id="keyboard-heading" class="mt-3 max-w-3xl font-display text-4xl font-bold tracking-tight text-balance sm:text-5xl">
+        Browse. Preview. Rate. Keep moving.
+      </h2>
+      <p class="mt-5 max-w-2xl text-lg text-white/55">
+        Move through your library, hear the drop and build a playlist with a few keys.
+        Shortcuts work across the library and leave you alone while you type in search or name a playlist.
+      </p>
+      <div class="mt-10 grid gap-4 md:grid-cols-2">
+        {shortcutGroups.map((group) => (
+          <div class="rounded-3xl border border-line bg-panel p-6 sm:p-8">
+            <h3 class="font-display text-xl font-bold">{group.title}</h3>
+            <dl class="mt-5 divide-y divide-line">
+              {group.shortcuts.map(([key, action]) => (
+                <div class="flex items-center justify-between gap-4 py-3">
+                  <dt class="text-sm text-white/70">{action}</dt>
+                  <dd class="shrink-0">
+                    <kbd class="inline-block min-w-14 rounded-md border border-white/15 border-b-white/5 bg-white/8 px-2.5 py-1 text-center font-mono text-xs font-medium text-white shadow-[0_2px_0_rgb(255_255_255/0.08)]">{key}</kbd>
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        ))}
+      </div>
+      <div class="mt-6 flex flex-col gap-3 text-sm text-white/55 sm:flex-row sm:items-center sm:justify-between">
+        <p>
+          Press <kbd class="rounded bg-white/10 px-1.5 py-0.5 font-mono text-white">?</kbd> or
+          <kbd class="rounded bg-white/10 px-1.5 py-0.5 font-mono text-white">⌘/</kbd> for the shortcut overlay in the app.
+        </p>
+        <p>Letters don't need Shift. <span class="text-white/80">⇧ Shift · ⌥ Option · ⌘ Command</span></p>
+      </div>
+    </section>
+
     <!-- How it works -->
     <section id="how" class="mx-auto max-w-6xl scroll-mt-20 px-4 py-24 sm:px-6">
       <p class="font-mono text-xs tracking-[0.2em] text-amber uppercase">How it works</p>
@@ -398,6 +460,7 @@ const faqs = [
         <a href={github} class="mt-10 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 font-semibold text-ink transition hover:bg-amber">
           Get Deckhand for Mac →
         </a>
+        <p class="mt-4 text-sm text-white/50">Requires Apple Silicon and macOS 26 (Tahoe) or later.</p>
       </div>
     </section>
   </main>
