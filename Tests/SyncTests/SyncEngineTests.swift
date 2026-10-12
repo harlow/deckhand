@@ -61,6 +61,7 @@ import Testing
         let before = try h.evaluate()
         #expect(before.track("A")?.changes == [.record, .artworkCheck] || before.track("A")?.changes == [.record])
         #expect(before.track("B")?.status == .clean)
+        #expect(SyncExecutor.analysisValidationDirectories(before.tracks, baseline: try h.manifest()).isEmpty)
         let files = h.snapshot()
         let run = try h.sync()
         #expect(run.result.wroteDatabase && run.result.copied.isEmpty && run.result.anlzWritten.isEmpty)
@@ -70,6 +71,25 @@ import Testing
         let after = h.snapshot()
         #expect(files.filter { !$0.key.contains("rekordbox") && !$0.key.contains(".deckhand") }
             == after.filter { !$0.key.contains("rekordbox") && !$0.key.contains(".deckhand") })
+    }
+
+    @Test func analysisValidationReusesProofOnlyForUnchangedFiles() throws {
+        let h = try synced(["A"])
+        let baseline = try h.manifest()
+        var tracks = try h.evaluate().tracks
+        let directory = AnlzPath.directory(forAudioPath: tracks[0].usbPath!)
+        #expect(SyncExecutor.analysisValidationDirectories(tracks, baseline: baseline).isEmpty)
+        var unproven = baseline
+        unproven.tracks["A"]?.anlzFingerprint = nil
+        #expect(SyncExecutor.analysisValidationDirectories(tracks, baseline: unproven) == [directory])
+        tracks[0].status = .pending([.analysisFiles])
+        #expect(SyncExecutor.analysisValidationDirectories(tracks, baseline: baseline) == [directory])
+        tracks[0].status = .clean
+        tracks[0].contentHash = "changed"
+        #expect(SyncExecutor.analysisValidationDirectories(tracks, baseline: baseline) == [directory])
+        tracks[0].usbPath = "/Contents/moved.mp3"
+        #expect(SyncExecutor.analysisValidationDirectories(tracks, baseline: baseline)
+                == [AnlzPath.directory(forAudioPath: "/Contents/moved.mp3")])
     }
 
     // 4

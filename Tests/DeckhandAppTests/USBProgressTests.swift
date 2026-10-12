@@ -13,7 +13,7 @@ import Testing
     }
 
     @Test func finalPhasesDoNotSuggestThatTrackCompletionMeansSyncCompletion() {
-        for (phase, title) in [("Writing library database", "Saving playlists"),
+        for (phase, title) in [("Writing library database", "Saving library"),
                                ("Committing", "Finishing USB"), ("Checking USB", "Checking USB")] {
             let progress = USBProgressState(phase: phase, done: 11, total: nil)
             #expect(progress.title == title && progress.count == nil && progress.fraction == nil)

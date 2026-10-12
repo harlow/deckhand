@@ -54,6 +54,17 @@ public struct SyncExecutor {
     /// Analyze audio the analyzer failed on before (`--retry-failed`).
     public var retryFailedAnalysis = false
 
+    /// Only analysis that changed, moved, or lacks the manifest's prior proof needs to be inspected again.
+    static func analysisValidationDirectories(_ tracks: [ChangeSet.Track], baseline: Manifest) -> Set<String> {
+        Set(tracks.compactMap { track -> String? in
+            guard track.isPlaced, let path = track.usbPath else { return nil }
+            let previous = baseline.tracks[track.id]
+            let trusted = previous?.anlzFingerprint != nil && previous?.usbPath == path
+                && previous?.contentHash == track.contentHash && !track.changes.contains(.analysisFiles)
+            return trusted ? nil : AnlzPath.directory(forAudioPath: path)
+        })
+    }
+
     static let dbRelativePath = DriveProbe.databasePath
     /// For tests: stop as if the drive were unplugged just before the manifest is saved.
     var stopBeforeManifest = false
@@ -204,7 +215,11 @@ public struct SyncExecutor {
             defer { try? FileManager.default.removeItem(at: local) }
             try OneLibraryDatabase.write(contents, to: local, previous: carriesHistory(changes, on: volume) ? dbURL : nil)
             timer.mark("db build")
-            let issues = try OneLibraryValidator.validate(database: local, volumeRoot: volume.url)
+            // Keep the plan's proof for unchanged analysis. A rating or playlist edit mustn't reread the USB's
+            // entire waveform library. Replaced/missing databases and forced rebuilds get a full inspection.
+            let inspectAll = forceDatabase || changes.drive.contains(.databaseChanged) || changes.drive.contains(.databaseMissing)
+            let issues = try OneLibraryValidator.validate(database: local, volumeRoot: volume.url,
+                analysisDirectoriesToInspect: inspectAll ? nil : Self.analysisValidationDirectories(tracks, baseline: base))
             if !issues.isEmpty { throw OneLibraryError.validation(issues) }
             timer.mark("db validate")
 

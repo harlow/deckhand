@@ -193,7 +193,8 @@ final class Job {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
         log += line + "\n"
-        Log.info(title.lowercased().hasPrefix("sync") ? "sync" : "analyze", trimmed)
+        Log.post(trimmed.hasPrefix("[timing]") ? .perf : .info,
+                 title.lowercased().hasPrefix("sync") ? "sync" : "analyze", trimmed)
         // Indented status lines ("  writing library database") are steps without a count.
         if line.hasPrefix("  "), !trimmed.hasPrefix("!"), trimmed.first?.isLowercase == true {
             phase = trimmed.prefix(1).uppercased() + trimmed.dropFirst()

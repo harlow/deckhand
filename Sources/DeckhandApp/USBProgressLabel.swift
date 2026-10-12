@@ -11,7 +11,7 @@ struct USBProgressState: Equatable {
         case "Copying": "Copying tracks"
         case "Analyzing": "Analyzing tracks"
         case "Analysis files": "Saving analysis"
-        case "Writing library database": "Saving playlists"
+        case "Writing library database": "Saving library"
         case "Committing": "Finishing USB"
         case "Checking USB": "Checking USB"
         case "", "Starting…": "Preparing sync"
