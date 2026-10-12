@@ -1,0 +1,28 @@
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/17] Write sources
+[3/17] Write swift-version--58304C5D6DBC2206.txt
+[5/7] Compiling DeckhandAppTests PlayerShortcutTests.swift
+[6/7] Emitting module DeckhandAppTests
+[6/8] Write Objects.LinkFileList
+[7/8] Linking DeckhandPackageTests
+Build complete! (4.70s)
+Test Suite 'Selected tests' started at 2026-10-12 11:26:48.750.
+Test Suite 'DeckhandPackageTests.xctest' started at 2026-10-12 11:26:48.752.
+Test Suite 'DeckhandPackageTests.xctest' passed at 2026-10-12 11:26:48.752.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-12 11:26:48.752.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+◇ Test run started.
+↳ Testing Library Version: 1743
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite PlayerShortcutTests started.
+◇ Test playbackSeeksAndCuesUseTheGridAndKeepPauseState() started.
+✘ Test playbackSeeksAndCuesUseTheGridAndKeepPauseState() recorded an issue at PlayerShortcutTests.swift:150:9: Expectation failed: (player.current?.id == listed[1].id → false) && (player.isPlaying → <not evaluated>)
+✘ Test playbackSeeksAndCuesUseTheGridAndKeepPauseState() recorded an issue at PlayerShortcutTests.swift:152:9: Expectation failed: (player.nextInList?.id → "track-2") == (listed[2].id → "track-3")
+✘ Test playbackSeeksAndCuesUseTheGridAndKeepPauseState() recorded an issue at PlayerShortcutTests.swift:157:9: Expectation failed: (player.current?.id == listed[1].id → false) && (player.isPlaying → <not evaluated>)
+✘ Test playbackSeeksAndCuesUseTheGridAndKeepPauseState() recorded an issue at PlayerShortcutTests.swift:162:9: Expectation failed: (player.current?.id == listed[1].id → false) && (!player.isPlaying → <not evaluated>)
+✘ Test playbackSeeksAndCuesUseTheGridAndKeepPauseState() failed after 0.982 seconds with 4 issues.
+✘ Suite PlayerShortcutTests failed after 0.983 seconds with 4 issues.
+✘ Test run with 1 test in 1 suite failed after 0.983 seconds with 4 issues.

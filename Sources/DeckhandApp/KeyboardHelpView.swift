@@ -168,7 +168,7 @@ struct KeyboardHelpView: View {
                         ])
                         section("Playback", [
                             ("Enter", "Play selected song"), ("Space", "Play / pause"),
-                            ("H", "Jump to song start"), ("L", "Jump to pre-drop preview"),
+                            ("H", "Jump to song start"), ("L", "Preview selected song"),
                             ("⇧H", "Back 8 bars"), ("⇧L", "Forward 8 bars"),
                         ])
                     }

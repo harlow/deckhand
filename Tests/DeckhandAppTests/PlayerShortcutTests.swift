@@ -1,5 +1,7 @@
 @testable import DeckhandApp
 import Analysis
+import AppKit
+import SwiftUI
 import AVFoundation
 import DeckhandCore
 import DeckhandLibrary
@@ -110,6 +112,56 @@ import Testing
         #expect(model.selection == order.last)
         model.selectAdjacentPlaylist(1)
         #expect(model.selection == order.first)
+        // Exercise the actual TrackListView command callback, not just Player's seek helpers.
+        // A different song is playing when J highlights the next row and L auditions it.
+        for _ in 0..<100 where model.rows.values.contains(where: { !$0.checked }) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let playlist = try #require(model.playlists.first { $0.name == "Keyboard Test" })
+        model.selection = .playlist(playlist.id)
+        let listed = model.listing(playing: player.current).rows
+        #expect(listed.count == 3)
+        let first = try #require(listed.first)
+        model.trackSelection = [first.id]
+        player.play(first, continuingIn: listed)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1200, height: 600),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let host = NSHostingView(rootView: TrackListView().environment(model).environment(player))
+        window.contentView = host
+        func findTable(_ view: NSView) -> KeyTableView? {
+            if let table = view as? KeyTableView { return table }
+            return view.subviews.lazy.compactMap { findTable($0) }.first
+        }
+        for _ in 0..<100 where findTable(host)?.numberOfRows != 3 {
+            host.layoutSubtreeIfNeeded(); try await Task.sleep(for: .milliseconds(10))
+        }
+        let table = try #require(findTable(host))
+        func key(_ letter: String, code: UInt16) {
+            table.keyDown(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, characters: letter,
+                charactersIgnoringModifiers: letter, isARepeat: false, keyCode: code)!)
+        }
+        key("j", code: 38)
+        #expect(model.trackSelection == [listed[1].id] && player.current?.id == first.id)
+        key("l", code: 37)
+        for _ in 0..<100 where player.detail == nil { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(player.current?.id == listed[1].id && player.isPlaying)
+        #expect(abs(player.time - 24) < 0.5)
+        #expect(player.nextInList?.id == listed[2].id)
+
+        // L also starts a paused selected song; an empty selection retains the current-song fallback.
+        player.pause(); player.seek(seconds: 80)
+        key("l", code: 37)
+        #expect(player.current?.id == listed[1].id && player.isPlaying)
+        #expect(abs(player.time - 24) < 0.5)
+        player.pause(); player.seek(seconds: 80)
+        table.deselectAll(nil)
+        key("l", code: 37)
+        #expect(player.current?.id == listed[1].id && !player.isPlaying)
+        #expect(abs(player.time - 24) < 0.5)
+
         await model.closeLibrary()
     }
 }

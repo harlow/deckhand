@@ -13,7 +13,7 @@ require Shift unless the Shift symbol is shown. Quick Rate has its own contextua
 | Play selected song | Enter | Native app with generated WAVs |
 | Play / pause | Space | Native app and player tests |
 | Jump to playing song's start | H | Native app; paused transport remains paused |
-| Jump to pre-drop preview | L | Native app; test drop at 32s previews from 24s |
+| Preview selected song | L | Native app; 32s drop previews from 24s. TrackListView regression test covers J selecting another song while one is playing |
 | Back / forward 8 bars | Shift+H / Shift+L | Native app and beat-grid tests; 32 beats on a four-beat bar grid |
 | Rate 1–5 stars | Option+1–5 | Each value verified in native app using an isolated local library |
 | Clear rating | Option+0 | Native app; persisted rating cleared |
@@ -28,9 +28,11 @@ require Shift unless the Shift symbol is shown. Quick Rate has its own contextua
 | Remove selected songs from the playlist | Delete, then Enter | Native isolated playlist: Escape keeps 3 songs; Enter removes Song 2, leaving 2 in the playlist and all 3 in the library |
 
 Navigation and song commands work across the workspace while text editors and modal
-dialogs retain their keyboard input. Arrow keys retain normal focus behavior. H/L seek
-within the playing song; Enter plays the selected song. If nothing is playing, L starts
-the selected song's preview. Bar jumps require a beat grid or a known tempo.
+dialogs retain their keyboard input. Arrow keys retain normal focus behavior. H seeks
+within the playing song; Enter plays the selected song from the start. L starts the selected
+song's pre-drop preview, including when a different song is already playing or the selected
+song is paused. With no song selected, L seeks within the current song and keeps its pause
+state. Bar jumps require a beat grid or a known tempo.
 
 ## Approved removals
 

@@ -1,0 +1,103 @@
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/17] Write sources
+[3/17] Write swift-version--58304C5D6DBC2206.txt
+[5/10] Compiling DeckhandApp KeyboardHelpView.swift
+[6/10] Compiling DeckhandApp TrackListView.swift
+[7/10] Emitting module DeckhandApp
+[7/12] Write Objects.LinkFileList
+[8/12] Linking DeckhandApp
+[9/12] Applying DeckhandApp
+[11/13] Emitting module DeckhandAppTests
+[11/13] Write Objects.LinkFileList
+[12/13] Linking DeckhandPackageTests
+Build complete! (4.91s)
+Test Suite 'Selected tests' started at 2026-10-12 11:28:14.394.
+Test Suite 'DeckhandPackageTests.xctest' started at 2026-10-12 11:28:14.394.
+Test Suite 'DeckhandPackageTests.xctest' passed at 2026-10-12 11:28:14.394.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-12 11:28:14.395.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+◇ Test run started.
+↳ Testing Library Version: 1743
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite TrackListingTests started.
+◇ Suite TrackKeyboardTests started.
+◇ Suite PlayerShortcutTests started.
+◇ Suite MatchesModelTests started.
+◇ Suite MatchesTableTests started.
+◇ Suite ContinuousPlaybackTests started.
+◇ Suite KeyboardHelpTests started.
+◇ Test reusesPreviousOrderOnlyWhileItStillHolds() started.
+◇ Test filtersBySearchKeyAndRating() started.
+◇ Test playbackSeeksAndCuesUseTheGridAndKeepPauseState() started.
+◇ Test navigatesFromOtherControlsAndDoesNotDispatchTwice() started.
+◇ Test exportNativeFixtureOnlyWhenExplicitlyRequested() started.
+◇ Test sortsNaturallyByTitle() started.
+◇ Test mixesWithPlayingUsesKeyAndTempo() started.
+◇ Test pinnedSeedDestinationDedupAndViewRestorationSurviveRealPlaybackAndRestart() started.
+◇ Test emptyFilterKeepsEverything() started.
+◇ Test allTracksHasNoImplicitDestinationAndSidebarNavigationLeavesTemporaryList() started.
+◇ Test opensFromControlsAndRestoresFocusWithoutPlaying() started.
+◇ Test returningFromLongMatchesListPreservesOriginalSongSelection() started.
+◇ Test naturalSongEndAdvancesInCapturedVisibleOrder() started.
+✔ Test mixesWithPlayingUsesKeyAndTempo() passed after 0.001 seconds.
+✔ Test reusesPreviousOrderOnlyWhileItStillHolds() passed after 0.001 seconds.
+✔ Test emptyFilterKeepsEverything() passed after 0.001 seconds.
+✔ Test filtersBySearchKeyAndRating() passed after 0.002 seconds.
+✔ Test sortsNaturallyByTitle() passed after 0.002 seconds.
+✔ Suite TrackListingTests passed after 0.002 seconds.
+✔ Test exportNativeFixtureOnlyWhenExplicitlyRequested() passed after 0.055 seconds.
+✔ Test navigatesFromOtherControlsAndDoesNotDispatchTwice() passed after 0.778 seconds.
+✔ Test opensFromControlsAndRestoresFocusWithoutPlaying() passed after 0.777 seconds.
+◇ Test removedShiftLetterNavigationStaysInactiveAndPlainNavigationStopsAtEdges() started.
+◇ Test navigationDoesNotStealTypingOrQuickRateSectionKeys() started.
+✔ Test naturalSongEndAdvancesInCapturedVisibleOrder() passed after 0.873 seconds.
+◇ Test naturalEndsHonorTheQueueThenReturnToTheList() started.
+✔ Test returningFromLongMatchesListPreservesOriginalSongSelection() passed after 0.874 seconds.
+✔ Suite MatchesTableTests passed after 0.874 seconds.
+✔ Test removedShiftLetterNavigationStaysInactiveAndPlainNavigationStopsAtEdges() passed after 0.176 seconds.
+◇ Test escapeCollapsesMultipleSongsToFirstSelectedSong() started.
+✔ Test navigationDoesNotStealTypingOrQuickRateSectionKeys() passed after 0.177 seconds.
+◇ Test sheetsAndOtherWindowsKeepTheirKeyboardInput() started.
+✔ Test escapeCollapsesMultipleSongsToFirstSelectedSong() passed after 0.009 seconds.
+◇ Test escapeLeavesEditorsHelpAndSheetsInCharge() started.
+✔ Test sheetsAndOtherWindowsKeepTheirKeyboardInput() passed after 0.675 seconds.
+◇ Test commandHelpRestoresTheSearchFieldEditorAndInsertionPoint() started.
+✔ Test playbackSeeksAndCuesUseTheGridAndKeepPauseState() passed after 2.389 seconds.
+✔ Suite PlayerShortcutTests passed after 2.390 seconds.
+✔ Test escapeLeavesEditorsHelpAndSheetsInCharge() passed after 1.438 seconds.
+◇ Test escapeLeavesTrackingMenusInChargeUntilTheyClose() started.
+✔ Test commandHelpRestoresTheSearchFieldEditorAndInsertionPoint() passed after 0.852 seconds.
+◇ Test matchesEscapeRespectsHelpEditorsMenusAndSheets() started.
+✔ Test naturalEndsHonorTheQueueThenReturnToTheList() passed after 1.653 seconds.
+◇ Test queuedListSongsDoNotRepeatAndPreviousKeepsContinuation() started.
+✔ Test escapeLeavesTrackingMenusInChargeUntilTheyClose() passed after 0.245 seconds.
+◇ Test dispatchesEveryCleanSongShortcutAndRejectsRemovedAliases() started.
+✔ Test allTracksHasNoImplicitDestinationAndSidebarNavigationLeavesTemporaryList() passed after 2.648 seconds.
+✔ Test queuedListSongsDoNotRepeatAndPreviousKeepsContinuation() passed after 0.851 seconds.
+◇ Test naturalEndSkipsMissingAndUnreadableFiles() started.
+✔ Test matchesEscapeRespectsHelpEditorsMenusAndSheets() passed after 0.895 seconds.
+◇ Test helpFocusBlocksTableNavigationBehindOverlay() started.
+✔ Test dispatchesEveryCleanSongShortcutAndRejectsRemovedAliases() passed after 0.788 seconds.
+◇ Test leavesSearchAndNameEditorsAlone() started.
+✔ Test pinnedSeedDestinationDedupAndViewRestorationSurviveRealPlaybackAndRestart() passed after 3.483 seconds.
+✔ Suite MatchesModelTests passed after 3.483 seconds.
+✔ Test helpFocusBlocksTableNavigationBehindOverlay() passed after 0.110 seconds.
+✔ Suite KeyboardHelpTests passed after 3.491 seconds.
+✔ Test leavesSearchAndNameEditorsAlone() passed after 0.060 seconds.
+◇ Test ignoresModifiedKeysOtherWindowsAndHiddenLists() started.
+✔ Test ignoresModifiedKeysOtherWindowsAndHiddenLists() passed after 0.010 seconds.
+◇ Test leavesSheetsAlone() started.
+✔ Test leavesSheetsAlone() passed after 0.550 seconds.
+✔ Suite TrackKeyboardTests passed after 4.059 seconds.
+✔ Test naturalEndSkipsMissingAndUnreadableFiles() passed after 0.759 seconds.
+◇ Test lastSongStopsWithoutRepeatingAndCanBePlayedAgain() started.
+✔ Test lastSongStopsWithoutRepeatingAndCanBePlayedAgain() passed after 0.330 seconds.
+◇ Test newListAndStandalonePreviewReplaceOldContinuation() started.
+✔ Test newListAndStandalonePreviewReplaceOldContinuation() passed after 0.199 seconds.
+◇ Test playQueuedNowPreservesListAndStaleCompletionCannotSkip() started.
+✔ Test playQueuedNowPreservesListAndStaleCompletionCannotSkip() passed after 0.163 seconds.
+✔ Suite ContinuousPlaybackTests passed after 4.831 seconds.
+✔ Test run with 32 tests in 7 suites passed after 4.832 seconds.

@@ -237,10 +237,9 @@ struct TrackListView: View {
             if let seed = picked.first ?? library.matches?.seed ?? player.current { library.openMatches(seed: seed) }
             else { library.flash("Select a song to find matches") }
         case .preview:
-            if library.matches != nil, let r = picked.first {
+            if let r = picked.first {
                 player.play(from: .preview, r, artwork: library.artwork, continuingIn: rows)
-            } else if player.current != nil { player.jumpToPreview() }
-            else if let r = picked.first { player.play(from: .preview, r, artwork: library.artwork, continuingIn: rows) }
+            } else { player.jumpToPreview() }
         case .songStart: player.seek(to: 0)
         case .togglePlay:
             if player.current == nil, let r = picked.first { player.play(r, artwork: library.artwork, continuingIn: rows) }
