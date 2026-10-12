@@ -1,0 +1,81 @@
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/17] Write sources
+[3/17] Write swift-version--58304C5D6DBC2206.txt
+[5/9] Emitting module DeckhandApp
+[6/9] Compiling DeckhandApp TrackListView.swift
+[7/10] Compiling DeckhandApp ContentView.swift
+[7/12] Write Objects.LinkFileList
+[8/12] Linking DeckhandApp
+[9/12] Applying DeckhandApp
+[11/13] Emitting module DeckhandAppTests
+[11/13] Write Objects.LinkFileList
+[12/13] Linking DeckhandPackageTests
+Build complete! (5.62s)
+Test Suite 'Selected tests' started at 2026-10-12 10:53:48.448.
+Test Suite 'DeckhandPackageTests.xctest' started at 2026-10-12 10:53:48.449.
+Test Suite 'DeckhandPackageTests.xctest' passed at 2026-10-12 10:53:48.449.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-12 10:53:48.449.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+◇ Test run started.
+↳ Testing Library Version: 1743
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite TrackKeyboardTests started.
+◇ Suite KeyboardHelpTests started.
+◇ Suite MatchesTableTests started.
+◇ Suite MatchDiscoveryTests started.
+◇ Test returningFromLongMatchesListPreservesOriginalSongSelection() started.
+◇ Suite MatchesModelTests started.
+◇ Test missingAnalysisUsesMetadataAndInvalidNumbersStayFinite() started.
+◇ Test opensFromControlsAndRestoresFocusWithoutPlaying() started.
+◇ Test groupsExplainKeyTempoAndEnergyWithoutClaimingAudioSimilarity() started.
+◇ Test limitsToFiftyBestUniqueTracksInStableOrder() started.
+◇ Test excludesUnavailableUnrelatedExtremeTempoAndDuplicateFilesOrHashes() started.
+◇ Test navigatesFromOtherControlsAndDoesNotDispatchTwice() started.
+◇ Test exportNativeFixtureOnlyWhenExplicitlyRequested() started.
+◇ Test allTracksHasNoImplicitDestinationAndSidebarNavigationLeavesTemporaryList() started.
+◇ Test pinnedSeedDestinationDedupAndViewRestorationSurviveRealPlaybackAndRestart() started.
+✔ Test groupsExplainKeyTempoAndEnergyWithoutClaimingAudioSimilarity() passed after 0.001 seconds.
+✔ Test missingAnalysisUsesMetadataAndInvalidNumbersStayFinite() passed after 0.001 seconds.
+✔ Test excludesUnavailableUnrelatedExtremeTempoAndDuplicateFilesOrHashes() passed after 0.003 seconds.
+✔ Test limitsToFiftyBestUniqueTracksInStableOrder() passed after 0.005 seconds.
+✔ Suite MatchDiscoveryTests passed after 0.005 seconds.
+✔ Test exportNativeFixtureOnlyWhenExplicitlyRequested() passed after 0.248 seconds.
+✔ Test returningFromLongMatchesListPreservesOriginalSongSelection() passed after 0.419 seconds.
+✔ Suite MatchesTableTests passed after 0.419 seconds.
+✔ Test opensFromControlsAndRestoresFocusWithoutPlaying() passed after 0.431 seconds.
+◇ Test navigationDoesNotStealTypingOrQuickRateSectionKeys() started.
+✔ Test navigatesFromOtherControlsAndDoesNotDispatchTwice() passed after 0.431 seconds.
+◇ Test removedShiftLetterNavigationStaysInactiveAndPlainNavigationStopsAtEdges() started.
+✔ Test navigationDoesNotStealTypingOrQuickRateSectionKeys() passed after 0.059 seconds.
+✔ Test removedShiftLetterNavigationStaysInactiveAndPlainNavigationStopsAtEdges() passed after 0.059 seconds.
+◇ Test sheetsAndOtherWindowsKeepTheirKeyboardInput() started.
+◇ Test escapeCollapsesMultipleSongsToFirstSelectedSong() started.
+✔ Test sheetsAndOtherWindowsKeepTheirKeyboardInput() passed after 0.574 seconds.
+◇ Test commandHelpRestoresTheSearchFieldEditorAndInsertionPoint() started.
+✔ Test escapeCollapsesMultipleSongsToFirstSelectedSong() passed after 0.574 seconds.
+◇ Test escapeLeavesEditorsHelpAndSheetsInCharge() started.
+✔ Test commandHelpRestoresTheSearchFieldEditorAndInsertionPoint() passed after 0.602 seconds.
+◇ Test matchesEscapeRespectsHelpEditorsMenusAndSheets() started.
+✔ Test escapeLeavesEditorsHelpAndSheetsInCharge() passed after 0.602 seconds.
+◇ Test escapeLeavesTrackingMenusInChargeUntilTheyClose() started.
+✔ Test matchesEscapeRespectsHelpEditorsMenusAndSheets() passed after 0.563 seconds.
+◇ Test helpFocusBlocksTableNavigationBehindOverlay() started.
+✔ Test escapeLeavesTrackingMenusInChargeUntilTheyClose() passed after 0.574 seconds.
+◇ Test dispatchesEveryCleanSongShortcutAndRejectsRemovedAliases() started.
+✔ Test allTracksHasNoImplicitDestinationAndSidebarNavigationLeavesTemporaryList() passed after 2.363 seconds.
+✔ Test helpFocusBlocksTableNavigationBehindOverlay() passed after 0.131 seconds.
+✔ Suite KeyboardHelpTests passed after 2.363 seconds.
+✔ Test dispatchesEveryCleanSongShortcutAndRejectsRemovedAliases() passed after 0.209 seconds.
+◇ Test leavesSearchAndNameEditorsAlone() started.
+✔ Test leavesSearchAndNameEditorsAlone() passed after 0.009 seconds.
+◇ Test ignoresModifiedKeysOtherWindowsAndHiddenLists() started.
+✔ Test pinnedSeedDestinationDedupAndViewRestorationSurviveRealPlaybackAndRestart() passed after 2.520 seconds.
+✔ Suite MatchesModelTests passed after 2.521 seconds.
+✔ Test ignoresModifiedKeysOtherWindowsAndHiddenLists() passed after 0.058 seconds.
+◇ Test leavesSheetsAlone() started.
+✔ Test leavesSheetsAlone() passed after 0.563 seconds.
+✔ Suite TrackKeyboardTests passed after 3.085 seconds.
+✔ Test run with 23 tests in 5 suites passed after 3.085 seconds.

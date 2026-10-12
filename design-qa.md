@@ -74,3 +74,27 @@ No open questions or blocking polish findings.
 
 Installed the verified build, closed QA and ejected the disposable image. Only normal Deckhand
 remains open; [regular-app evidence](docs/images/library-evidence/65-progress-regular-app.png).
+
+---
+
+# Matches header refinement — October 12, 2026
+
+final result: passed
+
+## Target and comparison
+
+The supplied Matches screenshot and website record palette are the visual brief: make the pinned seed header feel special with color fading into the list, and simplify its filters. This is an intentional refinement, not a pixel-identical clone of the original gray header.
+
+[Native before/after comparison](docs/images/matches-header/comparison.jpg) was opened and inspected as one comparison input. Both captures are 4038×2310 @2x, with the same Peggy Gou seed, JIMBO CHILL destination, 6A, 125 BPM, All 50 and empty search. The main-pane header crop is (580,103)–(3430,445), 2850×342 pixels. Changed height and control placement are intentional. The website record image provides palette guidance; the task did not request a record illustration or album-art asset.
+
+## Required surfaces
+
+- **Typography:** retains native SF text; slightly larger semibold seed title and coral, tracked eyebrow establish hierarchy. Seed/artist/destination remain readable and single-line. No font substitution.
+- **Spacing/layout:** full-width background reaches both pane edges and fades before the table. Artist and A destination are grouped. Category chips and search align at the bottom. The removed filter row reduces clutter. Existing toolbar/table divider alignment is preserved.
+- **Colors/tokens:** drop coral, breakdown violet and waveform blue are the existing website/app palette. Low-opacity diagonal tint plus vertical mask keeps the dark table and white text readable; no animation is added.
+- **Image quality/assets:** native gradients and SF Symbol controls stay sharp at Retina density. No rasterized UI, new illustration or approximate brand mark was introduced.
+- **Copy/content:** seed title, artist, destination, count, key and BPM agree with the original view. Empty categories are deliberately dimmed/disabled, rather than implying an available result.
+
+## Findings and checks
+
+No P0/P1/P2 findings remain in the wide native target. Search was verified in the isolated native library, with one text field and no extra filter buttons. The 23 focused keyboard/model/table regression tests and standalone build passed. The compact layout reuses the existing adaptive TrackToolsLayout; no narrow-window visual verification is claimed. The user's normal library/preferences are restored and the updated Applications app is open.

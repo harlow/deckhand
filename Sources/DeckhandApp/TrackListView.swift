@@ -22,8 +22,10 @@ struct TrackListView: View {
         let rows = listing.rows
         VStack(spacing: 0) {
             if let matches = library.matches { matchesHeader(matches) }
-            else { header(listing) }
-            FilterBar(shown: rows.count, total: listing.base.count, genres: listing.genres)
+            else {
+                header(listing)
+                FilterBar(shown: rows.count, total: listing.base.count, genres: listing.genres)
+            }
             SyncNoticeBanner(library: library)
             if library.unavailableTracks > 0, library.selection == .all {
                 HStack {
@@ -79,19 +81,25 @@ struct TrackListView: View {
         .padding(.bottom, 6)
     }
 
-    /// This anchor stays above the scrolling table, even when a match starts playing.
+    /// A pinned discovery header, with the website's warm-to-violet palette fading into the list.
     private func matchesHeader(_ session: MatchSession) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
+        @Bindable var library = library
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 14) {
                 Button { library.endMatches() } label: { Image(systemName: "chevron.left") }
                     .buttonStyle(.plain).help("Back to \(library.title) · Esc")
                     .accessibilityLabel("Back to \(library.title)")
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("MATCHES FOR").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    Text(session.seed.title).font(.title3.bold()).lineLimit(1)
-                    Text(session.seed.artist).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("MATCHES FOR").font(.caption.weight(.semibold)).tracking(1.2)
+                        .foregroundStyle(Color.phrase(.drop).opacity(0.95))
+                    Text(session.seed.title).font(.title2.weight(.semibold)).lineLimit(1)
+                    HStack(spacing: 10) {
+                        Text(session.seed.artist).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                        Text(library.matchDestination.map { "A → \($0.name)" } ?? "A → Add to playlist")
+                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
                 }
-                Spacer()
+                Spacer(minLength: 12)
                 KeyChip(key: session.seed.key)
                 Text(session.seed.bpmText).monospacedDigit().foregroundStyle(.secondary)
                 Button { player.play(session.seed, artwork: library.artwork,
@@ -99,21 +107,40 @@ struct TrackListView: View {
                     Image(systemName: "play.fill")
                 }.buttonStyle(.plain).help("Play seed song").accessibilityLabel("Play seed song")
             }
-            HStack(spacing: 8) {
-                matchGroupButton("All \(session.tracks.count)", group: nil)
-                ForEach(MatchGroup.allCases) { group in
-                    let count = session.tracks.filter { $0.group == group }.count
-                    matchGroupButton("\(group.rawValue) \(count)", group: group)
-                }
-                Spacer()
-                Text(library.matchDestination.map { "A → \($0.name)" } ?? "A → Add to playlist")
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            // Discovery already ranks by key, tempo and energy. Keep only categories and search here.
+            TrackToolsLayout {
+                matchGroups(session)
+                SearchField(text: $library.filter.search)
             }
             if session.tracks.isEmpty {
                 Text("No matches yet. Analyze your music for key and tempo, or add more songs, then press M to try again.")
                     .font(.callout).foregroundStyle(.secondary)
             }
-        }.padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
+        }
+        .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 16)
+        .background {
+            LinearGradient(stops: [
+                .init(color: Color.phrase(.drop).opacity(0.22), location: 0),
+                .init(color: Color.phrase(.breakdown).opacity(0.20), location: 0.42),
+                .init(color: Color.waveLow.opacity(0.08), location: 0.76),
+                .init(color: .clear, location: 1),
+            ], startPoint: .topLeading, endPoint: .bottomTrailing)
+            .mask(LinearGradient(colors: [.white, .white.opacity(0.75), .clear],
+                                 startPoint: .top, endPoint: .bottom))
+            .allowsHitTesting(false)
+        }
+    }
+
+    private func matchGroups(_ session: MatchSession) -> some View {
+        HStack(spacing: 8) {
+            matchGroupButton("All \(session.tracks.count)", group: nil)
+            ForEach(MatchGroup.allCases) { group in
+                let count = session.tracks.filter { $0.group == group }.count
+                matchGroupButton("\(group.rawValue) \(count)", group: group)
+                    .disabled(count == 0)
+                    .opacity(count == 0 ? 0.45 : 1)
+            }
+        }.fixedSize()
     }
 
     private func matchGroupButton(_ title: String, group: MatchGroup?) -> some View {
