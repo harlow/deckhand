@@ -153,7 +153,13 @@ struct SidebarView: View {
             })
             .overlay(alignment: over == .before ? .top : .bottom) {
                 if over == .before || over == .after {
-                    Rectangle().fill(Color.accentColor).frame(height: 2)
+                    HStack(spacing: 0) {
+                        Circle().fill(.background)
+                            .overlay { Circle().strokeBorder(Color.accentColor, lineWidth: 2) }
+                            .frame(width: 8, height: 8)
+                        Rectangle().fill(Color.accentColor).frame(height: 2)
+                    }
+                        .frame(height: 2)
                         .padding(.leading, 8 + CGFloat(e.depth + (over == .after && e.playlist.isFolder && library.isFolderExpanded(e.playlist.id) ? 1 : 0)) * 14)
                         .allowsHitTesting(false)
                 }
