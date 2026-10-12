@@ -23,6 +23,7 @@ require Shift unless the Shift symbol is shown. Quick Rate has its own contextua
 | Show / hide help | ? or Command+/ | Native app, including Command+/ while editing search |
 | Close help / cancel | Escape | Native overlay and playlist picker |
 | Collapse multiple selected songs | Escape | Native five-song selection returns to one; open filter closes first and keeps all five selected. AppKit tests cover workspace, editor, help, sheet, and menu priority |
+| Remove selected songs from the playlist | Delete, then Enter | Native isolated playlist: Escape keeps 3 songs; Enter removes Song 2, leaving 2 in the playlist and all 3 in the library |
 
 Navigation and song commands work across the workspace while text editors and modal
 dialogs retain their keyboard input. Arrow keys retain normal focus behavior. H/L seek

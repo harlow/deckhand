@@ -125,7 +125,9 @@ struct TrackListView: View {
                 selection.subtract(ids)
                 removing = []
             }
+            .keyboardShortcut(.defaultAction)
             Button("Cancel", role: .cancel) { removing = [] }
+                .keyboardShortcut(.cancelAction)
         } message: {
             Text("They stay in your library.")
         }
