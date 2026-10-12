@@ -26,6 +26,9 @@ Previous, replacing the playing list, standalone previews, explicit queued playb
 reset, and stale callbacks. These tests do not use the user's library or USB files.
 
 The standalone arm64 bundle passed its runtime dependency and code-signature checks
-and was installed in Applications. Native UI verification was blocked before app
-startup by macOS security policy for the unsigned build. No library or USB data was
-changed, and normal app preferences were restored after the attempted fixture launch.
+and was installed in Applications. After the user opened the unsigned build,
+native UI verification passed using the isolated Keyboard Test library: Song 1
+finished and Song 2 started automatically while Target Playlist was being browsed;
+Up Next showed Song 3 as the next song in the original list. Evidence was captured
+at `/tmp/deckhand-continuous-playback.jpg`. No user library or USB data was changed,
+and normal app preferences were restored after the fixture check.
