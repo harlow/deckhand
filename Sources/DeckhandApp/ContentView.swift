@@ -9,12 +9,12 @@ struct ContentView: View {
     @ViewBuilder private var titleMark: some View {
         if #available(macOS 15, *) {
             HStack(spacing: 7) {
-                PlatterMark(mono: true).frame(width: 18, height: 18)
+                PlatterMark().frame(width: 18, height: 18)
                 Text(DeckhandApp.displayName).font(.headline)
             }
             .padding(.leading, 4)
         } else {
-            PlatterMark(mono: true).frame(width: 18, height: 18).padding(.leading, 4)
+            PlatterMark().frame(width: 18, height: 18).padding(.leading, 4)
         }
     }
 
