@@ -1,0 +1,75 @@
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/17] Write sources
+[3/17] Write swift-version--58304C5D6DBC2206.txt
+[5/9] Compiling DeckhandApp TrackListView.swift
+[6/9] Emitting module DeckhandApp
+[7/10] Compiling DeckhandApp ContentView.swift
+[7/12] Write Objects.LinkFileList
+[8/12] Linking DeckhandApp
+[9/12] Applying DeckhandApp
+[11/13] Emitting module DeckhandAppTests
+[11/13] Write Objects.LinkFileList
+[12/13] Linking DeckhandPackageTests
+Build complete! (5.98s)
+Test Suite 'Selected tests' started at 2026-10-12 11:04:09.642.
+Test Suite 'DeckhandPackageTests.xctest' started at 2026-10-12 11:04:09.643.
+Test Suite 'DeckhandPackageTests.xctest' passed at 2026-10-12 11:04:09.643.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'Selected tests' passed at 2026-10-12 11:04:09.643.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+◇ Test run started.
+↳ Testing Library Version: 1743
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite KeyboardHelpTests started.
+◇ Suite TrackKeyboardTests started.
+◇ Suite MatchesTableTests started.
+◇ Suite TrackListingTests started.
+◇ Test reusesPreviousOrderOnlyWhileItStillHolds() started.
+◇ Test returningFromLongMatchesListPreservesOriginalSongSelection() started.
+◇ Test emptyFilterKeepsEverything() started.
+◇ Test filtersBySearchKeyAndRating() started.
+◇ Test navigatesFromOtherControlsAndDoesNotDispatchTwice() started.
+◇ Test mixesWithPlayingUsesKeyAndTempo() started.
+◇ Test sortsNaturallyByTitle() started.
+◇ Test opensFromControlsAndRestoresFocusWithoutPlaying() started.
+✔ Test reusesPreviousOrderOnlyWhileItStillHolds() passed after 0.001 seconds.
+✔ Test mixesWithPlayingUsesKeyAndTempo() passed after 0.001 seconds.
+✔ Test emptyFilterKeepsEverything() passed after 0.001 seconds.
+✔ Test filtersBySearchKeyAndRating() passed after 0.002 seconds.
+✔ Test sortsNaturallyByTitle() passed after 0.002 seconds.
+✔ Suite TrackListingTests passed after 0.003 seconds.
+✔ Test returningFromLongMatchesListPreservesOriginalSongSelection() passed after 0.227 seconds.
+✔ Suite MatchesTableTests passed after 0.227 seconds.
+✔ Test opensFromControlsAndRestoresFocusWithoutPlaying() passed after 0.235 seconds.
+✔ Test navigatesFromOtherControlsAndDoesNotDispatchTwice() passed after 0.235 seconds.
+◇ Test navigationDoesNotStealTypingOrQuickRateSectionKeys() started.
+◇ Test removedShiftLetterNavigationStaysInactiveAndPlainNavigationStopsAtEdges() started.
+✔ Test removedShiftLetterNavigationStaysInactiveAndPlainNavigationStopsAtEdges() passed after 0.062 seconds.
+◇ Test escapeCollapsesMultipleSongsToFirstSelectedSong() started.
+✔ Test navigationDoesNotStealTypingOrQuickRateSectionKeys() passed after 0.063 seconds.
+◇ Test sheetsAndOtherWindowsKeepTheirKeyboardInput() started.
+✔ Test escapeCollapsesMultipleSongsToFirstSelectedSong() passed after 0.584 seconds.
+◇ Test escapeLeavesEditorsHelpAndSheetsInCharge() started.
+✔ Test sheetsAndOtherWindowsKeepTheirKeyboardInput() passed after 0.588 seconds.
+◇ Test commandHelpRestoresTheSearchFieldEditorAndInsertionPoint() started.
+✔ Test escapeLeavesEditorsHelpAndSheetsInCharge() passed after 0.576 seconds.
+◇ Test escapeLeavesTrackingMenusInChargeUntilTheyClose() started.
+✔ Test commandHelpRestoresTheSearchFieldEditorAndInsertionPoint() passed after 0.597 seconds.
+◇ Test matchesEscapeRespectsHelpEditorsMenusAndSheets() started.
+✔ Test escapeLeavesTrackingMenusInChargeUntilTheyClose() passed after 0.040 seconds.
+◇ Test dispatchesEveryCleanSongShortcutAndRejectsRemovedAliases() started.
+✔ Test matchesEscapeRespectsHelpEditorsMenusAndSheets() passed after 0.573 seconds.
+◇ Test helpFocusBlocksTableNavigationBehindOverlay() started.
+✔ Test dispatchesEveryCleanSongShortcutAndRejectsRemovedAliases() passed after 0.575 seconds.
+◇ Test leavesSearchAndNameEditorsAlone() started.
+✔ Test helpFocusBlocksTableNavigationBehindOverlay() passed after 0.025 seconds.
+✔ Suite KeyboardHelpTests passed after 2.084 seconds.
+✔ Test leavesSearchAndNameEditorsAlone() passed after 0.022 seconds.
+◇ Test ignoresModifiedKeysOtherWindowsAndHiddenLists() started.
+✔ Test ignoresModifiedKeysOtherWindowsAndHiddenLists() passed after 0.012 seconds.
+◇ Test leavesSheetsAlone() started.
+✔ Test leavesSheetsAlone() passed after 0.566 seconds.
+✔ Suite TrackKeyboardTests passed after 2.677 seconds.
+✔ Test run with 21 tests in 4 suites passed after 2.678 seconds.

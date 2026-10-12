@@ -15,3 +15,9 @@ The gradient is static, contains no image assets, and does not capture pointer i
 - [Before/after comparison](../images/matches-header/comparison.jpg), [finished header](../images/matches-header/after.jpg).
 
 The native visual comparison covers the supplied wide-window target. The narrower layout uses the existing adaptive workspace layout; no native narrow-window capture is claimed.
+
+## Shared playlist headers — October 12, 2026
+
+The accepted gradient now also spans ordinary playlist headers and their filtering tools. A PLAYLIST eyebrow distinguishes the playlist name from MATCHES FOR. All Tracks/Needs Analysis use LIBRARY, and a selected folder uses FOLDER. Playlist names use the same semibold title style; the track/time/USB summary stays on its existing title row. Normal filters, Quick Rate and search remain, with their horizontal insets aligned to the title. Both modes use one shared gradient definition.
+
+The standalone build passed, and [21 focused listing, table, keyboard and overlay tests passed](validation-evidence/playlist-header-tests.log). Native Applications verification showed PLAYLIST / JIMBO CHILL / 144 tracks, the retained Key/BPM/Quick Rate/search controls, a working key-wheel popover and keyboard search. The regular library was used for read-only UI checks; no playlists or USB contents were edited. The app remains open with the updated build.

@@ -23,8 +23,12 @@ struct TrackListView: View {
         VStack(spacing: 0) {
             if let matches = library.matches { matchesHeader(matches) }
             else {
-                header(listing)
-                FilterBar(shown: rows.count, total: listing.base.count, genres: listing.genres)
+                VStack(spacing: 0) {
+                    header(listing)
+                    FilterBar(shown: rows.count, total: listing.base.count, genres: listing.genres)
+                }
+                .padding(.bottom, 8)
+                .background { headerBackground }
             }
             SyncNoticeBanner(library: library)
             if library.unavailableTracks > 0, library.selection == .all {
@@ -65,20 +69,36 @@ struct TrackListView: View {
         }
     }
 
-    /// The title and summary stay above the filtering tools.
+    /// Playlist and discovery views share one header treatment; everyday filters stay available.
     private func header(_ listing: TrackListing) -> some View {
-        return HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
+            let eyebrow = library.selectedPlaylist.map { $0.isFolder ? "FOLDER" : "PLAYLIST" } ?? "LIBRARY"
+            Text(eyebrow).font(.caption.weight(.semibold)).tracking(1.2)
+                .foregroundStyle(Color.phrase(.drop).opacity(0.95))
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(library.title).font(.title3.bold()).lineLimit(1)
+                Text(library.title).font(.title2.weight(.semibold)).lineLimit(1)
                 if library.loadState == .loaded {
                     Text(summary(listing)).font(.callout).foregroundStyle(.secondary).lineLimit(1)
                 }
+                Spacer(minLength: 12)
             }
-            Spacer(minLength: 12)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 16)
+    }
+
+    private var headerBackground: some View {
+        LinearGradient(stops: [
+            .init(color: Color.phrase(.drop).opacity(0.22), location: 0),
+            .init(color: Color.phrase(.breakdown).opacity(0.20), location: 0.42),
+            .init(color: Color.waveLow.opacity(0.08), location: 0.76),
+            .init(color: .clear, location: 1),
+        ], startPoint: .topLeading, endPoint: .bottomTrailing)
+        .mask(LinearGradient(colors: [.white, .white.opacity(0.75), .clear],
+                             startPoint: .top, endPoint: .bottom))
+        .allowsHitTesting(false)
     }
 
     /// A pinned discovery header, with the website's warm-to-violet palette fading into the list.
@@ -118,17 +138,7 @@ struct TrackListView: View {
             }
         }
         .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 16)
-        .background {
-            LinearGradient(stops: [
-                .init(color: Color.phrase(.drop).opacity(0.22), location: 0),
-                .init(color: Color.phrase(.breakdown).opacity(0.20), location: 0.42),
-                .init(color: Color.waveLow.opacity(0.08), location: 0.76),
-                .init(color: .clear, location: 1),
-            ], startPoint: .topLeading, endPoint: .bottomTrailing)
-            .mask(LinearGradient(colors: [.white, .white.opacity(0.75), .clear],
-                                 startPoint: .top, endPoint: .bottom))
-            .allowsHitTesting(false)
-        }
+        .background { headerBackground }
     }
 
     private func matchGroups(_ session: MatchSession) -> some View {
@@ -523,7 +533,7 @@ struct FilterBar: View {
                 SearchField(text: $library.filter.search)
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 20)
         .padding(.bottom, 8)
     }
 
