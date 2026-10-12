@@ -14,7 +14,7 @@ require Shift unless the Shift symbol is shown. Quick Rate has its own contextua
 | Play / pause | Space | Native app and player tests |
 | Jump to playing song's start | H | Native app; paused transport remains paused |
 | Jump to pre-drop preview | L | Native app; test drop at 32s previews from 24s |
-| Back / forward 16 bars | Shift+H / Shift+L | Native app and beat-grid tests; 64 beats on a four-beat bar grid |
+| Back / forward 8 bars | Shift+H / Shift+L | Native app and beat-grid tests; 32 beats on a four-beat bar grid |
 | Rate 1–5 stars | Option+1–5 | Each value verified in native app using an isolated local library |
 | Clear rating | Option+0 | Native app; persisted rating cleared |
 | Jump to hot cues 1–5 | 1–5 | All five verified at 0s, 32s, 64s, 80s and 96s in the generated track |
@@ -50,7 +50,7 @@ mode-specific shortcuts remain; native testing confirmed cue 8 and its contextua
 - Opening help while editing search now restores the text field and insertion point;
   native testing typed `Song`, opened/closed help, then appended ` 2` successfully.
 - Player tests use generated silent WAVs with synthetic analysis and five hot cues.
-  They verify 64-beat seeks, boundary clamping, playback toggles and pause preservation.
+  They verify 32-beat seeks, boundary clamping, playback toggles and pause preservation.
 - The native walkthrough used only the generated library, playlists and analysis.
   Ratings and playlist membership were read back from its local database after restart.
 - Read-only fingerprints confirmed the real library's tracks, playlists, sources and

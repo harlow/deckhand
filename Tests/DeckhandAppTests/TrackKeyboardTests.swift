@@ -153,7 +153,7 @@ import SwiftUI
             let keys: [(String, NSEvent.ModifierFlags, UInt16, TrackCommand)] = [
                 ("\r", [], 36, .play(fromMixIn: false)), (" ", [], 49, .togglePlay),
                 ("h", [], 4, .songStart), ("l", [], 37, .preview),
-                ("H", .shift, 4, .beats(-64)), ("L", .shift, 37, .beats(64)),
+                ("H", .shift, 4, .beats(-32)), ("L", .shift, 37, .beats(32)),
                 ("a", [], 0, .addToPlaylist), ("/", [], 44, .search), ("?", .shift, 44, .help),
             ] + (1...5).map { (String($0), [], UInt16(18 + $0), .hotCue($0)) }
               + (0...5).map { (String($0), .option, UInt16(18 + $0), .rate($0)) }

@@ -57,7 +57,7 @@ release and replace the app to update. Your saved library stays in Application S
 - **Playlists and ratings, saved locally.** Keep them across source changes and restarts. Explicitly sync
   playlist copies and edited ratings to Music, export Rekordbox XML, or send them to a drive.
 - **Quick Rate.** Plays each unrated track from just before its first drop. One key rates it and moves on.
-- **Keyboard first.** Browse, preview, queue and rate without touching the mouse.
+- **Keyboard first.** Browse, preview, organize and rate without touching the mouse.
 - **A Mac app and a CLI.** Use the SwiftUI app, or script everything with `deckhand`.
 
 Press **?** or **⌘/** to open the keyboard shortcut overlay, or choose **Help → Keyboard Shortcuts**.
@@ -65,7 +65,7 @@ Press **Esc** or **?** again to close it. **[ / ]** switches playlists;
 **k / j** moves up / down through songs, **Enter** plays the selection, and **Space** toggles
 playback. These single-key shortcuts leave search and playlist-name typing alone.
 **H** jumps to the playing song’s start, **L** to its pre-drop preview, and **Shift+H / Shift+L**
-jumps back / forward 16 bars (64 beats). **A** adds the selected songs to a playlist;
+jumps back / forward 8 bars (32 beats). **A** adds the selected songs to a playlist;
 **1–5** jumps to hot cues and **Option+1–5 / Option+0** rates / clears ratings.
 
 ![Deckhand keyboard shortcuts](docs/images/keyboard-shortcuts.png)

@@ -415,8 +415,8 @@ final class KeyTableView: NSTableView {
         default: break
         }
         switch text.lowercased() {
-        case "h": return shift ? .beats(-64) : .songStart // 16 four-beat bars.
-        case "l": return shift ? .beats(64) : .preview
+        case "h": return shift ? .beats(-32) : .songStart // 8 four-beat bars.
+        case "l": return shift ? .beats(32) : .preview
         case "a" where !shift: return .addToPlaylist
         case "1" where !shift, "2" where !shift, "3" where !shift, "4" where !shift, "5" where !shift: return .hotCue(Int(text)!)
         case "/" where !shift: return .search

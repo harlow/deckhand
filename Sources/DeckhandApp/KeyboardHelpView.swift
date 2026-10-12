@@ -151,7 +151,7 @@ struct KeyboardHelpView: View {
                         section("Playback", [
                             ("Enter", "Play selected song"), ("Space", "Play / pause"),
                             ("H", "Jump to song start"), ("L", "Jump to pre-drop preview"),
-                            ("⇧H", "Back 16 bars"), ("⇧L", "Forward 16 bars"),
+                            ("⇧H", "Back 8 bars"), ("⇧L", "Forward 8 bars"),
                         ])
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)

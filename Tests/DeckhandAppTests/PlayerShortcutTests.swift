@@ -69,9 +69,9 @@ import Testing
         player.pause()
         #expect(!player.isPlaying)
         player.seek(seconds: 80)
-        player.jumpBeats(-64)
-        #expect(abs(player.time - 48) < 0.01)
-        player.jumpBeats(64)
+        player.jumpBeats(-32)
+        #expect(abs(player.time - 64) < 0.01) // 8 bars at 120 BPM is 16 seconds.
+        player.jumpBeats(32)
         #expect(abs(player.time - 80) < 0.01)
         player.jumpToPreview()
         #expect(abs(player.time - 24) < 0.01) // 16 beats before the first drop at 32 seconds.
@@ -84,10 +84,10 @@ import Testing
             #expect(!player.isPlaying)
         }
         player.seek(to: 0)
-        player.jumpBeats(-64)
+        player.jumpBeats(-32)
         #expect(player.time == 0)
         player.seek(seconds: 170)
-        player.jumpBeats(64)
+        player.jumpBeats(32)
         #expect(player.time <= player.duration)
         player.toggle()
         #expect(player.isPlaying)
