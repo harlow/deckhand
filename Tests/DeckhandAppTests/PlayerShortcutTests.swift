@@ -146,10 +146,13 @@ import Testing
         key("j", code: 38)
         #expect(model.trackSelection == [listed[1].id] && player.current?.id == first.id)
         key("l", code: 37)
-        for _ in 0..<100 where player.detail == nil { try await Task.sleep(for: .milliseconds(10)) }
         #expect(player.current?.id == listed[1].id && player.isPlaying)
-        #expect(abs(player.time - 24) < 0.5)
         #expect(player.nextInList?.id == listed[2].id)
+        // Freeze playback before awaiting analysis: a busy CI runner can otherwise advance the
+        // audio clock while other tests occupy the main actor, even when the seek was correct.
+        player.pause()
+        for _ in 0..<100 where player.detail == nil { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(abs(player.time - 24) < 0.01)
 
         // L also starts a paused selected song; an empty selection retains the current-song fallback.
         player.pause(); player.seek(seconds: 80)
