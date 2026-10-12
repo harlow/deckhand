@@ -6,6 +6,9 @@ import CamelotWheel from "../components/CamelotWheel.astro";
 import { camelotColor } from "../lib/camelot";
 
 const github = "https://github.com/harlow/deckhand";
+// Link to a published beta explicitly; prereleases don't become GitHub's stable "latest" release.
+const download = `${github}/releases/download/v0.1.0-beta.1/Deckhand-arm64.dmg`;
+const installationHelp = "https://support.apple.com/en-us/102445";
 
 const ticker = [
   ["8A", "124 BPM", "Deep House"],
@@ -97,6 +100,12 @@ const faqs = [
     a: "Your playlist edits and ratings save locally in Deckhand. Sending playlists back to Apple Music is an explicit export; importing music doesn't change your Apple Music library.",
   },
   {
+    q: "Why does macOS warn when opening Deckhand?",
+    a: "This first beta is an unsigned preview. Apple Developer ID signing and notarization are pending, so macOS may block a downloaded copy from opening. Follow Apple's guidance if you choose to open this preview.",
+    link: installationHelp,
+    linkLabel: "Apple's instructions for opening downloaded apps →",
+  },
+  {
     q: "What does it cost?",
     a: "Nothing. Deckhand is free and open source (GPL-3.0). It requires an Apple Silicon Mac running macOS 26 (Tahoe) or later. No Homebrew or extra software to install.",
   },
@@ -117,8 +126,8 @@ const faqs = [
         <a href="#how" class="transition hover:text-white">How it works</a>
         <a href="#faq" class="transition hover:text-white">FAQ</a>
       </div>
-      <a href={github} class="rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:bg-amber">
-        Get Deckhand
+      <a href={download} class="rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:bg-amber">
+        Download beta
       </a>
     </nav>
   </header>
@@ -147,8 +156,8 @@ const faqs = [
           Rekordbox XML into one library, saved locally in Deckhand.
         </p>
         <div class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <a href={github} class="group inline-flex items-center gap-2 rounded-full bg-amber px-6 py-3 font-semibold text-ink shadow-[0_0_40px_-8px_var(--color-amber)] transition hover:scale-[1.03]">
-            Get it for Mac
+          <a href={download} class="group inline-flex items-center gap-2 rounded-full bg-amber px-6 py-3 font-semibold text-ink shadow-[0_0_40px_-8px_var(--color-amber)] transition hover:scale-[1.03]">
+            Download beta for Mac
             <span class="transition group-hover:translate-x-0.5">→</span>
           </a>
           <a href="#how" class="inline-flex items-center gap-2 rounded-full border border-white/15 px-6 py-3 font-semibold text-white/80 transition hover:border-white/40 hover:text-white">
@@ -156,6 +165,10 @@ const faqs = [
           </a>
         </div>
         <p class="mt-4 text-xs text-white/40">Free and open source · Apple Silicon · macOS 26+</p>
+        <p class="mt-2 text-xs text-white/55">
+          Unsigned preview · Apple signing pending.
+          <a href="#faq" class="underline underline-offset-4 transition hover:text-white">Installation help</a>
+        </p>
 
         <!-- Deck mock -->
         <div class="relative mx-auto mt-20 max-w-5xl">
@@ -445,6 +458,7 @@ const faqs = [
               <span class="text-2xl font-normal text-amber transition group-open:rotate-45">+</span>
             </summary>
             <p class="mt-3 text-white/55">{f.a}</p>
+            {"link" in f && <a href={f.link} class="mt-3 inline-block text-sm text-amber underline underline-offset-4 transition hover:text-white">{f.linkLabel}</a>}
           </details>
         ))}
       </div>
@@ -457,10 +471,11 @@ const faqs = [
         <h2 class="mx-auto mt-6 max-w-2xl font-display text-4xl font-bold tracking-tight text-balance sm:text-6xl">
           Spend your time on the mix, not the export.
         </h2>
-        <a href={github} class="mt-10 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 font-semibold text-ink transition hover:bg-amber">
-          Get Deckhand for Mac →
+        <a href={download} class="mt-10 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 font-semibold text-ink transition hover:bg-amber">
+          Download beta for Mac →
         </a>
         <p class="mt-4 text-sm text-white/50">Requires Apple Silicon and macOS 26 (Tahoe) or later.</p>
+        <p class="mt-2 text-xs text-white/55">Unsigned preview · Apple signing and notarization pending.</p>
       </div>
     </section>
   </main>
@@ -469,6 +484,7 @@ const faqs = [
     <div class="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-10 text-sm text-white/40 sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <div class="flex items-center gap-2"><Logo class="size-5" /><span class="font-semibold text-white/70">Deckhand</span> · Free and open source (GPL-3.0)</div>
       <div>Not affiliated with AlphaTheta, Pioneer DJ or Apple.</div>
+      <a href={github} class="transition hover:text-white">Source on GitHub →</a>
     </div>
   </footer>
 </Layout>

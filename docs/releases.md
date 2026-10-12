@@ -43,9 +43,30 @@ a new version. An older stable release cannot replace a newer stable download.
 There is deliberately no automatic updater in this version. Users install a newer DMG
 over the existing app; their library and analysis remain in Application Support.
 
+## First unsigned beta
+
+`v0.1.0-beta.1` was explicitly published as an **unsigned, unnotarized preview** from
+commit `aed513fd6e521345eb14d6494afd05498ea08416`, after its CI passed. Its GitHub
+release is marked prerelease and does not move the stable latest-download link.
+The verified DMG, matching source, manifest, notes and checksums were uploaded to a
+draft, checked against GitHub's SHA-256 digests and sizes, then published.
+
+This is a deliberate exception to the notarized publishing route below. The normal
+`release.py publish` command and tag workflow still require Apple signing. Another
+unsigned beta must use a new version/build and tag, verified clean preview artifacts,
+explicit unsigned-preview release notes, draft asset verification, and GitHub's
+prerelease flag with latest disabled. Published assets must never be overwritten.
+
+The homepage and README link to this exact published beta and state that Apple signing
+is pending. When releasing a new beta, update those links only after its assets are
+published. Once a notarized stable release exists, switch them to the stable latest URL.
+The Release workflow recognizes an already-published unsigned beta and verifies its
+tag, clean manifest, uploaded digests and mounted installer without importing signing
+credentials or replacing assets. Unpublished normal releases still require notarization.
+
 ## Signing setup: once
 
-A public release requires an Apple Developer account with a **Developer ID Application**
+A notarized release requires an Apple Developer account with a **Developer ID Application**
 certificate and its private key, plus notarization credentials. No signing identity is
 installed on the current development Mac yet. Never put certificate material or passwords
 in the repository, release notes, issue comments or build logs.

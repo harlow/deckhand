@@ -24,6 +24,7 @@ jobs:
     env:
       PREVIEW: ${{ github.event_name == 'workflow_dispatch' && inputs.preview }}
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      PUBLISHED_PREVIEW: 'false'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -34,8 +35,56 @@ jobs:
         run: |
           python3 Scripts/release.py check --tag "$RELEASE_TAG" --require-clean
           python3 -m unittest discover -s Tests/ReleaseTests -v
-      - name: Configure temporary signing keychain
+      - name: Verify an already-published unsigned beta
         if: env.PREVIEW != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess, sys, tempfile
+          def run(*args):
+              return subprocess.check_output(args, text=True).strip()
+          config = json.loads(pathlib.Path("release.json").read_text())
+          repo, tag = config["repository"], os.environ["RELEASE_TAG"]
+          lookup = subprocess.run(["gh", "api", f"repos/{repo}/releases/tags/{tag}"], text=True, capture_output=True)
+          if lookup.returncode:
+              if "HTTP 404" in lookup.stderr:
+                  sys.exit(0)  # Unpublished tags continue through signing and notarization.
+              raise RuntimeError(lookup.stderr)
+          release = json.loads(lookup.stdout)
+          with tempfile.TemporaryDirectory(prefix="deckhand-published-preview-") as temporary:
+              out = pathlib.Path(temporary)
+              run("gh", "release", "download", tag, "--repo", repo, "--dir", temporary,
+                  "--pattern", "release-manifest.json")
+              manifest = json.loads((out / "release-manifest.json").read_text())
+              if manifest["distribution"] != "local-preview":
+                  sys.exit(0)
+              if release["draft"] or not release["prerelease"] or "-beta." not in config["version"]:
+                  raise ValueError("Unsigned downloads must be explicitly published as beta prereleases")
+              if manifest["dirty"] or manifest["commit"] != run("git", "rev-parse", "HEAD"):
+                  raise ValueError("Published preview must match this clean tagged commit")
+              if manifest["minimumOS"] != "26.0" or manifest["architecture"] != "arm64":
+                  raise ValueError("Published preview has unexpected platform requirements")
+              names = {"Deckhand-arm64.dmg", f"Deckhand-{config['version']}-source.tar.gz",
+                       "release-notes.md", "release-manifest.json", "SHA256SUMS.txt"}
+              assets = {asset["name"]: asset for asset in release["assets"]}
+              if set(assets) != names:
+                  raise ValueError("Published preview has unexpected or missing assets")
+              for name in names - {"release-manifest.json"}:
+                  run("gh", "release", "download", tag, "--repo", repo, "--dir", temporary, "--pattern", name)
+              for name in names:
+                  path = out / name
+                  sha = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+                  if assets[name]["size"] != path.stat().st_size or assets[name].get("digest") != sha:
+                      raise ValueError(f"Published asset verification failed: {name}")
+              # Verify checksums, source/notes/version and the actual mounted standalone installer.
+              run(sys.executable, "Scripts/release.py", "validate-artifacts", "--artifacts", temporary)
+          with open(os.environ["GITHUB_ENV"], "a") as env:
+              env.write("PUBLISHED_PREVIEW=true\n")
+          print("Verified existing unsigned beta; Apple notarization remains required for new normal releases.")
+          PY
+      - name: Configure temporary signing keychain
+        if: env.PREVIEW != 'true' && env.PUBLISHED_PREVIEW != 'true'
         env:
           SIGN_IDENTITY: ${{ secrets.DECKHAND_SIGN_IDENTITY }}
           CERTIFICATE_BASE64: ${{ secrets.DECKHAND_CERTIFICATE_BASE64 }}
@@ -70,16 +119,19 @@ jobs:
             echo "DECKHAND_NOTARY_KEYCHAIN=$keychain_path"
           } >> "$GITHUB_ENV"
       - name: Verify public signing prerequisites before building
-        if: env.PREVIEW != 'true'
+        if: env.PREVIEW != 'true' && env.PUBLISHED_PREVIEW != 'true'
         run: python3 Scripts/release.py preflight --public
       - name: Install build-only pkg-config
+        if: env.PUBLISHED_PREVIEW != 'true'
         run: command -v pkg-config || brew install pkg-config
       - name: Run Swift tests with the shipped database engine
+        if: env.PUBLISHED_PREVIEW != 'true'
         run: |
           Scripts/build-sqlcipher.sh
           export PKG_CONFIG_PATH="$PWD/.build-release-deps/prefix/lib/pkgconfig"
           swift test --scratch-path .build-standalone --force-resolved-versions
       - name: Package and verify the installer
+        if: env.PUBLISHED_PREVIEW != 'true'
         run: |
           if [[ "$PREVIEW" == true ]]; then
             Scripts/package-release.sh
@@ -87,6 +139,7 @@ jobs:
             Scripts/package-release.sh --public
           fi
       - name: Preserve artifacts for inspection
+        if: env.PUBLISHED_PREVIEW != 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Deckhand-${{ github.run_id }}
@@ -99,12 +152,12 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Publish verified assets through a draft GitHub release
-        if: env.PREVIEW != 'true'
+        if: env.PREVIEW != 'true' && env.PUBLISHED_PREVIEW != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 Scripts/release.py publish
       - name: Preserve notarization diagnostics on failure
-        if: failure() && env.PREVIEW != 'true'
+        if: failure() && env.PREVIEW != 'true' && env.PUBLISHED_PREVIEW != 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Deckhand-notary-diagnostics-${{ github.run_id }}
@@ -112,7 +165,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
       - name: Remove temporary signing keychain
-        if: always() && env.PREVIEW != 'true'
+        if: always() && env.PREVIEW != 'true' && env.PUBLISHED_PREVIEW != 'true'
         run: |
           security delete-keychain "$RUNNER_TEMP/deckhand-signing.keychain-db" || true
           rm -f "$RUNNER_TEMP/deckhand-signing.p12"

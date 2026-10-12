@@ -15,7 +15,10 @@ and hot cues already set. Playlists and ratings save in Deckhand; audio stays in
 
 Free and open source · Apple Silicon · macOS 26+
 
-**Public Mac download coming soon.** The first beta is awaiting Apple signing and notarization.
+**[Download the Mac beta](https://github.com/harlow/deckhand/releases/download/v0.1.0-beta.1/Deckhand-arm64.dmg)** · [Release notes](https://github.com/harlow/deckhand/releases/tag/v0.1.0-beta.1)
+
+This is an **unsigned preview**. Apple signing and notarization are pending, so macOS may block
+a downloaded copy on first launch. See [Apple's guidance for opening downloaded apps](https://support.apple.com/en-us/102445).
 
 ![Deckhand](docs/images/app.png)
 
@@ -28,10 +31,9 @@ Music / Rekordbox XML / Folders  →  Deckhand library  →  USB  →  the decks
 Requires an **Apple Silicon Mac running macOS 26 or newer**. No Homebrew, Python,
 FFmpeg or developer tools needed.
 
-The first public beta is being prepared. Downloads and release notes will appear on
-[GitHub Releases](https://github.com/harlow/deckhand/releases). For a published release:
+Downloads and release notes are on [GitHub Releases](https://github.com/harlow/deckhand/releases).
 
-1. Download `Deckhand-arm64.dmg`, open it and drag Deckhand into Applications.
+1. [Download `Deckhand-arm64.dmg`](https://github.com/harlow/deckhand/releases/download/v0.1.0-beta.1/Deckhand-arm64.dmg), open it and drag Deckhand into Applications.
 2. Import tracks and playlists from Apple Music, Rekordbox XML or a folder.
 3. Check the playlists you want on your drive, then click **Sync**.
 
