@@ -360,6 +360,12 @@ final class KeyTableView: NSTableView {
             window.makeFirstResponder(self)
             return true
         }
+        if let delta = pageNavigationDelta(event) {
+            guard numberOfRows > 0 else { return false }
+            movePage(delta)
+            window.makeFirstResponder(self)
+            return true
+        }
         if let delta = Self.navigationDelta(event) {
             guard numberOfRows > 0 else { return false }
             move(delta, extend: event.modifierFlags.contains(.shift))
@@ -384,6 +390,7 @@ final class KeyTableView: NSTableView {
 
     override func keyDown(with event: NSEvent) {
         if collapseSelection(with: event) { return }
+        if let delta = pageNavigationDelta(event) { movePage(delta); return }
         if let delta = Self.navigationDelta(event) {
             move(delta, extend: event.modifierFlags.contains(.shift))
             return
@@ -477,6 +484,30 @@ final class KeyTableView: NSTableView {
             selectRowIndexes([target], byExtendingSelection: false)
         }
         scrollRowToVisible(target)
+    }
+
+    private func pageNavigationDelta(_ event: NSEvent) -> Int? {
+        guard event.type == .keyDown,
+              event.modifierFlags.intersection([.command, .option, .control, .shift]) == .control else { return nil }
+        switch event.charactersIgnoringModifiers?.lowercased() {
+        case "j": return 1
+        case "k": return -1
+        default:
+            // Control can produce newline/vertical-tab characters rather than the letter.
+            switch event.keyCode {
+            case 38: return 1
+            case 40: return -1
+            default: return nil
+            }
+        }
+    }
+
+    private func movePage(_ direction: Int) {
+        guard numberOfRows > 0 else { return }
+        let stride = max(1, rowHeight + intercellSpacing.height)
+        let page = max(1, Int(visibleRect.height / stride))
+        let from = direction > 0 ? (selectedRowIndexes.last ?? 0) : (selectedRowIndexes.first ?? 0)
+        select(max(0, min(numberOfRows - 1, from + direction * page)))
     }
 
     private func select(_ row: Int) {

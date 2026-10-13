@@ -9,6 +9,10 @@ Reversing direction shrinks the range and can extend across the starting row. Pl
 Escape, a mouse selection or switching lists starts a new range; editors, sheets, help
 and open menus retain their keys. AppKit regression tests cover these boundaries.
 
+Control+J/K moves down/up by the number of full song rows that fit in the visible table.
+It selects one destination row and scrolls it into view, stops at the list edges, and
+adapts when the window is resized. A page jump starts a new Shift-selection range.
+
 Search and playlist name fields retain normal text entry. Sheets, popovers, settings windows, modified shortcuts (Command, Option or Control), and hidden track lists retain their own keyboard behavior. Arrow keys retain their normal focus-dependent behavior. Escape or Return from search returns to the list.
 
 The table installs a weak local event monitor while attached to its window, and removes it on detachment or destruction. It only handles events for its own key window, with no sheet/modal operation or editable responder. Events already targeting the table go through its existing handler once.

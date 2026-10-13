@@ -11,6 +11,7 @@ require Shift unless the Shift symbol is shown. Quick Rate has its own contextua
 | Previous / next playlist | `[` / `]` | Native app; wraps visible playlists, skips filters and folder headers |
 | Previous / next song | `K` / `J`, or ↑ / ↓ | Native app and AppKit navigation tests |
 | Extend contiguous song selection | Shift+J / Shift+K | AppKit tests: fixed anchor, direction reversal, edges, Escape, external selection changes, editor and sheet guards |
+| Page down / up through songs | Control+J / Control+K | AppKit tests: viewport-sized jumps, window resize, edges, range reset, editor/menu/sheet guards |
 | Play selected song | Enter | Native app with generated WAVs |
 | Play / pause | Space | Native app and player tests |
 | Jump to playing song's start | H | Native app; paused transport remains paused |

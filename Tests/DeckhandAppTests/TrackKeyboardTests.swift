@@ -6,7 +6,8 @@ import SwiftUI
 
 @MainActor @Suite(.serialized) struct TrackKeyboardTests {
     private final class Rows: NSObject, NSTableViewDataSource {
-        func numberOfRows(in tableView: NSTableView) -> Int { 4 }
+        var count = 4
+        func numberOfRows(in tableView: NSTableView) -> Int { count }
         func tableView(_ tableView: NSTableView, objectValueFor tableColumn: NSTableColumn?, row: Int) -> Any? { "Track \(row)" }
     }
 
@@ -17,17 +18,24 @@ import SwiftUI
         override var isKeyWindow: Bool { receivesKeys }
     }
 
-    private func withTable(_ check: (KeyTableView, NSWindow, NSButton) -> Void) {
+    private func withTable(rowsCount: Int = 4, viewportHeight: CGFloat? = nil,
+                           _ check: (KeyTableView, NSWindow, NSButton) -> Void) {
         _ = NSApplication.shared
         let window = WorkspaceWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         let table = KeyTableView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
         let rows = Rows()
+        rows.count = rowsCount
         table.dataSource = rows
         table.allowsMultipleSelection = true
         table.addTableColumn(NSTableColumn(identifier: .init("title")))
-        window.contentView!.addSubview(table)
+        if let viewportHeight {
+            table.rowHeight = 40; table.intercellSpacing = .zero; table.headerView = nil
+            let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 300, height: viewportHeight))
+            scroll.documentView = table
+            window.contentView!.addSubview(scroll)
+        } else { window.contentView!.addSubview(table) }
         let button = NSButton(title: "Sync", target: nil, action: nil)
         window.contentView!.addSubview(button)
         table.reloadData()
@@ -65,6 +73,48 @@ import SwiftUI
             #expect(table.selectedRow == 3)
             for _ in 0..<6 { table.keyDown(with: key("k", in: window)) }
             #expect(table.selectedRow == 0)
+        }
+    }
+
+    @Test func controlLettersPageByViewportAndClampAtListEdges() {
+        withTable(rowsCount: 30, viewportHeight: 160) { table, window, button in
+            #expect(table.visibleRect.height == 160)
+            table.selectRowIndexes([2], byExtendingSelection: false)
+            #expect(table.routeWorkspaceNavigation(key("j", in: window, flags: .control)))
+            #expect(table.selectedRowIndexes == IndexSet([6]))
+            #expect(window.firstResponder === table)
+            let next = key("\n", in: window, flags: .control, code: 38)
+            #expect(!table.routeWorkspaceNavigation(next)) // Already routed to the table.
+            table.keyDown(with: next)
+            #expect(table.selectedRow == 10)
+            table.keyDown(with: key("\u{0b}", in: window, flags: .control, code: 40))
+            #expect(table.selectedRow == 6)
+            let scroll = table.enclosingScrollView!
+            scroll.setFrameSize(NSSize(width: 300, height: 80))
+            #expect(table.visibleRect.height == 80)
+            table.keyDown(with: key("j", in: window, flags: .control))
+            #expect(table.selectedRow == 8)
+            table.selectRowIndexes([28], byExtendingSelection: false)
+            table.keyDown(with: key("j", in: window, flags: .control))
+            #expect(table.selectedRow == 29)
+            table.selectRowIndexes([1], byExtendingSelection: false)
+            table.keyDown(with: key("k", in: window, flags: .control))
+            #expect(table.selectedRow == 0)
+            table.deselectAll(nil)
+            table.keyDown(with: key("k", in: window, flags: .control))
+            #expect(table.selectedRow == 0)
+        }
+    }
+
+    @Test func pageJumpCollapsesSelectionAndStartsANewShiftRange() {
+        withTable(rowsCount: 30, viewportHeight: 160) { table, window, _ in
+            table.selectRowIndexes([2], byExtendingSelection: false)
+            table.keyDown(with: key("J", in: window, flags: .shift))
+            #expect(table.selectedRowIndexes == IndexSet([2, 3]))
+            table.keyDown(with: key("j", in: window, flags: .control))
+            #expect(table.selectedRowIndexes == IndexSet([7]))
+            table.keyDown(with: key("K", in: window, flags: .shift))
+            #expect(table.selectedRowIndexes == IndexSet([6, 7]))
         }
     }
 
@@ -178,6 +228,7 @@ import SwiftUI
             NotificationCenter.default.post(name: NSMenu.didBeginTrackingNotification, object: menu)
             #expect(!table.routeWorkspaceNavigation(escape))
             #expect(!table.routeWorkspaceNavigation(key("J", in: window, flags: .shift)))
+            #expect(!table.routeWorkspaceNavigation(key("j", in: window, flags: .control)))
             #expect(table.selectedRowIndexes == selection)
             NotificationCenter.default.post(name: NSMenu.didEndTrackingNotification, object: menu)
             #expect(table.routeWorkspaceNavigation(escape))
@@ -244,6 +295,8 @@ import SwiftUI
                 #expect(!table.routeWorkspaceNavigation(key("k", in: window)))
                 #expect(!table.routeWorkspaceNavigation(key("J", in: window, flags: .shift)))
                 #expect(!table.routeWorkspaceNavigation(key("K", in: window, flags: .shift)))
+                #expect(!table.routeWorkspaceNavigation(key("\n", in: window, flags: .control, code: 38)))
+                #expect(!table.routeWorkspaceNavigation(key("\u{0b}", in: window, flags: .control, code: 40)))
                 for text in ["h", "l", "H", "L", "a", "m", "/", "1"] {
                     #expect(!table.routeWorkspaceNavigation(key(text, in: window)))
                 }
@@ -255,7 +308,7 @@ import SwiftUI
 
     @Test func ignoresModifiedKeysOtherWindowsAndHiddenLists() {
         withTable { table, window, _ in
-            for flags: NSEvent.ModifierFlags in [.command, .option, .control] {
+            for flags: NSEvent.ModifierFlags in [.command, .option, [.control, .command], [.control, .option], [.control, .shift]] {
                 #expect(!table.routeWorkspaceNavigation(key("j", in: window, flags: flags)))
             }
             #expect(!table.routeWorkspaceNavigation(key("q", in: window)))
@@ -280,6 +333,7 @@ import SwiftUI
             window.beginSheet(sheet)
             #expect(!table.routeWorkspaceNavigation(key("j", in: window)))
             #expect(!table.routeWorkspaceNavigation(key("J", in: window, flags: .shift)))
+            #expect(!table.routeWorkspaceNavigation(key("j", in: window, flags: .control)))
             #expect(!table.routeWorkspaceNavigation(key("j", in: sheet)))
             #expect(table.selectedRow == -1)
             window.endSheet(sheet)
