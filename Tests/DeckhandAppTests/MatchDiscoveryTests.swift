@@ -53,6 +53,56 @@ import Testing
         #expect(result[0].group == .changeDirection && result[0].reason == "House")
         #expect(MatchDiscovery.rank(seed: seed, candidates: [], limit: 0).isEmpty)
     }
+
+    private func audio(_ id: String, bright: Bool = false, shifted: Bool = false, key: String = "8A", genre: String = "House") throws -> TrackRow {
+        var r = row(id, key: key, genre: genre)
+        let bands: [[Float]] = (0..<3).map { band in
+            (0..<4800).map { f in
+                let phase = (f + (shifted ? 37 : 0)) % 75
+                let pulse = phase < 12 ? Float(0.5) : Float(0.04)
+                let scale: Float = bright ? [0.2, 0.5, 1][band] : [1, 0.5, 0.1][band]
+                return pulse * scale
+            }
+        }
+        let analysis = TrackAnalysis(durationSeconds: 32, sampleRate: 44100, bpm: 120,
+            beats: (0..<64).map { .init(barPosition: $0 % 4 + 1, timeMs: $0 * 500, bpm: 120) },
+            key: r.key, waveforms: .init(peak: bands[0], rms: bands[0], low: bands[0], mid: bands[1], high: bands[2]))
+        r.matchProfile = try #require(AudioMatchProfile(analysis: analysis))
+        return r
+    }
+
+    @Test func soundAndGrooveCanOutrankExactKeyAndConnectDifferentGenreTags() throws {
+        let seed = try audio("seed")
+        let good = try audio("good", key: "9A")
+        let wrongSound = try audio("wrong", bright: true, shifted: true)
+        let crossGenre = try audio("different tag", key: "3B", genre: "Disco")
+        let results = MatchDiscovery.rank(seed: seed, candidates: [wrongSound, crossGenre, good])
+        #expect(results.first?.id == good.id) // Compatible key + audio fit beats exact key alone.
+        #expect(results.first?.reason.contains("similar groove") == true)
+        #expect(results.first?.reason.contains("similar band balance") == true)
+        #expect(results.first { $0.id == wrongSound.id }?.group == .changeDirection)
+        #expect(results.first { $0.id == crossGenre.id }?.group == .changeDirection)
+        var missing = row("metadata only")
+        missing.matchProfile = nil
+        let fallback = MatchDiscovery.rank(seed: seed, candidates: [missing])
+        #expect(fallback.count == 1 && !fallback[0].reason.contains("similar groove"))
+    }
+
+    @Test func fiftyResultsPreserveAllGroupsAndPreferArtistVarietyWithoutUnderfilling() {
+        let seed = row("seed")
+        let pool = (0..<100).map { row("smooth \($0)") }
+            + (0..<30).map { row("lift \($0)", energy: 8) }
+            + (0..<30).map { row("turn \($0)", key: "3B") }
+        let matches = MatchDiscovery.rank(seed: seed, candidates: pool)
+        #expect(matches.count == 50)
+        #expect(MatchGroup.allCases.allSatisfy { group in matches.filter { $0.group == group }.count >= 8 })
+        #expect(matches == MatchDiscovery.rank(seed: seed, candidates: pool.reversed()))
+        let dominant = (0..<80).map { row("AAA \($0)", artist: "One Artist") }
+        let varied = (0..<47).map { row("ZZZ \($0)", artist: "Other \($0)") }
+        let diverse = MatchDiscovery.rank(seed: seed, candidates: dominant + varied)
+        #expect(diverse.count == 50 && diverse.filter { $0.id.hasPrefix("AAA") }.count == 3)
+        #expect(MatchDiscovery.rank(seed: seed, candidates: dominant).count == 50)
+    }
 }
 
 @MainActor @Suite struct MatchesModelTests {

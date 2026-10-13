@@ -1,4 +1,5 @@
 import Analysis
+import Darwin
 import DeckhandCore
 import Foundation
 
@@ -17,7 +18,8 @@ public final class AnalysisCache: @unchecked Sendable {
     /// checked against its entry's size and mtime and rebuilt from the entry when they differ, so a
     /// missing, stale or partly lost index only costs a decode.
     private var index: [String: IndexEntry]
-    private var indexDirty = false
+    private var dirtyIndexKeys = Set<String>()
+    private let saveLock = NSLock()
     private static let indexFile = "analysis-index.plist"
     /// Tracks the analyzer couldn't handle, so syncs don't retry (and count) them every time. Valid only for the
     /// algorithm versions that failed: a new analyzer tries again.
@@ -25,7 +27,7 @@ public final class AnalysisCache: @unchecked Sendable {
     private var failuresDirty = false
     private static let failuresFile = "analysis-failures.json"
 
-    struct Failure: Codable {
+    struct Failure: Codable, Equatable {
         var reason: String
         var versions: String
     }
@@ -93,29 +95,49 @@ public final class AnalysisCache: @unchecked Sendable {
 
     /// Writes the content-hash fingerprints and, if they changed, the summary index and failure list.
     public func save() throws {
-        // Keep hashes another process saved meanwhile (the app and the CLI share this cache).
+        // Serialize same-process saves and app/CLI read-merge-write operations. Descriptor upgrades
+        // must survive a CLI process that opened an older index before the upgrade finished.
+        try saveLock.withLock {
+            let fd = Darwin.open(root.appendingPathComponent("analysis-cache.lock").path, O_CREAT | O_RDWR, 0o644)
+            guard fd >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+            defer { Darwin.close(fd) }
+            guard flock(fd, LOCK_EX) == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+            defer { flock(fd, LOCK_UN) }
+            try saveLocked()
+        }
+    }
+
+    private func saveLocked() throws {
         let onDisk = (try? JSONDecoder().decode([String: String].self,
-                                                from: Data(contentsOf: root.appendingPathComponent("fingerprints.json")))) ?? [:]
+            from: Data(contentsOf: root.appendingPathComponent("fingerprints.json")))) ?? [:]
         let data = try lock.withLock {
             fingerprints.merge(onDisk) { mine, _ in mine }
             return try JSONEncoder().encode(fingerprints)
         }
         try data.write(to: root.appendingPathComponent("fingerprints.json"), options: .atomic)
-        let failures: [String: Failure]? = lock.withLock {
-            defer { failuresDirty = false }
-            return failuresDirty ? self.failures : nil
+        let pendingFailures = lock.withLock { failuresDirty ? failures : nil }
+        if let pendingFailures {
+            try JSONEncoder().encode(pendingFailures).write(to: root.appendingPathComponent(Self.failuresFile), options: .atomic)
+            lock.withLock { if failures == pendingFailures { failuresDirty = false } }
         }
-        if let failures {
-            try JSONEncoder().encode(failures).write(to: root.appendingPathComponent(Self.failuresFile), options: .atomic)
+        let changed = lock.withLock {
+            Dictionary(uniqueKeysWithValues: dirtyIndexKeys.compactMap { hash in index[hash].map { (hash, $0) } })
         }
-        let index: [String: IndexEntry]? = lock.withLock {
-            defer { indexDirty = false }
-            return indexDirty ? self.index : nil
+        guard !changed.isEmpty else { return }
+        var merged = (try? PropertyListDecoder().decode([String: IndexEntry].self,
+            from: Data(contentsOf: root.appendingPathComponent(Self.indexFile)))) ?? lock.withLock { index }
+        for (hash, entry) in changed {
+            if let disk = merged[hash], disk.stamp == entry.stamp,
+               disk.profileVersion == AudioMatchProfile.currentVersion,
+               entry.profileVersion != AudioMatchProfile.currentVersion { continue }
+            merged[hash] = entry
         }
-        if let index {
-            let encoder = PropertyListEncoder()
-            encoder.outputFormat = .binary
-            try encoder.encode(index).write(to: root.appendingPathComponent(Self.indexFile), options: .atomic)
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .binary
+        try encoder.encode(merged).write(to: root.appendingPathComponent(Self.indexFile), options: .atomic)
+        lock.withLock {
+            for (hash, entry) in changed where index[hash] == entry { dirtyIndexKeys.remove(hash) }
+            for (hash, entry) in merged where !dirtyIndexKeys.contains(hash) { index[hash] = entry }
         }
     }
 
@@ -152,13 +174,36 @@ public final class AnalysisCache: @unchecked Sendable {
         let e = IndexEntry(stored, stamp: stamp)
         lock.withLock {
             index[hash] = e
-            indexDirty = true
+            dirtyIndexKeys.insert(hash)
         }
         return e.summary
     }
 
     public func isAnalyzed(_ hash: String) -> Bool {
         summary(forHash: hash) != nil
+    }
+
+    /// Descriptor lookup for app rows; ordinary summary/sync queries do not decode descriptors.
+    public func cachedMatchProfile(forHash hash: String) -> AudioMatchProfile? {
+        guard let stamp = Self.stamp(path(hash)), let entry = lock.withLock({ index[hash] }),
+              entry.stamp == stamp, entry.profileVersion == AudioMatchProfile.currentVersion,
+              Self.isCurrent(version: entry.version, policy: entry.policy, cueVersion: entry.cueVersion, structureVersion: entry.structureVersion)
+        else { return nil }
+        return entry.matchProfile
+    }
+
+    /// Backfill descriptors from cached analysis only. Older indexes remain valid for normal
+    /// analysis/sync queries; this optional upgrade never reads or re-analyzes the music file.
+    public func matchProfile(forHash hash: String) -> AudioMatchProfile? {
+        guard let stamp = Self.stamp(path(hash)) else { return nil }
+        if let entry = lock.withLock({ index[hash] }), entry.stamp == stamp,
+           entry.profileVersion == AudioMatchProfile.currentVersion,
+           entry.profileData == nil || entry.matchProfile != nil { return cachedMatchProfile(forHash: hash) }
+        guard let data = try? Data(contentsOf: path(hash)),
+              let stored = try? JSONDecoder().decode(Stored.self, from: data) else { return nil }
+        let entry = IndexEntry(stored, stamp: stamp)
+        lock.withLock { index[hash] = entry; dirtyIndexKeys.insert(hash) }
+        return entry.summary == nil ? nil : entry.matchProfile
     }
 
     /// Why the current analyzer failed on this audio, if it did.
@@ -200,10 +245,11 @@ public final class AnalysisCache: @unchecked Sendable {
         stored.trackEnergy = cues?.energy
         try JSONEncoder().encode(stored).write(to: path(hash), options: .atomic)
         let stamp = Self.stamp(path(hash))
+        let indexed = stamp.map { IndexEntry(stored, stamp: $0) }
         lock.withLock {
             recent[hash] = nil
-            index[hash] = stamp.map { IndexEntry(stored, stamp: $0) }
-            indexDirty = true
+            index[hash] = indexed
+            dirtyIndexKeys.insert(hash)
             if failures.removeValue(forKey: hash) != nil { failuresDirty = true }
         }
     }
@@ -242,7 +288,7 @@ public final class AnalysisCache: @unchecked Sendable {
     }
 
     /// An entry's versions and summary fields, as of the entry file's `stamp`.
-    private struct IndexEntry: Codable {
+    private struct IndexEntry: Codable, Equatable {
         var stamp: String
         var version: Int
         var policy: String?
@@ -255,6 +301,13 @@ public final class AnalysisCache: @unchecked Sendable {
         var energy: Int?
         var cues: [Int]
         var low, mid, high: Data
+        var profileVersion: Int?
+        var profileData: Data?
+        var matchProfile: AudioMatchProfile? {
+            guard let profileData, let profile = try? PropertyListDecoder().decode(AudioMatchProfile.self, from: profileData),
+                  profile.version == AudioMatchProfile.currentVersion else { return nil }
+            return profile
+        }
 
         init(_ s: Stored, stamp: String) {
             self.stamp = stamp
@@ -271,6 +324,10 @@ public final class AnalysisCache: @unchecked Sendable {
             low = Self.reduce(s.low)
             mid = Self.reduce(s.mid)
             high = Self.reduce(s.high)
+            profileVersion = AudioMatchProfile.currentVersion
+            let encoder = PropertyListEncoder()
+            encoder.outputFormat = .binary
+            profileData = s.isCurrent ? AudioMatchProfile(analysis: s.analysis).flatMap { try? encoder.encode($0) } : nil
         }
 
         var summary: Summary? {

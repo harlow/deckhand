@@ -1,0 +1,16 @@
+{
+  "analyzedCandidates" : 2175,
+  "descriptorReadSeconds" : 5.4974210262298584,
+  "evaluatedSeeds" : 20,
+  "grooveProfiles" : 2162,
+  "groupCountsAcrossSeeds" : {
+    "Change Direction" : 259,
+    "Lift" : 61,
+    "Smooth" : 680
+  },
+  "maximumRankMilliseconds" : 30.133962631225586,
+  "meanRankMilliseconds" : 25.112706422805786,
+  "meanTopTenOverlapWithMetadataOnly" : 2.0499999999999998,
+  "note" : "Metadata-only baseline uses the same group\/diversity rules. This measures behavior and latency, not listening preference.",
+  "textureProfiles" : 2175
+}

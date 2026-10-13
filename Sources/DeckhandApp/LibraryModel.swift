@@ -1,4 +1,5 @@
 import AppKit
+import Analysis
 import DeckhandAppCore
 import DeckhandCore
 import DeckhandLibrary
@@ -50,6 +51,7 @@ struct TrackRow: Identifiable, Equatable, Sendable {
     var key: MusicalKey?
     var energy: Int?
     var overview: Overview?
+    var matchProfile: AudioMatchProfile?
 
     var bpmSort: Double { bpm ?? 0 }
     var keySort: Int { key.map { $0.camelotNumber * 2 + ($0.mode == .minor ? 0 : 1) } ?? 99 }
@@ -517,7 +519,15 @@ final class LibraryModel {
     }
 
     /// Test teardown releases the single-writer lock before reopening the same library.
-    func closeLibrary() async { endMatches(); scheduledReload?.cancel(); await localStore?.close(); localStore = nil }
+    func closeLibrary() async {
+        endMatches()
+        matchProfileTask?.cancel()
+        matchProfileGeneration &+= 1
+        matchProfileTask = nil
+        scheduledReload?.cancel()
+        await localStore?.close()
+        localStore = nil
+    }
 
     /// Selecting a folder/XML never imports files into Music or modifies the source file.
     func chooseSource(_ kind: SourceConnection.Kind) {
@@ -756,6 +766,7 @@ final class LibraryModel {
                     row.key = nil
                     row.energy = nil
                     row.overview = nil
+                    row.matchProfile = nil
                 }
                 if rows[t.id] != row { rows[t.id] = row; changed = true }
                 continue
@@ -786,7 +797,7 @@ final class LibraryModel {
         var id: String
         var location: URL
         var hash: String?
-        var analysis: (bpm: Double, key: MusicalKey?, energy: Int?, overview: Overview)?
+        var analysis: (bpm: Double, key: MusicalKey?, energy: Int?, overview: Overview, matchProfile: AudioMatchProfile?)?
     }
 
     @ObservationIgnored private var loadingAnalysis = false
@@ -829,6 +840,76 @@ final class LibraryModel {
         status = nil
         evaluateStatus()
         Log.info("analysis", "Loaded cached analysis in \(String(format: "%.1f", Date().timeIntervalSince(start))) s; \(unanalyzedCount) tracks not analyzed")
+        warmMatchProfiles()
+    }
+
+    @ObservationIgnored private var matchProfileTask: Task<Void, Never>?
+    @ObservationIgnored private var matchProfileGeneration = 0
+    @ObservationIgnored private var matchProfileWarmRequested = false
+
+    private func warmMatchProfiles() {
+        matchProfileWarmRequested = true
+        guard matchProfileTask == nil else { return }
+        matchProfileGeneration &+= 1
+        let generation = matchProfileGeneration
+        matchProfileTask = Task {
+            guard !Task.isCancelled, generation == matchProfileGeneration else { return }
+            repeat {
+                matchProfileWarmRequested = false
+                await loadMatchProfiles(generation: generation)
+            } while matchProfileWarmRequested && !Task.isCancelled && generation == matchProfileGeneration
+            if generation == matchProfileGeneration { matchProfileTask = nil }
+        }
+    }
+
+    /// Upgrade old cached descriptors in the background after the normal analysis fields are shown.
+    /// An open Matches session stays fixed so keyboard browsing never jumps during backfill.
+    private func loadMatchProfiles(generation: Int) async {
+        guard let cache, !Task.isCancelled, generation == matchProfileGeneration else { return }
+        let start = Date()
+        var attempted = Set<String>()
+        while !Task.isCancelled && generation == matchProfileGeneration {
+            let items = rows.values.compactMap { row -> (String, String)? in
+                guard row.matchProfile == nil, row.analyzed, let hash = row.hash, !attempted.contains(hash) else { return nil }
+                return (row.id, hash)
+            }
+            guard !items.isEmpty else { break }
+            attempted.formUnion(items.map(\.1))
+            let idsByHash = Dictionary(grouping: items, by: \.1).mapValues { $0.map(\.0) }
+            await withTaskGroup(of: (String, AudioMatchProfile?).self) { group in
+                var pending = idsByHash.keys.makeIterator()
+                func add(_ hash: String) {
+                    group.addTask { (hash, Task.isCancelled ? nil : cache.matchProfile(forHash: hash)) }
+                }
+                for _ in 0..<4 { if let item = pending.next() { add(item) } }
+                var batch: [(String, String, AudioMatchProfile)] = []
+                var completed = 0
+                for await (hash, profile) in group {
+                    guard !Task.isCancelled, generation == matchProfileGeneration else { group.cancelAll(); return }
+                    if let profile { batch += (idsByHash[hash] ?? []).map { ($0, hash, profile) } }
+                    if batch.count >= 64 { mergeMatchProfiles(batch); batch = [] }
+                    completed += 1
+                    if completed % 512 == 0 { await Task.detached { try? cache.save() }.value }
+                    if let item = pending.next() { add(item) }
+                }
+                mergeMatchProfiles(batch)
+            }
+        }
+        guard !Task.isCancelled, generation == matchProfileGeneration else { return }
+        await Task.detached { try? cache.save() }.value
+        Log.info("matches", "Prepared audio match profiles in \(String(format: "%.1f", Date().timeIntervalSince(start))) s")
+    }
+
+    private func mergeMatchProfiles(_ batch: [(String, String, AudioMatchProfile)]) {
+        guard !batch.isEmpty else { return }
+        var updated = rows
+        for (id, hash, profile) in batch {
+            // Use the current row so concurrent import/rating edits are retained.
+            guard var row = updated[id], row.hash == hash else { continue }
+            row.matchProfile = profile
+            updated[id] = row
+        }
+        rows = updated
     }
 
     nonisolated private static func loadOne(_ id: String, _ url: URL, _ cache: AnalysisCache) -> Loaded {
@@ -836,7 +917,7 @@ final class LibraryModel {
         guard let s = cache.summary(forHash: hash) else { return Loaded(id: id, location: url, hash: hash) }
         let overview = Overview(s.overview, bins: AnalysisCache.Summary.overviewBins, cuesMs: s.cuesMs,
                                 durationMs: s.durationSeconds * 1000)
-        return Loaded(id: id, location: url, hash: hash, analysis: (s.bpm, s.key, s.energy, overview))
+        return Loaded(id: id, location: url, hash: hash, analysis: (s.bpm, s.key, s.energy, overview, cache.cachedMatchProfile(forHash: hash)))
     }
 
     private func merge(_ batch: [Loaded]) {
@@ -845,12 +926,14 @@ final class LibraryModel {
         for r in batch {
             guard var row = updated[r.id], row.location == r.location else { continue }
             row.checked = true
+            let sameHash = row.hash == r.hash
             row.hash = r.hash
             row.analyzed = r.analysis != nil
             row.bpm = r.analysis?.bpm
             row.key = r.analysis?.key
             row.energy = r.analysis?.energy
             row.overview = r.analysis?.overview
+            row.matchProfile = r.analysis?.matchProfile ?? (sameHash && r.analysis != nil ? row.matchProfile : nil)
             updated[r.id] = row
         }
         rows = updated

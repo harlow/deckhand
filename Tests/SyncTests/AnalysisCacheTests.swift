@@ -44,6 +44,74 @@ import Testing
         #expect(cache.isAnalyzed("h1") && !cache.isAnalyzed("missing"))
     }
 
+    @Test func audioProfilesBackfillAnOldIndexWithoutInvalidatingOrRewritingAnalysis() throws {
+        defer { try? FileManager.default.removeItem(at: root) }
+        let writer = try AnalysisCache(root: root)
+        try writer.store(sample(), cues: cues, sections: [], forHash: "legacy-profile")
+        try writer.save()
+        let analysisBefore = try Data(contentsOf: entry("legacy-profile"))
+        let indexURL = root.appendingPathComponent("analysis-index.plist")
+        var plist = try PropertyListSerialization.propertyList(from: Data(contentsOf: indexURL), format: nil) as! [String: [String: Any]]
+        plist["legacy-profile"]?.removeValue(forKey: "profileVersion")
+        plist["legacy-profile"]?.removeValue(forKey: "profileData")
+        try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0).write(to: indexURL)
+        let cache = try AnalysisCache(root: root)
+        #expect(cache.isAnalyzed("legacy-profile"))
+        let revision = try #require(cache.summary(forHash: "legacy-profile")?.revision)
+        #expect(cache.cachedMatchProfile(forHash: "legacy-profile") == nil)
+        let profile = try #require(cache.matchProfile(forHash: "legacy-profile"))
+        #expect(cache.summary(forHash: "legacy-profile")?.energy == 6)
+        #expect(cache.summary(forHash: "legacy-profile")?.revision == revision)
+        #expect(try Data(contentsOf: entry("legacy-profile")) == analysisBefore)
+        try cache.save()
+        let reopened = try AnalysisCache(root: root)
+        #expect(reopened.cachedMatchProfile(forHash: "legacy-profile") == profile)
+        #expect(reopened.matchProfile(forHash: "missing") == nil)
+        try edit("legacy-profile") { $0["version"] = TrackAnalysis.currentVersion - 1 }
+        #expect(reopened.matchProfile(forHash: "legacy-profile") == nil)
+    }
+
+    @Test func staleCacheWriterPreservesOtherProcessesDescriptorsAndFailedSaveCanRetry() throws {
+        defer { try? FileManager.default.removeItem(at: root) }
+        let app = try AnalysisCache(root: root)
+        try app.store(sample(), cues: cues, sections: [], forHash: "app")
+        try app.save()
+        let cli = try AnalysisCache(root: root)
+        try app.store(sample(bpm: 128), cues: cues, sections: [], forHash: "new-app-track")
+        try app.save()
+        try cli.store(sample(bpm: 130), cues: cues, sections: [], forHash: "cli-track")
+        try cli.save()
+        let reopened = try AnalysisCache(root: root)
+        #expect(reopened.cachedMatchProfile(forHash: "new-app-track") != nil)
+        #expect(reopened.summary(forHash: "cli-track")?.bpm == 130)
+
+        try reopened.store(sample(bpm: 132), cues: cues, sections: [], forHash: "retry")
+        let indexURL = root.appendingPathComponent("analysis-index.plist")
+        try FileManager.default.removeItem(at: indexURL)
+        try FileManager.default.createDirectory(at: indexURL, withIntermediateDirectories: false)
+        #expect(throws: (any Error).self) { try reopened.save() }
+        try FileManager.default.removeItem(at: indexURL)
+        try reopened.save()
+        #expect(try AnalysisCache(root: root).cachedMatchProfile(forHash: "retry") != nil)
+        #expect(try AnalysisCache(root: root).cachedMatchProfile(forHash: "app") != nil)
+    }
+
+    @Test func malformedOptionalProfileDoesNotDiscardTheAnalysisIndex() throws {
+        defer { try? FileManager.default.removeItem(at: root) }
+        let writer = try AnalysisCache(root: root)
+        try writer.store(sample(), cues: cues, sections: [], forHash: "one")
+        try writer.store(sample(bpm: 126), cues: cues, sections: [], forHash: "two")
+        try writer.save()
+        let indexURL = root.appendingPathComponent("analysis-index.plist")
+        var plist = try PropertyListSerialization.propertyList(from: Data(contentsOf: indexURL), format: nil) as! [String: [String: Any]]
+        plist["one"]?["profileData"] = Data("future format".utf8)
+        try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0).write(to: indexURL)
+        let cache = try AnalysisCache(root: root)
+        #expect(cache.isAnalyzed("one") && cache.summary(forHash: "two")?.bpm == 126)
+        #expect(cache.cachedMatchProfile(forHash: "one") == nil)
+        #expect(cache.matchProfile(forHash: "one") != nil)
+    }
+
     @Test func backfillsFromLegacyEntryAndPersistsIndex() throws {
         let writer = try AnalysisCache(root: root)
         try writer.store(sample(), cues: cues, sections: [], forHash: "legacy")
