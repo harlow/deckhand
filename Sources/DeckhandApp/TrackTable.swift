@@ -487,8 +487,16 @@ final class KeyTableView: NSTableView {
     }
 
     private func pageNavigationDelta(_ event: NSEvent) -> Int? {
-        guard event.type == .keyDown,
-              event.modifierFlags.intersection([.command, .option, .control, .shift]) == .control else { return nil }
+        guard event.type == .keyDown else { return nil }
+        let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        if modifiers.isEmpty {
+            switch event.keyCode {
+            case 121: return 1 // Page Down, including translated Fn+Down.
+            case 116: return -1 // Page Up, including translated Fn+Up.
+            default: return nil
+            }
+        }
+        guard modifiers == .control else { return nil }
         switch event.charactersIgnoringModifiers?.lowercased() {
         case "j": return 1
         case "k": return -1

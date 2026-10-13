@@ -167,6 +167,7 @@ struct KeyboardHelpView: View {
                             ("K / ↑", "Previous song"), ("J / ↓", "Next song"),
                             ("⇧J / ⇧K", "Extend song selection"),
                             ("⌃J / ⌃K", "Page down / up"),
+                            ("Fn↓ / Fn↑", "Page down / up (PgDn / PgUp)"),
                             ("⌘L", "Show playing song"),
                         ])
                         section("Playback", [

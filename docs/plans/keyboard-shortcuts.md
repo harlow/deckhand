@@ -12,6 +12,7 @@ require Shift unless the Shift symbol is shown. Quick Rate has its own contextua
 | Previous / next song | `K` / `J`, or ↑ / ↓ | Native app and AppKit navigation tests |
 | Extend contiguous song selection | Shift+J / Shift+K | AppKit tests: fixed anchor, direction reversal, edges, Escape, external selection changes, editor and sheet guards |
 | Page down / up through songs | Control+J / Control+K | AppKit tests: viewport-sized jumps, window resize, edges, range reset, editor/menu/sheet guards |
+| Standard page navigation | Page Down / Page Up, or Fn+↓ / Fn+↑ | Same selection behavior as Control+J/K; AppKit tests cover page keycodes with Fn flags, workspace routing and ordinary arrow-key preservation |
 | Play selected song | Enter | Native app with generated WAVs |
 | Play / pause | Space | Native app and player tests |
 | Jump to playing song's start | H | Native app; paused transport remains paused |

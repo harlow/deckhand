@@ -118,6 +118,33 @@ import SwiftUI
         }
     }
 
+    @Test func standardPageKeysAndFnArrowsMatchControlPagingAcrossWorkspace() {
+        withTable(rowsCount: 30, viewportHeight: 160) { table, window, button in
+            table.selectRowIndexes([2], byExtendingSelection: false)
+            #expect(table.routeWorkspaceNavigation(key("", in: window, code: 121)))
+            #expect(table.selectedRowIndexes == IndexSet([6]))
+            let pageDown = key("", in: window, flags: [.function, .numericPad], code: 121)
+            #expect(!table.routeWorkspaceNavigation(pageDown))
+            table.keyDown(with: pageDown)
+            #expect(table.selectedRow == 10)
+            table.keyDown(with: key("", in: window, flags: .function, code: 116))
+            #expect(table.selectedRow == 6)
+            table.keyDown(with: key("", in: window, flags: .function, code: 121))
+            #expect(table.selectedRow == 10)
+            window.makeFirstResponder(button)
+            #expect(table.routeWorkspaceNavigation(key("", in: window, flags: .function, code: 116)))
+            #expect(table.selectedRow == 6)
+            table.keyDown(with: key("", in: window, code: 116))
+            #expect(table.selectedRow == 2)
+            table.keyDown(with: key("", in: window, code: 116))
+            #expect(table.selectedRow == 0)
+            window.makeFirstResponder(button)
+            // Arrow keys may themselves carry the function-key flag; those remain arrows.
+            #expect(!table.routeWorkspaceNavigation(key("", in: window, flags: [.function, .numericPad], code: 125)))
+            #expect(!table.routeWorkspaceNavigation(key("", in: window, flags: [.function, .numericPad], code: 126)))
+        }
+    }
+
     @Test func shiftLettersExtendShrinkAndCrossTheAnchorWithoutGaps() {
         withTable { table, window, button in
             table.selectRowIndexes([1], byExtendingSelection: false)
@@ -229,6 +256,7 @@ import SwiftUI
             #expect(!table.routeWorkspaceNavigation(escape))
             #expect(!table.routeWorkspaceNavigation(key("J", in: window, flags: .shift)))
             #expect(!table.routeWorkspaceNavigation(key("j", in: window, flags: .control)))
+            #expect(!table.routeWorkspaceNavigation(key("", in: window, code: 121)))
             #expect(table.selectedRowIndexes == selection)
             NotificationCenter.default.post(name: NSMenu.didEndTrackingNotification, object: menu)
             #expect(table.routeWorkspaceNavigation(escape))
@@ -297,6 +325,8 @@ import SwiftUI
                 #expect(!table.routeWorkspaceNavigation(key("K", in: window, flags: .shift)))
                 #expect(!table.routeWorkspaceNavigation(key("\n", in: window, flags: .control, code: 38)))
                 #expect(!table.routeWorkspaceNavigation(key("\u{0b}", in: window, flags: .control, code: 40)))
+                #expect(!table.routeWorkspaceNavigation(key("", in: window, code: 121)))
+                #expect(!table.routeWorkspaceNavigation(key("", in: window, flags: .function, code: 116)))
                 for text in ["h", "l", "H", "L", "a", "m", "/", "1"] {
                     #expect(!table.routeWorkspaceNavigation(key(text, in: window)))
                 }
@@ -310,6 +340,7 @@ import SwiftUI
         withTable { table, window, _ in
             for flags: NSEvent.ModifierFlags in [.command, .option, [.control, .command], [.control, .option], [.control, .shift]] {
                 #expect(!table.routeWorkspaceNavigation(key("j", in: window, flags: flags)))
+                #expect(!table.routeWorkspaceNavigation(key("", in: window, flags: flags, code: 121)))
             }
             #expect(!table.routeWorkspaceNavigation(key("q", in: window)))
             let other = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
@@ -334,6 +365,7 @@ import SwiftUI
             #expect(!table.routeWorkspaceNavigation(key("j", in: window)))
             #expect(!table.routeWorkspaceNavigation(key("J", in: window, flags: .shift)))
             #expect(!table.routeWorkspaceNavigation(key("j", in: window, flags: .control)))
+            #expect(!table.routeWorkspaceNavigation(key("", in: window, code: 121)))
             #expect(!table.routeWorkspaceNavigation(key("j", in: sheet)))
             #expect(table.selectedRow == -1)
             window.endSheet(sheet)

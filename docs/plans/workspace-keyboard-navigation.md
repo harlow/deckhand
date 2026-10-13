@@ -12,6 +12,9 @@ and open menus retain their keys. AppKit regression tests cover these boundaries
 Control+J/K moves down/up by the number of full song rows that fit in the visible table.
 It selects one destination row and scrolls it into view, stops at the list edges, and
 adapts when the window is resized. A page jump starts a new Shift-selection range.
+Page Down/Up and Mac Fn+Down/Up use the same behavior, including when focus is in the
+sidebar. Modified page keys retain AppKit's native behavior; text editors retain all
+page-navigation keys.
 
 Search and playlist name fields retain normal text entry. Sheets, popovers, settings windows, modified shortcuts (Command, Option or Control), and hidden track lists retain their own keyboard behavior. Arrow keys retain their normal focus-dependent behavior. Escape or Return from search returns to the list.
 
