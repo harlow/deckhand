@@ -4,6 +4,14 @@ Matches now combines key/tempo/energy/genre metadata with lightweight audio desc
 The existing M, J/K, L, A and Esc workflow remains the interface. All computation runs
 locally, using cached analysis; no cloud service, external model or new install dependency.
 
+**Save as Playlist** turns a Matches session into a regular local playlist. The naming
+sheet starts with “Matches — [seed title]”; Enter saves and Esc cancels. The seed is first,
+followed by every result in its ranked order, regardless of the category/search currently
+shown. Saving opens the new playlist without changing playback or the original playlist.
+It is a fixed snapshot, not a live recommendation list. USB export uses the usual playlist
+selection and explicit Sync action. Playlist creation and membership commit atomically;
+duplicate/blank names keep the sheet open so the name can be corrected.
+
 ## Signals and ranking
 
 - **Band balance:** relative power of the cached low/mid/high envelopes in the track body.
@@ -48,13 +56,16 @@ and off the UI thread for background upgrades.
 
 ## Validation
 
-- 291 release-configuration tests passed across 58 suites.
+- 293 release-configuration tests passed across 58 suites, including Save as Playlist.
 - Controlled fixtures verify gain/tempo tolerance, contrasting accents and band balance,
   downbeat offsets, missing/invalid evidence, artist variety, and group coverage.
 - Cache tests cover legacy backfill without rewriting analysis, stale writers, corrupt
   optional descriptors, failed-save retry, and normal analysis-summary consistency.
 - Existing Matches tests cover pinned seeds, playback, deduplicated playlist additions,
   restart persistence, sidebar changes and returning to the original view.
+- Saving Matches tests cover seed-first ordering, all-result membership while filtering,
+  name validation, original-playlist preservation, view selection and restart persistence.
+  A storage failure test verifies atomic rollback and ordered membership deduplication.
 - Native walkthrough of the installed app: Hello (Original Mix) previously returned
   50 Smooth matches; the new ranking returns 39 Smooth, 1 Lift and 10 Change Direction.
   J/L previews a different selected result and Esc restores Deep Tech without editing

@@ -261,7 +261,7 @@ public actor DeckhandLibraryStore {
         return next
     }
 
-    public func createPlaylist(named name: String, isFolder: Bool = false) throws -> DeckhandLibrarySnapshot {
+    public func createPlaylist(named name: String, isFolder: Bool = false, trackIDs: [String] = []) throws -> DeckhandLibrarySnapshot {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw DeckhandLibraryError.invalid("Give the playlist a name.") }
         guard !state.playlists.values.contains(where: { $0.value.parentId == nil && $0.value.name == name }) else {
@@ -269,7 +269,9 @@ public actor DeckhandLibraryStore {
         }
         var next = state
         let id = "deckhand:playlist:\(UUID().uuidString)"
-        next.playlists[id] = Playlist(value: SourcePlaylist(id: id, name: name, isFolder: isFolder), edited: true)
+        var seen = Set<String>()
+        let members = isFolder ? [] : trackIDs.filter { state.tracks[$0] != nil && seen.insert($0).inserted }
+        next.playlists[id] = Playlist(value: SourcePlaylist(id: id, name: name, isFolder: isFolder, trackIds: members), edited: true)
         next.metadata.playlists.append(id)
         next.metadata.initialized = true
         try commit(next)

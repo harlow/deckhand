@@ -407,6 +407,26 @@ final class LibraryModel {
         }
     }
 
+    /// Save the fixed discovery snapshot, including its seed, in one local transaction.
+    /// Category/search filters do not change this playlist's membership or ranked order.
+    func saveMatchesPlaylist(named name: String, session: MatchSession) async -> Bool {
+        guard canEditLibrary, matches?.id == session.id else { return false }
+        pendingSourceEdits += 1
+        defer { pendingSourceEdits -= 1 }
+        let before = Set(playlists.map(\.id))
+        let ids = [session.seed.id] + session.tracks.map(\.id)
+        guard await editLocal({ try await $0.createPlaylist(named: name, trackIDs: ids) }),
+              let saved = playlists.first(where: {
+                  !before.contains($0.id) && $0.name == name.trimmingCharacters(in: .whitespacesAndNewlines)
+              }) else { return false }
+        endMatches()
+        filter = TrackFilter(); sort = nil
+        selection = .playlist(saved.id)
+        trackSelection = saved.trackIds.first.map { [$0] } ?? []
+        focusTrackList()
+        return true
+    }
+
     var filter = TrackFilter()
     var sort: TrackSort?
 

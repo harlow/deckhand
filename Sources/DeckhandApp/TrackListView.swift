@@ -15,6 +15,7 @@ struct TrackListView: View {
     /// Tracks waiting in the A "Add to playlist" picker.
     @State private var picking: [String] = []
     @State private var reviewUnavailableAudio = false
+    @State private var savingMatches = false
 
     var body: some View {
         // Memoized in the model: cheap unless rows, selection, filter or sort changed.
@@ -48,6 +49,9 @@ struct TrackListView: View {
             }
         }
         .sheet(isPresented: $reviewUnavailableAudio) { UnavailableAudioView(library: library) }
+        .sheet(isPresented: $savingMatches, onDismiss: { library.focusTrackList() }) {
+            if let session = library.matches { SaveMatchesPlaylistView(library: library, session: session) }
+        }
         .toolbar { driveToolbar }
         // When Up Next moves on (next button, ⌘→, or a track ending), select the new track and scroll
         // it into view if it's in this list.
@@ -126,6 +130,8 @@ struct TrackListView: View {
                     continuingIn: [session.seed] + library.listing(playing: player.current).rows) } label: {
                     Image(systemName: "play.fill")
                 }.buttonStyle(.plain).help("Play seed song").accessibilityLabel("Play seed song")
+                Button("Save as Playlist") { savingMatches = true }
+                    .disabled(!library.canEditLibrary || session.tracks.isEmpty)
             }
             // Discovery already ranks by key, tempo and energy. Keep only categories and search here.
             TrackToolsLayout {

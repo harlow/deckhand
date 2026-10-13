@@ -207,6 +207,42 @@ import Testing
         await model.closeLibrary()
     }
 
+    @Test func savingMatchesCreatesAtomicOrderedPlaylistAndPersistsAcrossRestart() async throws {
+        let f = try DedicatedLibraryModelTests.Fixture()
+        defer { UserDefaults(suiteName: f.root.lastPathComponent)?.removePersistentDomain(forName: f.root.lastPathComponent) }
+        let model = try await loaded(f.root)
+        let seed = try #require(model.rows.values.first { $0.title == "Seed Song" })
+        let origin = try #require(model.playlists.first { $0.name == "My Set" })
+        model.selection = .playlist(origin.id)
+        model.openMatches(seed: seed)
+        let session = try #require(model.matches)
+        let expected = [seed.id] + session.tracks.map(\.id)
+        #expect(expected.count == 51)
+        model.matchGroup = .lift; model.filter.search = "not found"
+        model.sort = TrackSort(column: .title, ascending: false)
+        #expect(model.listing(playing: nil).rows.isEmpty)
+        let before = model.playlists
+        #expect(await model.saveMatchesPlaylist(named: "My Set", session: session) == false)
+        #expect(model.playlists == before && model.matches?.id == session.id)
+        #expect(await model.saveMatchesPlaylist(named: "   ", session: session) == false)
+        #expect(model.playlists == before && model.matches?.id == session.id)
+        #expect(await model.saveMatchesPlaylist(named: "  My Matches  ", session: session))
+        let saved = try #require(model.playlists.first { $0.name == "My Matches" })
+        #expect(saved.trackIds == expected && Set(saved.trackIds).count == expected.count)
+        #expect(model.matches == nil && model.selection == .playlist(saved.id))
+        #expect(model.trackSelection == [seed.id] && model.filter.isEmpty && model.sort == nil)
+        #expect(model.listing(playing: nil).rows.map(\.id) == expected)
+        #expect(model.playlists.first { $0.id == origin.id }?.trackIds == origin.trackIds)
+        #expect(await model.saveMatchesPlaylist(named: "Again", session: session) == false)
+        await model.closeLibrary()
+        let reopened = LibraryModel(libraryDirectory: f.root.appendingPathComponent("Library"),
+            legacyDirectory: f.root.appendingPathComponent("Legacy"), defaults: UserDefaults(suiteName: f.root.lastPathComponent)!,
+            observesChanges: false, driveReader: { [] })
+        await reopened.load()
+        #expect(reopened.playlists.first { $0.id == saved.id }?.trackIds == expected)
+        await reopened.closeLibrary()
+    }
+
     @Test func exportNativeFixtureOnlyWhenExplicitlyRequested() async throws {
         guard let path = ProcessInfo.processInfo.environment["DECKHAND_MATCHES_QA_DIR"], path.hasPrefix("/tmp/deckhand-matches-qa-") else { return }
         let model = try await loaded(URL(fileURLWithPath: path))

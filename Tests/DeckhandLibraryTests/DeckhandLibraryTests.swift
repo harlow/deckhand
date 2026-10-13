@@ -5,6 +5,28 @@ import Testing
 @testable import DeckhandLibrary
 
 @Suite struct DeckhandLibraryTests {
+    @Test func playlistCreationWithTracksIsAtomicAndDeduplicatesInOrder() async throws {
+        let f = try LibraryFixture()
+        _ = try f.audio("One.wav"); _ = try f.audio("Two.wav")
+        let store = try DeckhandLibraryStore(directory: f.directory)
+        let imported = try await store.refresh(SourceConnection(kind: .folder, location: f.a))
+        let ids = try #require(imported.library.allTrackIds)
+        #expect(ids.count == 2)
+        let ordered = ids.reversed().map { $0 }
+        try f.rawSQL("CREATE TRIGGER fail_create BEFORE INSERT ON playlists BEGIN SELECT RAISE(ABORT, 'fixture failure'); END;")
+        await #expect(throws: (any Error).self) {
+            try await store.createPlaylist(named: "Saved Matches", trackIDs: ordered)
+        }
+        #expect(await store.snapshot().library.playlists == imported.library.playlists)
+        try f.rawSQL("DROP TRIGGER fail_create")
+        let saved = try await store.createPlaylist(named: "Saved Matches", trackIDs: ordered + ["missing", ordered[0]])
+        #expect(saved.library.playlists.last?.trackIds == ordered)
+        await store.close()
+        let reopened = try DeckhandLibraryStore(directory: f.directory)
+        #expect(await reopened.snapshot().library.playlists.last?.trackIds == ordered)
+        await reopened.close()
+    }
+
     @Test func deletedImportedPlaylistStaysDeletedAcrossRestartAndReimportWithoutRemovingTracks() async throws {
         let f = try LibraryFixture(); let url = try f.audio("One.wav")
         try f.writeXML(track: url)
