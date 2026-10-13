@@ -60,10 +60,12 @@ and off the UI thread for background upgrades.
   J/L previews a different selected result and Esc restores Deep Tech without editing
   its contents. Needs Analysis remains zero and all 2,226 cached analysis JSON files
   have identical aggregate content before and after the descriptor upgrade.
-- Native USB status verification after relaunch is waiting on macOS's removable-volume
-  authorization prompt for the rebuilt ad-hoc app. Its old permission is shown enabled
-  in System Settings; no system permission was changed by this walkthrough. Unit tests
-  additionally verify that descriptor backfill leaves the analysis revision unchanged.
+- After the user approved macOS removable-volume access for the rebuilt ad-hoc app,
+  RATS finished reading and displayed normal capacity and sync status. During active
+  listening/rating, it showed nine pending changes; a read-only comparison of the local
+  library with the USB database confirmed nine rating differences (rated locally,
+  unrated on USB). No sync was performed during verification. Unit tests additionally
+  verify that descriptor backfill leaves the analysis revision unchanged.
 - Read-only evaluation over 20 seeds and 2,175 analyzed candidates: mean ranking 25.1 ms,
   maximum 30.1 ms; first descriptor read/extraction 5.5 seconds. 2,162 tracks supplied a
   usable groove descriptor. The top ten shared an average 2.05 results with the metadata-only
