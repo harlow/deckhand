@@ -4,6 +4,11 @@ Implemented October 11, 2026.
 
 In the main library window, **j/k** selects the next/previous visible track even when keyboard focus is in the sidebar or another control. **Shift+J/K** extends the track selection. Navigation brings focus into the track table, where the remaining track shortcuts work normally.
 
+Restored October 13: Shift+J/K selects a contiguous range from a fixed starting row.
+Reversing direction shrinks the range and can extend across the starting row. Plain J/K,
+Escape, a mouse selection or switching lists starts a new range; editors, sheets, help
+and open menus retain their keys. AppKit regression tests cover these boundaries.
+
 Search and playlist name fields retain normal text entry. Sheets, popovers, settings windows, modified shortcuts (Command, Option or Control), and hidden track lists retain their own keyboard behavior. Arrow keys retain their normal focus-dependent behavior. Escape or Return from search returns to the list.
 
 The table installs a weak local event monitor while attached to its window, and removes it on detachment or destruction. It only handles events for its own key window, with no sheet/modal operation or editable responder. Events already targeting the table go through its existing handler once.

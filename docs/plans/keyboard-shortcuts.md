@@ -10,6 +10,7 @@ require Shift unless the Shift symbol is shown. Quick Rate has its own contextua
 | --- | --- | --- |
 | Previous / next playlist | `[` / `]` | Native app; wraps visible playlists, skips filters and folder headers |
 | Previous / next song | `K` / `J`, or ↑ / ↓ | Native app and AppKit navigation tests |
+| Extend contiguous song selection | Shift+J / Shift+K | AppKit tests: fixed anchor, direction reversal, edges, Escape, external selection changes, editor and sheet guards |
 | Play selected song | Enter | Native app with generated WAVs |
 | Play / pause | Space | Native app and player tests |
 | Jump to playing song's start | H | Native app; paused transport remains paused |
@@ -40,8 +41,10 @@ The user approved removing these song-list bindings: P as a preview alias, Shift
 for Mix In, Q/Shift+Q for queue/play next, Shift+P for the playlist picker, hot cues 6–8,
 comma/period and their Shift variants for beat jumps, Shift+brackets for section jumps,
 M for the mix filter, R for starting Quick Rate, Command+L for revealing playback, and
-Shift+J/K for extending selection. Tests and a native walkthrough confirmed these no
-longer dispatch song-list actions. The corresponding mouse/menu features remain.
+Shift+J/K for extending selection. Shift+J/K was restored on October 13 at the user's
+request, with contiguous ranges that shrink when direction reverses. Command+L and M
+have also since returned as reveal-playing and Matches. The other removed bindings
+remain inactive; their corresponding mouse/menu features remain.
 
 Ordinary menu and focus shortcuts remain, including Command+F, Tab/Shift+Tab, standard
 table selection/editing keys, and the existing Playback and Library menus. Quick Rate's

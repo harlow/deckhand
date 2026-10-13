@@ -295,6 +295,23 @@ final class KeyTableView: NSTableView {
     weak var coordinator: TrackTable.Coordinator?
     private var navigationMonitor: Any?
     private var trackingMenus = Set<ObjectIdentifier>()
+    private var selectionRange: (anchor: Int, cursor: Int)?
+    private var movingSelection = false
+
+    override func selectRowIndexes(_ indexes: IndexSet, byExtendingSelection extend: Bool) {
+        if !movingSelection { selectionRange = nil }
+        super.selectRowIndexes(indexes, byExtendingSelection: extend)
+    }
+
+    override func reloadData() {
+        selectionRange = nil
+        super.reloadData()
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        selectionRange = nil
+        super.mouseDown(with: event)
+    }
 
     override func viewWillMove(toWindow newWindow: NSWindow?) {
         if let navigationMonitor { NSEvent.removeMonitor(navigationMonitor) }
@@ -334,6 +351,7 @@ final class KeyTableView: NSTableView {
     func routeWorkspaceNavigation(_ event: NSEvent) -> Bool {
         guard let window, event.window === window, window.isKeyWindow,
               window.attachedSheet == nil, !window.isSheet, NSApp.modalWindow == nil,
+              trackingMenus.isEmpty,
               !isHiddenOrHasHiddenAncestor, window.firstResponder !== self,
               !(window.firstResponder is KeyboardShortcutView) else { return false }
         if let editor = window.firstResponder as? NSText, editor.isEditable { return false }
@@ -344,7 +362,7 @@ final class KeyTableView: NSTableView {
         }
         if let delta = Self.navigationDelta(event) {
             guard numberOfRows > 0 else { return false }
-            move(delta, extend: false)
+            move(delta, extend: event.modifierFlags.contains(.shift))
             window.makeFirstResponder(self)
             return true
         }
@@ -356,7 +374,7 @@ final class KeyTableView: NSTableView {
 
     private static func navigationDelta(_ event: NSEvent) -> Int? {
         guard event.type == .keyDown,
-              event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty else { return nil }
+              event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return nil }
         switch event.charactersIgnoringModifiers?.lowercased() {
         case "j": return 1
         case "k": return -1
@@ -370,6 +388,8 @@ final class KeyTableView: NSTableView {
             move(delta, extend: event.modifierFlags.contains(.shift))
             return
         }
+        // Native arrow navigation starts a new selection gesture.
+        if (123...126).contains(event.keyCode) { selectionRange = nil }
         guard let c = coordinator, let parent = c.parent else { return super.keyDown(with: event) }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let shift = flags.contains(.shift)
@@ -435,9 +455,27 @@ final class KeyTableView: NSTableView {
     private func move(_ delta: Int, extend: Bool) {
         let n = numberOfRows
         guard n > 0 else { return }
-        let from = delta > 0 ? (selectedRowIndexes.last ?? -1) : (selectedRowIndexes.first ?? n)
-        let target = max(0, min(n - 1, from + delta))
-        selectRowIndexes([target], byExtendingSelection: extend)
+        let selected = selectedRowIndexes
+        let from = delta > 0 ? (selected.last ?? -1) : (selected.first ?? n)
+        var target = max(0, min(n - 1, from + delta))
+        if extend {
+            // A fixed anchor and moving cursor allow reversing direction to shrink the range.
+            // Reconcile native selection changes (arrows, mouse, Cmd+A) before reusing it.
+            let range = selectionRange.flatMap { range in
+                range.anchor < n && range.cursor < n &&
+                selected == IndexSet(integersIn: min(range.anchor, range.cursor)...max(range.anchor, range.cursor))
+                    ? range : nil
+            }
+            let anchor = range?.anchor ?? (delta > 0 ? selected.first : selected.last) ?? target
+            let cursor = range?.cursor ?? from
+            target = max(0, min(n - 1, cursor + delta))
+            selectionRange = (anchor, target)
+            movingSelection = true
+            selectRowIndexes(IndexSet(integersIn: min(anchor, target)...max(anchor, target)), byExtendingSelection: false)
+            movingSelection = false
+        } else {
+            selectRowIndexes([target], byExtendingSelection: false)
+        }
         scrollRowToVisible(target)
     }
 

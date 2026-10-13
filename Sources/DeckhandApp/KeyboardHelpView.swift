@@ -165,6 +165,7 @@ struct KeyboardHelpView: View {
                         section("Navigation", [
                             ("[", "Previous playlist"), ("]", "Next playlist"),
                             ("K / ↑", "Previous song"), ("J / ↓", "Next song"),
+                            ("⇧J / ⇧K", "Extend song selection"),
                             ("⌘L", "Show playing song"),
                         ])
                         section("Playback", [

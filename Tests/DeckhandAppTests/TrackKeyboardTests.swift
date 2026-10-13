@@ -58,16 +58,65 @@ import SwiftUI
         }
     }
 
-    @Test func removedShiftLetterNavigationStaysInactiveAndPlainNavigationStopsAtEdges() {
+    @Test func plainNavigationStopsAtEdges() {
         withTable { table, window, button in
             table.selectRowIndexes([1], byExtendingSelection: false)
-            #expect(!table.routeWorkspaceNavigation(key("J", in: window, flags: .shift)))
-            #expect(!table.routeWorkspaceNavigation(key("K", in: window, flags: .shift)))
-            #expect(table.selectedRowIndexes == IndexSet([1]))
             for _ in 0..<6 { table.keyDown(with: key("j", in: window)) }
             #expect(table.selectedRow == 3)
             for _ in 0..<6 { table.keyDown(with: key("k", in: window)) }
             #expect(table.selectedRow == 0)
+        }
+    }
+
+    @Test func shiftLettersExtendShrinkAndCrossTheAnchorWithoutGaps() {
+        withTable { table, window, button in
+            table.selectRowIndexes([1], byExtendingSelection: false)
+            #expect(table.routeWorkspaceNavigation(key("J", in: window, flags: .shift)))
+            #expect(table.selectedRowIndexes == IndexSet([1, 2]))
+            #expect(window.firstResponder === table)
+            table.keyDown(with: key("J", in: window, flags: .shift))
+            #expect(table.selectedRowIndexes == IndexSet([1, 2, 3]))
+            table.keyDown(with: key("J", in: window, flags: .shift)) // Edge does not wrap.
+            #expect(table.selectedRowIndexes == IndexSet([1, 2, 3]))
+            table.keyDown(with: key("K", in: window, flags: .shift))
+            #expect(table.selectedRowIndexes == IndexSet([1, 2]))
+            table.keyDown(with: key("K", in: window, flags: .shift))
+            #expect(table.selectedRowIndexes == IndexSet([1]))
+            table.keyDown(with: key("K", in: window, flags: .shift))
+            #expect(table.selectedRowIndexes == IndexSet([0, 1]))
+            table.keyDown(with: key("J", in: window, flags: .shift))
+            #expect(table.selectedRowIndexes == IndexSet([1]))
+            table.keyDown(with: key("J", in: window, flags: .shift))
+            #expect(table.selectedRowIndexes == IndexSet([1, 2]))
+            table.keyDown(with: key("j", in: window))
+            #expect(table.selectedRowIndexes == IndexSet([3]))
+            table.keyDown(with: key("K", in: window, flags: .shift))
+            #expect(table.selectedRowIndexes == IndexSet([2, 3]))
+            table.keyDown(with: key("\u{1b}", in: window, code: 53))
+            #expect(table.selectedRowIndexes == IndexSet([2]))
+            window.makeFirstResponder(button)
+            #expect(table.routeWorkspaceNavigation(key("K", in: window, flags: .shift)))
+            #expect(table.selectedRowIndexes == IndexSet([1, 2]))
+        }
+    }
+
+    @Test func shiftLettersHandleEmptyExternalAndReloadedSelections() {
+        withTable { table, window, _ in
+            table.keyDown(with: key("J", in: window, flags: .shift))
+            #expect(table.selectedRowIndexes == IndexSet([0]))
+            table.deselectAll(nil)
+            table.keyDown(with: key("K", in: window, flags: .shift))
+            #expect(table.selectedRowIndexes == IndexSet([3]))
+            table.selectRowIndexes([0, 2], byExtendingSelection: false)
+            table.keyDown(with: key("J", in: window, flags: .shift))
+            #expect(table.selectedRowIndexes == IndexSet([0, 1, 2, 3]))
+            table.selectRowIndexes([2], byExtendingSelection: false)
+            table.keyDown(with: key("K", in: window, flags: .shift))
+            #expect(table.selectedRowIndexes == IndexSet([1, 2]))
+            table.reloadData()
+            table.selectRowIndexes([0], byExtendingSelection: false)
+            table.keyDown(with: key("J", in: window, flags: .shift))
+            #expect(table.selectedRowIndexes == IndexSet([0, 1]))
         }
     }
 
@@ -128,6 +177,7 @@ import SwiftUI
             let menu = NSMenu()
             NotificationCenter.default.post(name: NSMenu.didBeginTrackingNotification, object: menu)
             #expect(!table.routeWorkspaceNavigation(escape))
+            #expect(!table.routeWorkspaceNavigation(key("J", in: window, flags: .shift)))
             #expect(table.selectedRowIndexes == selection)
             NotificationCenter.default.post(name: NSMenu.didEndTrackingNotification, object: menu)
             #expect(table.routeWorkspaceNavigation(escape))
@@ -192,6 +242,8 @@ import SwiftUI
                 #expect(window.firstResponder is NSTextView) // The real AppKit field editor.
                 #expect(!table.routeWorkspaceNavigation(key("j", in: window)))
                 #expect(!table.routeWorkspaceNavigation(key("k", in: window)))
+                #expect(!table.routeWorkspaceNavigation(key("J", in: window, flags: .shift)))
+                #expect(!table.routeWorkspaceNavigation(key("K", in: window, flags: .shift)))
                 for text in ["h", "l", "H", "L", "a", "m", "/", "1"] {
                     #expect(!table.routeWorkspaceNavigation(key(text, in: window)))
                 }
@@ -227,6 +279,7 @@ import SwiftUI
             sheet.isReleasedWhenClosed = false
             window.beginSheet(sheet)
             #expect(!table.routeWorkspaceNavigation(key("j", in: window)))
+            #expect(!table.routeWorkspaceNavigation(key("J", in: window, flags: .shift)))
             #expect(!table.routeWorkspaceNavigation(key("j", in: sheet)))
             #expect(table.selectedRow == -1)
             window.endSheet(sheet)
